@@ -1,0 +1,17 @@
+# Local diagnostics and world-data backups
+diag/
+
+# Dependencies and generated packages
+node_modules/
+*.zip
+*.tgz
+*.tar.gz
+
+# Logs, temporary files, and editor metadata
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+

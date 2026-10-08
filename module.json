@@ -1,0 +1,41 @@
+{
+  "id": "eryndor-professions",
+  "title": "Eryndor Professions",
+  "description": "Profession progression, material checks, Skill Tree perks, rare finds, and a gathering node builder for Gatherer 5.",
+  "version": "0.17.0",
+  "authors": [
+    {
+      "name": "Eryndor"
+    }
+  ],
+  "compatibility": {
+    "minimum": "14",
+    "verified": "14.368"
+  },
+  "relationships": {
+    "requires": [
+      {
+        "id": "gatherer",
+        "type": "module"
+      }
+    ],
+    "recommends": [
+      {
+        "id": "skill-tree",
+        "type": "module",
+        "reason": "Grants skill points on profession rank-ups; tree skills can grant gathering perks."
+      },
+      {
+        "id": "simple-timekeeping",
+        "type": "module",
+        "reason": "Season, weather, and time of day for conditional loot."
+      }
+    ]
+  },
+  "esmodules": [
+    "scripts/main.js"
+  ],
+  "styles": [
+    "styles/module.css"
+  ]
+}
