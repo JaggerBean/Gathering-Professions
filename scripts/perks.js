@@ -1,6 +1,6 @@
 // Gathering perks: the effects a perk Item can carry, validation, and the
 // combined totals for one actor. Perks usually come from the universal Skill
-// Tree, but any Item with flags.eryndor-professions.perk counts.
+// Tree, but any Item with flags.gathering-professions.perk counts.
 import { MODULE_ID, PROFESSIONS, professionKey } from "./rules.js";
 
 export const MAX_PERK_YIELD = 20;

@@ -1,6 +1,6 @@
 import { baseYieldFormula } from "./gathering.js";
 
-export const MODULE_ID = "eryndor-professions";
+export const MODULE_ID = "gathering-professions";
 
 export const ABILITY_LABELS = Object.freeze({
   str: "Strength", dex: "Dexterity", con: "Constitution",
@@ -137,7 +137,7 @@ export function activeRules() {
 }
 
 // Defaults for the world Items in Professions > Mining. An Item's
-// flags.eryndor-professions.material overrides any field here.
+// flags.gathering-professions.material overrides any field here.
 export const MINING_MATERIALS = Object.freeze({
   "Stone": 1, "Cobblestones": 1, "Sandstone": 1, "Siltstone": 1,
   "Coal": 1, "Copper Ore": 1, "Tin": 1, "Fool's Gold": 1,

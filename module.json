@@ -1,11 +1,11 @@
 {
-  "id": "eryndor-professions",
-  "title": "Eryndor Professions",
+  "id": "gathering-professions",
+  "title": "Gathering Professions",
   "description": "Profession progression, material checks, Skill Tree perks, rare finds, and a gathering node builder for Gatherer 5.",
-  "version": "0.17.0",
+  "version": "0.18.0",
   "authors": [
     {
-      "name": "Eryndor"
+      "name": "JaggerBean"
     }
   ],
   "compatibility": {

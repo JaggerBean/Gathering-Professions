@@ -37,7 +37,7 @@ globalThis.Hooks = {
   // First registration wins, so transient watchers (gather wrapper) never replace module hooks.
   on(name, callback) { if (!hooks.has(name)) hooks.set(name, callback); return name; },
   off() {},
-  callAll(name, payload) { if (name === "eryndorGatherComplete") completions.push(payload); },
+  callAll(name, payload) { if (name === "gatheringProfessionsGatherComplete") completions.push(payload); },
   once(name, callback) { hooks.set(name, callback); }
 };
 globalThis.CONFIG = { Item: { documentClass: { implementation: Item } } };
@@ -72,7 +72,7 @@ globalThis.game = {
       else settingsStore[key] = value;
     }
   },
-  modules: new Map([["gatherer", { active: true }], ["eryndor-professions", {}]]),
+  modules: new Map([["gatherer", { active: true }], ["gathering-professions", {}]]),
   user: { isGM: true }, items: [], actors: []
 };
 globalThis.ui = { notifications: { info() {}, warn() {}, error(message) { errors.push(message); } } };
@@ -125,7 +125,7 @@ function makeActor(initialXp = 0, profession = "mining", modifier = 0) {
     async update(changes) {
       await delay();
       for (const [path, value] of Object.entries(changes)) {
-        const modulePrefix = "flags.eryndor-professions.";
+        const modulePrefix = "flags.gathering-professions.";
         if (path.startsWith(modulePrefix)) foundry.utils.setProperty(flags, path.slice(modulePrefix.length), value);
         else foundry.utils.setProperty(this, path, value);
       }
@@ -145,10 +145,10 @@ function makeActor(initialXp = 0, profession = "mining", modifier = 0) {
 }
 
 await import("../scripts/main.js");
-hooks.get("ready")();
+await hooks.get("ready")();
 const gather = hooks.get("gathererGather");
 const sheet = new GathererSheet();
-const api = game.modules.get("eryndor-professions").api;
+const api = game.modules.get("gathering-professions").api;
 const stone = new Item("Stone", { profession: "mining", tier: 1, baseYield: "1d4" });
 function queueGather(actor, item, total, yieldResult, options = {}) {
   const rule = materialRule(item);
@@ -460,10 +460,10 @@ dialogValues = undefined;
 registerSceneControls();
 const controls = { tokens: { tools: {} } };
 hooks.get("getSceneControlButtons")(controls);
-assert.equal(controls.tokens.tools["ep-professions"].button, true);
-assert.equal(typeof controls.tokens.tools["ep-professions"].onChange, "function");
-assert.equal(controls.tokens.tools["ep-skill-tree"].button, true);
-assert.equal(controls.tokens.tools["ep-skill-tree"].order, controls.tokens.tools["ep-professions"].order + 1);
+assert.equal(controls.tokens.tools["gp-professions"].button, true);
+assert.equal(typeof controls.tokens.tools["gp-professions"].onChange, "function");
+assert.equal(controls.tokens.tools["gp-skill-tree"].button, true);
+assert.equal(controls.tokens.tools["gp-skill-tree"].order, controls.tokens.tools["gp-professions"].order + 1);
 await openProfessionMenu();
 assert.match(dialogHtml, /Gathering profession: Logging/);
 globalThis.canvas = { tokens: { controlled: [{ actor: racing }] } };
@@ -632,7 +632,7 @@ const tables = {
 };
 globalThis.fromUuid = async uuid => uuid === "Item.starSapphire" ? rareGem : tables[uuid] ?? null;
 function perkItem(name, perk) {
-  return { name, system: {}, flags: { "eryndor-professions": { perk } } };
+  return { name, system: {}, flags: { "gathering-professions": { perk } } };
 }
 const perkMiner = makeActor(0);
 perkMiner.inventory.push(perkItem("Prospector's Eye", { enabled: true, profession: "mining", yieldBonus: 2, rareChance: 30 }));
@@ -714,7 +714,7 @@ assert.equal(perkSource.material.enabled, false);
 // ---------------------------------------------------------------------------
 savedRules.masterfulRareFind = false;
 function nodePage(node) {
-  return { type: "gatherer.gatherer", name: "Test Node", flags: { "eryndor-professions": { node }, gatherer: { draws: "5" } } };
+  return { type: "gatherer.gatherer", name: "Test Node", flags: { "gathering-professions": { node }, gatherer: { draws: "5" } } };
 }
 function nodeSheet(node) {
   const sheet = new GathererSheet();
@@ -874,9 +874,9 @@ assert.equal(await nodeSheet(undefined)._onGather(true, null, makeActor()), "gat
     "Rapid attempts serialize their counter and exhaustion changes");
   const laggingEffectActor = makeActor();
   laggingEffectActor.system.attributes = { exhaustion: 2 };
-  await laggingEffectActor.setFlag("eryndor-professions", "gatherAttemptsUsed", 5);
+  await laggingEffectActor.setFlag("gathering-professions", "gatherAttemptsUsed", 5);
   laggingEffectActor.update = async changes => {
-    await laggingEffectActor.setFlag("eryndor-professions", "gatherAttemptsUsed", changes["flags.eryndor-professions.gatherAttemptsUsed"]);
+    await laggingEffectActor.setFlag("gathering-professions", "gatherAttemptsUsed", changes["flags.gathering-professions.gatherAttemptsUsed"]);
     return laggingEffectActor; // dnd5e's derived exhaustion has not refreshed yet
   };
   confirmAnswers.push(true, true);
@@ -892,7 +892,7 @@ assert.equal(await nodeSheet(undefined)._onGather(true, null, makeActor()), "gat
   await delay(); await delay();
   assert.equal(gatherLimits.gatheringAllowance(budgetActor).used, 0, "Long rest restores free attempts");
   assert.equal(budgetActor.system.attributes.exhaustion, 3, "Module does not clear existing exhaustion");
-  await budgetActor.setFlag("eryndor-professions", "gatherAttemptsUsed", 5);
+  await budgetActor.setFlag("gathering-professions", "gatherAttemptsUsed", 5);
   const originalConfirm = foundry.applications.api.DialogV2.confirm;
   foundry.applications.api.DialogV2.confirm = async () => {
     await gatherLimits.resetGatherAttempts(budgetActor);
@@ -1021,7 +1021,7 @@ assert.equal(await nodeSheet(undefined)._onGather(true, null, makeActor()), "gat
   const summary = completions.at(-1).results[0];
   assert.deepEqual([summary.degree.id, summary.auto, summary.d20, summary.rare?.trigger, summary.rare?.pending, summary.rare?.tier],
     ["masterful", true, null, "Grandmaster's Touch", true, 1], "Guaranteed rare on the material tier, waiting for the Fortune die");
-  assert.match(touchCard.content, /data-ep-climb="[^"]+" data-ep-actor="Actor.grandmaster"/);
+  assert.match(touchCard.content, /data-gp-climb="[^"]+" data-gp-actor="Actor.grandmaster"/);
   assert.equal(actor.flags.masterfulUsed, 1);
   assert.equal(api.gather.masterfulLeft(actor), 0);
   // The player's Fortune die: a 20 climbs from tier 1 to 2.
@@ -1120,7 +1120,7 @@ assert.equal(await nodeSheet(undefined)._onGather(true, null, makeActor()), "gat
   assert.match(card, /Masterful Extraction<\/strong> \(natural 20\)/, "Nat 20 beats DC 40");
   assert.match(card, /Rare Find!<\/strong> \(Natural 20\)/);
   assert.match(card, /Natural 20 on the check: tier 1 → 2/);
-  assert.match(card, /data-ep-climb="([^"]+)" data-ep-actor="Actor.lucky"/, "Fortune die button for the player");
+  assert.match(card, /data-gp-climb="([^"]+)" data-gp-actor="Actor.lucky"/, "Fortune die button for the player");
   assert.equal(lucky.inventory.find(entry => entry.name === "Tier Two Gem"), undefined, "Nothing drawn before the player rolls");
   const result = completions.at(-1).results[0];
   assert.deepEqual([result.rare.tier, result.rare.pending, result.degree.id], [2, true, "masterful"]);
@@ -1147,12 +1147,12 @@ assert.equal(await nodeSheet(undefined)._onGather(true, null, makeActor()), "gat
   const [higher, duplicate] = await Promise.all([api.rareFinds.climb(lucky, again), api.rareFinds.climb(lucky, again)]);
   assert.equal(duplicate, null, "A simultaneous Fortune request cannot roll or award twice");
   assert.deepEqual([higher.tier, higher.pending], [3, true]);
-  assert.match(posted.at(-1).flavor, /Fortune die — climbs!.*Fortune die 20: tier 2 → 3.*data-ep-climb/s);
+  assert.match(posted.at(-1).flavor, /Fortune die — climbs!.*Fortune die 20: tier 2 → 3.*data-gp-climb/s);
   rolls.push({ formula: "1d20", total: 2 });
   assert.equal((await api.rareFinds.climb(lucky, again)).tier, 3);
 
   const lockedId = "failedAward";
-  await lucky.setFlag("eryndor-professions", `rareClimbs.${lockedId}`,
+  await lucky.setFlag("gathering-professions", `rareClimbs.${lockedId}`,
     { ...higher, pending: true, startTier: 2, tier: 2, startTable: "RollTable.tier2", steps: [], rareDraws: 1 });
   const awardedGem = lucky.inventory.find(entry => entry.name === "Tier Two Gem");
   const originalUpdate = awardedGem.update;
@@ -1163,12 +1163,12 @@ assert.equal(await nodeSheet(undefined)._onGather(true, null, makeActor()), "gat
   };
   rolls.push({ formula: "1d20", total: 4 });
   await assert.rejects(api.rareFinds.climb(lucky, lockedId), /locked for GM review/);
-  assert.equal(lucky.getFlag("eryndor-professions", `rareClimbs.${lockedId}`).settling, true);
+  assert.equal(lucky.getFlag("gathering-professions", `rareClimbs.${lockedId}`).settling, true);
   assert.equal(await api.rareFinds.climb(lucky, lockedId), null, "A partial award cannot be retried automatically");
   assert.equal(awardAttempts, 2, "The first item was not awarded twice");
   awardedGem.update = originalUpdate;
 
-  await lucky.setFlag("eryndor-professions", "rareClimbs.remote",
+  await lucky.setFlag("gathering-professions", "rareClimbs.remote",
     { ...higher, pending: true, startTier: 2, tier: 2, startTable: "RollTable.tier2", steps: [], rareDraws: 0 });
   const savedUser = game.user;
   const savedUsers = game.users;
@@ -1179,14 +1179,14 @@ assert.equal(await nodeSheet(undefined)._onGather(true, null, makeActor()), "gat
     await savedSetFlag.call(this, scope, key, value);
     if (key !== "climbRequest") return;
     game.user = { id: "gm", isGM: true };
-    hooks.get("updateActor")(this, { flags: { "eryndor-professions": { climbRequest: value } } }, {}, "player1");
+    hooks.get("updateActor")(this, { flags: { "gathering-professions": { climbRequest: value } } }, {}, "player1");
     game.user = { id: "player1", isGM: false };
   };
   game.user = { id: "player1", isGM: false };
   rolls.push({ formula: "1d20", total: 4 });
   const remoteResult = await api.rareFinds.climb(lucky, "remote");
   assert.deepEqual(remoteResult, { tier: 2, pending: false }, "Owner request resolves through the active GM");
-  assert.equal(lucky.getFlag("eryndor-professions", "rareClimbs.remote"), undefined);
+  assert.equal(lucky.getFlag("gathering-professions", "rareClimbs.remote"), undefined);
   lucky.setFlag = savedSetFlag;
   game.user = savedUser;
   game.users = savedUsers;
@@ -1199,7 +1199,7 @@ assert.equal(await nodeSheet(undefined)._onGather(true, null, makeActor()), "gat
   data = { actor: finder, things: [{ item: crownOre, quantity: 1 }] };
   gather(data);
   await nodeSheet({}).toChat(data.things, finder);
-  const story = posted.slice(before).find(message => message.flags?.["eryndor-professions"]?.storyFind);
+  const story = posted.slice(before).find(message => message.flags?.["gathering-professions"]?.storyFind);
   assert.ok(story, "GM story whisper posted");
   assert.match(story.content, /climbed past the tier 5 rare table while gathering Crown Ore/);
   assert.match(posted.at(-1).flavor, /Something more lies hidden here/);
@@ -1221,9 +1221,9 @@ assert.equal(await nodeSheet(undefined)._onGather(true, null, makeActor()), "gat
 
 // 0.12.0: tool durability — natural 1s with a node's tool cost 1 durability.
 {
-  const makeTool = (name, durability) => ({ name, system: { proficient: 1 }, flags: { "eryndor-professions": durability ? { durability } : {} },
-    getFlag(_module, key) { return this.flags["eryndor-professions"][key]; },
-    async setFlag(_module, key, value) { this.flags["eryndor-professions"][key] = { ...(this.flags["eryndor-professions"][key] ?? {}), ...value }; } });
+  const makeTool = (name, durability) => ({ name, system: { proficient: 1 }, flags: { "gathering-professions": durability ? { durability } : {} },
+    getFlag(_module, key) { return this.flags["gathering-professions"][key]; },
+    async setFlag(_module, key, value) { this.flags["gathering-professions"][key] = { ...(this.flags["gathering-professions"][key] ?? {}), ...value }; } });
   const durability = await import("../scripts/durability.js");
   const nodesLib = await import("../scripts/nodes.js");
   savedRules.toolDurability = 2;
@@ -1234,12 +1234,12 @@ assert.equal(await nodeSheet(undefined)._onGather(true, null, makeActor()), "gat
   const pickNode = { toolName: "Miner's Pick" };
   // d20 of 1 (total 2): failed, and the pick loses 1.
   await gatherOnNode(miner, plainStone, nodeSheet(pickNode), 2, undefined, "1d20 + 1 + 2 + 1d4");
-  assert.equal(pick.flags["eryndor-professions"].durability.value, 1);
+  assert.equal(pick.flags["gathering-professions"].durability.value, 1);
   assert.match(posted.at(-1).flavor, /Natural 1!<\/strong> Miner(?:'|&#39;)s Pick loses 1 durability \(1\/2\)/);
   assert.ok(completions.at(-1).results[0].notes.includes("Natural 1: Miner's Pick 1/2"));
   // A low roll that is not a natural 1 costs nothing.
   await gatherOnNode(miner, plainStone, nodeSheet(pickNode), 3, undefined, "1d20 + 1 + 2 + 1d4");
-  assert.equal(pick.flags["eryndor-professions"].durability.value, 1);
+  assert.equal(pick.flags["gathering-professions"].durability.value, 1);
   assert.match(posted.at(-1).flavor, /Tool: Miner(?:'|&#39;)s Pick \+2 \(proficient\) · durability 1\/2/);
   // The next natural 1 breaks it; a broken tool no longer meets the node's tool gate.
   await gatherOnNode(miner, plainStone, nodeSheet(pickNode), 2, undefined, "1d20 + 1 + 2 + 1d4");
@@ -1261,14 +1261,14 @@ assert.equal(await nodeSheet(undefined)._onGather(true, null, makeActor()), "gat
   confirmAnswers.push(true);
   rolls.push({ formula: "1d20 + 1 + 2 + 1d4", total: 2 });
   await gatherOnNode(careful, plainStone, nodeSheet(pickNode), 2, undefined, "1d20 + 1 + 2 + 1d4");
-  assert.equal(rope.flags["eryndor-professions"].durability.value, 3);
+  assert.equal(rope.flags["gathering-professions"].durability.value, 3);
   assert.match(posted.at(-1).flavor, /loses 2 durability \(3\/5\)/);
   // Maximum 0 never wears; no tool means nothing to wear.
   const everlasting = makeTool("Miner's Pick", { max: 0 });
   const steady = nodeActor();
   steady.inventory.push(everlasting);
   await gatherOnNode(steady, plainStone, nodeSheet(pickNode), 2, undefined, "1d20 + 1 + 2 + 1d4");
-  assert.equal(everlasting.flags["eryndor-professions"].durability.value, undefined);
+  assert.equal(everlasting.flags["gathering-professions"].durability.value, undefined);
   assert.doesNotMatch(posted.at(-1).flavor, /Natural 1!/);
   // GM editor validation and repair.
   assert.throws(() => durability.normalizeDurability({ value: 9, max: 5 }), /above the maximum/);

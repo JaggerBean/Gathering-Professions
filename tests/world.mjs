@@ -111,7 +111,7 @@ globalThis.game = {
   },
   modules: new Map([
     ["gatherer", { active: true }],
-    ["eryndor-professions", {}],
+    ["gathering-professions", {}],
     ["skill-tree", { active: true, API: {
       async grantSkillPoints(actor, points, { skillTree }) {
         const key = `skillTreeSkillPoints.${skillTree.id}`;
@@ -140,14 +140,14 @@ globalThis.fromUuid = async uuid => globalThis.fromUuidSync(uuid);
 await import("../scripts/main.js");
 const fixture = await import("./fixtures/sampleworld.js");
 hooks.get("init")();
-hooks.get("ready")();
-const api = game.modules.get("eryndor-professions").api;
+await hooks.get("ready")();
+const api = game.modules.get("gathering-professions").api;
 const integrations = await import("../scripts/integrations.js");
 game.modules.get("skill-tree").active = false;
 assert.deepEqual(integrations.availableSkillTrees(), [], "Inactive Skill Tree has no readable flag scope");
 const perksWithoutTree = await import("../scripts/perks.js");
 const storedSkill = { uuid: "JournalEntry.test.JournalEntryPage.skill", flags: {
-  "eryndor-professions": { universalSkill: "steadyHands" }, "skill-tree": { points: 1 } },
+  "gathering-professions": { universalSkill: "steadyHands" }, "skill-tree": { points: 1 } },
   getFlag(scope, key) { if (scope === "skill-tree") throw new Error("Inactive flag scope"); return this.flags[scope]?.[key]; } };
 const learnedActor = { flags: { "skill-tree": { skills: [{ uuid: storedSkill.uuid, points: 1 }] } },
   getFlag(scope) { if (scope === "skill-tree") throw new Error("Inactive flag scope"); } };
@@ -179,7 +179,7 @@ assert.equal(mining.formula, "1d4");
 assert.deepEqual(mining.results.map(r => r.range), [[1, 3], [4, 4]]);
 assert.equal(mining.results[0].documentUuid, copper.uuid);
 
-const nodes = journal.find(entry => entry.name === "Eryndor Test Nodes");
+const nodes = journal.find(entry => entry.name === "Gathering Test Nodes");
 const vein = nodes.pages.find(page => page.name === "Copper Vein");
 assert.equal(vein.type, "gatherer.gatherer");
 assert.equal(vein.flags.gatherer.table, mining.uuid);
@@ -187,11 +187,11 @@ assert.equal(vein.flags.gatherer.table, mining.uuid);
 const tree = journal.find(entry => entry.uuid === result.tree);
 assert.equal(tree.flags["skill-tree"].isSkillTree, true);
 assert.equal(tree.flags["skill-tree"].groups.length, 1, "One universal group");
-assert.equal(tree.flags["skill-tree"].groups[0].id, "eryndorGathering", "Fixed group id for the radial styles");
+assert.equal(tree.flags["skill-tree"].groups[0].id, "gatheringProfessions", "Fixed group id for the radial styles");
 assert.equal(tree.flags["skill-tree"].groups[0].name, "", "No yellow group title");
 assert.equal(tree.name, "Gathering Skill Tree", "No test suffix in the tree title");
 assert.equal(tree.flags["skill-tree"].independentSkillPoints, true, "Own point pool");
-assert.equal(tree.flags["eryndor-professions"].layoutVersion, 7);
+assert.equal(tree.flags["gathering-professions"].layoutVersion, 8);
 assert.equal(tree.pages.length, 30);
 const skillPage = name => tree.pages.find(page => page.name === name);
 const st = name => skillPage(name).flags["skill-tree"];
@@ -218,8 +218,8 @@ for (const name of capstones) {
   assert.deepEqual(st(name).lockoutSkills.sort(), capstones.filter(other => other !== name).map(other => skillPage(other).uuid).sort());
 }
 assert.deepEqual(st("Abundance").lockoutSkills, []);
-assert.equal(items.find(item => item.name === "Light Touch").flags["eryndor-professions"].perk.conserveChance, 15);
-assert.equal(items.find(item => item.name === "Light Touch").flags["eryndor-professions"].universalSkill, "lightTouch");
+assert.equal(items.find(item => item.name === "Light Touch").flags["gathering-professions"].perk.conserveChance, 15);
+assert.equal(items.find(item => item.name === "Light Touch").flags["gathering-professions"].universalSkill, "lightTouch");
 assert.equal(api.skillTreeConfig().uuid, tree.uuid);
 assert.deepEqual([api.skillTreeConfig().startingPoints, api.skillTreeConfig().pointsPerRank], [2, 2]);
 settings.skillTree = { uuid: tree.uuid, startingPoints: 3, pointsPerRank: 3 };
@@ -234,7 +234,7 @@ await skillPage("Bountiful").update({ "flags.skill-tree.requirements": [{ label:
   "text.content": "<p>Needs rank 3 in your profession</p>" });
 tree.flags["skill-tree"].groups = [{ id: "oldGroup", name: "Gathering" }];
 tree.flags["skill-tree"].independentSkillPoints = false;
-tree.flags["eryndor-professions"].layoutVersion = 3;
+tree.flags["gathering-professions"].layoutVersion = 3;
 const bountifulUuid = skillPage("Bountiful").uuid;
 assert.equal(needsRelayout(tree), true);
 // Scramble two links, as trees built before 0.15.0 could be; relayout fixes them.
@@ -247,19 +247,19 @@ assert.deepEqual([st("Light Touch").itemUuids, st("Bountiful").itemUuids], [[lig
 assert.ok(tree.pages.every(page => items.find(item => item.uuid === page.flags["skill-tree"].itemUuids[0])?.name === page.name), "Every page links its own Item");
 assert.equal(needsRelayout(tree), false);
 assert.equal(skillPage("Bountiful").uuid, bountifulUuid);
-assert.deepEqual([st("Bountiful").row, st("Bountiful").col, st("Bountiful").groupId], [4, 12, "eryndorGathering"]);
+assert.deepEqual([st("Bountiful").row, st("Bountiful").col, st("Bountiful").groupId], [4, 12, "gatheringProfessions"]);
 assert.equal(st("Bountiful").connectedSkills.length, 3);
 assert.deepEqual(st("Bountiful").requirements, [], "Existing tree loses the old rank gate");
 assert.doesNotMatch(skillPage("Bountiful").text.content, /Needs rank/);
-assert.equal(tree.flags["skill-tree"].groups[0].id, "eryndorGathering");
+assert.equal(tree.flags["skill-tree"].groups[0].id, "gatheringProfessions");
 assert.equal(tree.flags["skill-tree"].groups[0].name, "");
 assert.ok(st("Reader of Seasons").connectedSkills.includes(skillPage("Conservationist").uuid));
 assert.equal(tree.flags["skill-tree"].independentSkillPoints, true);
 
 const actor = actors[0];
 assert.equal(actor.name, "Test Gatherer");
-assert.equal(actor.getFlag("eryndor-professions", "effectiveRank").mining, 1);
-assert.equal(actor.getFlag("eryndor-professions", "professionRank"), 1, "Universal rank mirror");
+assert.equal(actor.getFlag("gathering-professions", "effectiveRank").mining, 1);
+assert.equal(actor.getFlag("gathering-professions", "professionRank"), 1, "Universal rank mirror");
 assert.deepEqual(granted, [["Test Gatherer", 2, "Gathering Skill Tree"]]);
 const comboNames = ["Keen Eye", "Treasure Hunter", "Fortune's Favour", "Light Touch", "Conservationist", "Steward of the Wilds"];
 const skillItems = comboNames.map(name => items.find(item => item.name === name));
@@ -269,7 +269,7 @@ assert.equal(api.actorPerks({ items: skillItems, flags: {} }, "herbalism").rareC
 assert.equal(api.actorPerks({ items: skillItems, flags: learned(["Keen Eye"]) }, "herbalism").rareChance, 3);
 assert.equal(api.actorPerks({ items: skillItems, flags: { "skill-tree": { skills: [{ uuid: skillPage("Fortune's Favour").uuid, points: 1 }] } } }, "herbalism").climbAdvantage, false, "A capstone needs both points");
 // Perks the GM hands out directly (not tree skills) always count.
-const gmPerk = { name: "Blessing of the Deep", parent: {}, flags: { "eryndor-professions": { perk: { enabled: true, profession: "any", yieldBonus: 2 } } } };
+const gmPerk = { name: "Blessing of the Deep", parent: {}, flags: { "gathering-professions": { perk: { enabled: true, profession: "any", yieldBonus: 2 } } } };
 assert.equal(api.actorPerks({ items: [gmPerk], flags: {} }, "mining").yieldBonus, 2);
 const combo = api.actorPerks({ items: skillItems, flags: learned(comboNames) }, "herbalism");
 assert.deepEqual([combo.rareChance, combo.rareAdvantage, combo.rareDouble, combo.climbAdvantage, combo.conserveChance], [14, false, false, true, 50], "Keen Eye 3 + Treasure Hunter 6 + Fortune's Favour 5");
@@ -277,7 +277,7 @@ assert.deepEqual([combo.rareChance, combo.rareAdvantage, combo.rareDouble, combo
 // Node Manager view model: grouped by journal, filters, badges, materials, HTML.
 const nodeUi = await import("../scripts/node-ui.js");
 let groupsModel = nodeUi.buildListModel(api.nodes.all(), {});
-assert.deepEqual(groupsModel.map(group => group.name), ["Eryndor Test Nodes"]);
+assert.deepEqual(groupsModel.map(group => group.name), ["Gathering Test Nodes"]);
 assert.deepEqual(groupsModel[0].rows.map(row => row.name), ["Copper Vein", "Deep Silver Seam", "Moonpetal Patch"]);
 const seamRow = groupsModel[0].rows.find(row => row.name === "Deep Silver Seam");
 assert.deepEqual(seamRow.badges.map(badge => badge.kind), ["hidden", "sense", "check", "rank", "tool", "dc", "yield", "rare"]);
@@ -286,20 +286,20 @@ assert.deepEqual(copperRow.materials.map(material => [material.name, material.pe
 assert.equal(copperRow.fill, 100);
 assert.equal(nodeUi.buildListModel(api.nodes.all(), { profession: "herbalism" })[0].rows.length, 1);
 assert.equal(nodeUi.buildListModel(api.nodes.all(), { search: "seam" })[0].rows.length, 1);
-assert.equal(nodeUi.buildListModel(api.nodes.all(), { search: "eryndor test" })[0].rows.length, 3, "Search matches journal names too");
+assert.equal(nodeUi.buildListModel(api.nodes.all(), { search: "gathering test" })[0].rows.length, 3, "Search matches journal names too");
 assert.equal(nodeUi.buildListModel(api.nodes.all(), { scene: map.id })[0].rows.length, 3);
 assert.equal(nodeUi.buildListModel(api.nodes.all(), { scene: "elsewhere" }).length, 0);
 const listHtml = nodeUi.renderList(groupsModel, { selected: seamRow.uuid, collapsed: new Set(), checked: new Set(), bulk: true });
-assert.ok(new RegExp(`ep-nm-row selected[^"]*" data-uuid="${seamRow.uuid}"`).test(listHtml), "Selected row is highlighted");
+assert.ok(new RegExp(`gp-nm-row selected[^"]*" data-uuid="${seamRow.uuid}"`).test(listHtml), "Selected row is highlighted");
 assert.match(listHtml, /Test Copper Ore — 75%/);
-assert.match(listHtml, /ep-nm-bulk/);
+assert.match(listHtml, /gp-nm-bulk/);
 const detailHtml = nodeUi.renderDetail(fromUuidSync(seamRow.uuid), { selected: seamRow.uuid, tab: "rules" });
-for (const text of ["Deep Silver Seam", "Check &amp; Rules", 'data-panel="rules"', 'name="minRank"', "Test Miner&#39;s Pick", "ep-tool-chip", "data-rare-select", "Test Rare Ores", "data-icon-picker", "Profession sense", "Save changes"]) {
+for (const text of ["Deep Silver Seam", "Check &amp; Rules", 'data-panel="rules"', 'name="minRank"', "Test Miner&#39;s Pick", "gp-tool-chip", "data-rare-select", "Test Rare Ores", "data-icon-picker", "Profession sense", "Save changes"]) {
   assert.ok(detailHtml.includes(text), `Detail pane missing ${text}`);
 }
 assert.match(nodeUi.renderDetail(null, { selected: "new", tab: "basics" }), /Create node/);
 assert.match(nodeUi.renderDetail(null, { selected: null }), /Gathering Nodes/);
-if (process.env.EP_PREVIEW) {
+if (process.env.GP_PREVIEW) {
   const fs = await import("node:fs");
   const css = fs.readFileSync(new URL("../styles/module.css", import.meta.url), "utf8");
   for (const [name, state] of [["preview-list-detail", { selected: seamRow.uuid, tab: "rules", bulk: false, scroll: true }], ["preview-basics", { selected: copperRow.uuid, tab: "basics", openPicker: true }], ["preview-new", { selected: "new", tab: "materials", bulk: true, checked: new Set([copperRow.uuid]) }]]) {
@@ -310,8 +310,8 @@ if (process.env.EP_PREVIEW) {
       .window-content{flex:1;min-height:0;display:flex;flex-direction:column}
       input,select,button{background:#2b2632;color:inherit;border:1px solid #5a4e43;border-radius:4px;height:28px;font:inherit}
       button{cursor:pointer} h2,h3{font-family:inherit} img{border:none}
-      ${css}</style></head><body><div class="app ep-node-manager eryndor-professions-ui"><header>Gathering Nodes</header><div class="window-content"><div class="ep-nm"><aside class="ep-nm-list">${nodeUi.renderList(nodeUi.buildListModel(api.nodes.all(), state), { collapsed: new Set(), checked: new Set(), ...state })}</aside><section class="ep-nm-detail">${nodeUi.renderDetail(state.selected === "new" ? null : fromUuidSync(state.selected), state).replace(state.openPicker ? 'class="ep-icon-picker"' : "\u0000", 'class="ep-icon-picker open"')}</section></div></div></div></body></html>`;
-    fs.writeFileSync(`${process.env.EP_PREVIEW}/${name}.html`, html);
+      ${css}</style></head><body><div class="app gp-node-manager gathering-professions-ui"><header>Gathering Nodes</header><div class="window-content"><div class="gp-nm"><aside class="gp-nm-list">${nodeUi.renderList(nodeUi.buildListModel(api.nodes.all(), state), { collapsed: new Set(), checked: new Set(), ...state })}</aside><section class="gp-nm-detail">${nodeUi.renderDetail(state.selected === "new" ? null : fromUuidSync(state.selected), state).replace(state.openPicker ? 'class="gp-icon-picker"' : "\u0000", 'class="gp-icon-picker open"')}</section></div></div></div></body></html>`;
+    fs.writeFileSync(`${process.env.GP_PREVIEW}/${name}.html`, html);
   }
 }
 
@@ -346,11 +346,11 @@ assert.equal(api.nodes.normalize({ tools: JSON.stringify(anyOf.tools) }).tools.l
 await api.nodes.removeToolFromLibrary(smith.uuid);
 assert.deepEqual(api.nodes.getToolLibrary().map(tool => tool.name), ["Test Miner's Pick"]);
 const toolsHtml = nodeUi.toolsSection([{ uuid: smith.uuid, name: "Smith's Tools", img: "smith.webp" }]);
-assert.match(toolsHtml, /ep-tool-chip/);
+assert.match(toolsHtml, /gp-tool-chip/);
 assert.match(toolsHtml, /Add a tool from the library/);
 assert.match(toolsHtml, /Tool library \(1\)/);
 await Item.deleteDocuments([smith.id]);
-await game.settings.set("eryndor-professions", "toolLibrary", []);
+await game.settings.set("gathering-professions", "toolLibrary", []);
 
 // Rare table dropdown, preview, and quick-create.
 assert.match(nodeUi.rareTableOptions(""), /Default — material/);
@@ -359,7 +359,7 @@ assert.match(nodeUi.rarePreview(result.rareOre), /Test Star Sapphire.*100%/s);
 assert.match(nodeUi.rarePreview(""), /each material/);
 const quickRare = await api.nodes.createRareTable("Seam Rares", [{ uuid: copper.uuid, weight: 1 }, { uuid: pickItem.uuid, weight: 3 }]);
 assert.equal(quickRare.formula, "1d4");
-assert.equal(quickRare.getFlag("eryndor-professions", "rareTable"), true);
+assert.equal(quickRare.getFlag("gathering-professions", "rareTable"), true);
 assert.equal(folders.find(folder => folder.id === quickRare.folder).name, "Rare Find Tables");
 await assert.rejects(api.nodes.createRareTable("", [{ uuid: copper.uuid, weight: 1 }]), /Name the rare/);
 await RollTable.implementation.deleteDocuments([quickRare.id]);
@@ -391,15 +391,15 @@ assert.match(windowHtml, /\?\?\?/);
 assert.match(windowHtml, /0\/2 known/);
 assert.match(windowHtml, /Undiscovered materials appear/);
 assert.match(windowHtml, /chance of a full success/);
-assert.doesNotMatch(windowHtml, /ep-gw-gm/, "Players get no GM bar");
+assert.doesNotMatch(windowHtml, /gp-gw-gm/, "Players get no GM bar");
 assert.doesNotMatch(windowHtml, /Test Copper Ore/, "Undiscovered names stay secret");
 await gatherUi.recordDiscovery(veinPage, [copper.uuid, copper.uuid]);
-assert.deepEqual(veinPage.flags["eryndor-professions"].discovered, [copper.uuid]);
+assert.deepEqual(veinPage.flags["gathering-professions"].discovered, [copper.uuid]);
 windowHtml = gatherUi.renderGatherWindow(gatherUi.buildGatherModel(veinPage, actor), { characters: [actor] });
 assert.match(windowHtml, /Test Copper Ore/);
 assert.match(windowHtml, /1\/2 known/);
 const gmHtml = gatherUi.renderGatherWindow(gm, { characters: [actor] });
-assert.match(gmHtml, /ep-gw-gm/);
+assert.match(gmHtml, /gp-gw-gm/);
 assert.match(gmHtml, /75% · DC 10/);
 // Seam: rank gate and tool requirement shown as missing; button disabled with the reason.
 const seamModel = gatherUi.buildGatherModel(nodes.pages.find(page => page.name === "Deep Silver Seam"), actor);
@@ -419,7 +419,7 @@ for (const text of ["Excellent Extraction", "margin +7", "×4", "Test Star Sapph
 }
 assert.deepEqual(gatherUi.xpProgress(100, 5, 2), { from: 0, to: 0, label: "100 / 300 XP to rank 3" });
 assert.deepEqual(gatherUi.xpProgress(1600, 60, 5), { from: 100, to: 100, label: "Max rank" });
-if (process.env.EP_PREVIEW) {
+if (process.env.GP_PREVIEW) {
   const fs = await import("node:fs");
   const css = fs.readFileSync(new URL("../styles/module.css", import.meta.url), "utf8");
   const shell = (body, width) => `<!doctype html><html><head><meta charset="utf-8"><style>
@@ -428,55 +428,55 @@ if (process.env.EP_PREVIEW) {
     .app>header{padding:.4rem .6rem;border-bottom:1px solid #4a3f35;font-weight:600}
     input,select,button,textarea{background:#2b2632;color:inherit;border:1px solid #5a4e43;border-radius:4px;height:28px;font:inherit}
     button{cursor:pointer} img{border:none}
-    ${css}</style></head><body><div class="app ep-gathering-window eryndor-professions-ui"><header>Gathering</header><div class="window-content">${body}</div></div></body></html>`;
+    ${css}</style></head><body><div class="app gp-gathering-window gathering-professions-ui"><header>Gathering</header><div class="window-content">${body}</div></div></body></html>`;
   const flavorModel = gatherUi.buildGatherModel(veinPage, actor);
   flavorModel.flavor = "Green-streaked rock juts from the cliff face. Old pick marks show someone has worked this vein before.";
-  fs.writeFileSync(`${process.env.EP_PREVIEW}/gather-window.html`, shell(gatherUi.renderGatherWindow(flavorModel, { characters: [actor], resultHtml: revealHtml }), 470));
-  fs.writeFileSync(`${process.env.EP_PREVIEW}/gather-seam.html`, shell(gatherUi.renderGatherWindow(seamModel, { characters: [actor] }), 470));
-  fs.writeFileSync(`${process.env.EP_PREVIEW}/gather-gm.html`, shell(gatherUi.renderGatherWindow(gm, { characters: [actor] }), 470));
+  fs.writeFileSync(`${process.env.GP_PREVIEW}/gather-window.html`, shell(gatherUi.renderGatherWindow(flavorModel, { characters: [actor], resultHtml: revealHtml }), 470));
+  fs.writeFileSync(`${process.env.GP_PREVIEW}/gather-seam.html`, shell(gatherUi.renderGatherWindow(seamModel, { characters: [actor] }), 470));
+  fs.writeFileSync(`${process.env.GP_PREVIEW}/gather-gm.html`, shell(gatherUi.renderGatherWindow(gm, { characters: [actor] }), 470));
 }
 
 // 0.8.0: conditions in the gathering window (pins via settings).
 {
   const moonPage = nodes.pages.find(page => page.name === "Moonpetal Patch");
   const moonItem = items.find(item => item.name === "Test Moonpetal");
-  await game.settings.set("eryndor-professions", "conditionOverrides", { season: "", weather: "", time: "night" });
+  await game.settings.set("gathering-professions", "conditionOverrides", { season: "", weather: "", time: "night" });
   let model = gatherUi.buildGatherModel(moonPage, actor, { isGM: true });
   assert.equal(model.materials[0].multiplier, 3);
   assert.equal(model.materials[0].hint.key, "abundant");
   assert.deepEqual(model.conditions.map(chip => [chip.type, chip.label]), [["time", "Night"]]);
   let html = gatherUi.renderGatherWindow(model, { characters: [actor] });
   assert.match(html, /Abundant now/);
-  assert.match(html, /ep-gw-cond[^>]*>.*Night/s);
+  assert.match(html, /gp-gw-cond[^>]*>.*Night/s);
   assert.match(html, /×3/);
   await gatherUi.recordDiscovery(moonPage, [moonItem.uuid]);
-  await game.settings.set("eryndor-professions", "conditionOverrides", { season: "winter", weather: "", time: "night" });
+  await game.settings.set("gathering-professions", "conditionOverrides", { season: "winter", weather: "", time: "night" });
   model = gatherUi.buildGatherModel(moonPage, actor, { isGM: false });
   assert.equal(model.empty, true);
   html = gatherUi.renderGatherWindow(model, { characters: [actor] });
   assert.match(html, /Nothing can be gathered here right now \(winter, Night\)/);
   assert.match(html, /Not found now/);
   assert.match(html, /data-act="gather" disabled/);
-  if (process.env.EP_PREVIEW) {
+  if (process.env.GP_PREVIEW) {
     const fs = await import("node:fs");
     const css = fs.readFileSync(new URL("../styles/module.css", import.meta.url), "utf8");
-    const wrap = (body, width, cls = "ep-gathering-window") => `<!doctype html><html><head><meta charset="utf-8"><style>
+    const wrap = (body, width, cls = "gp-gathering-window") => `<!doctype html><html><head><meta charset="utf-8"><style>
       body{margin:0;background:#15121a;color:#efe6d8;font-family:Signika,Arial,sans-serif;font-size:14px}
       .app{width:${width}px;margin:10px;border:1px solid #4a3f35;border-radius:6px;background:#211d27}
       .app>header{padding:.4rem .6rem;border-bottom:1px solid #4a3f35;font-weight:600}
       input,select,button,textarea{background:#2b2632;color:inherit;border:1px solid #5a4e43;border-radius:4px;height:28px;font:inherit}
-      img{border:none} ${css}</style></head><body><div class="app ${cls} eryndor-professions-ui"><header>Window</header><div class="window-content" style="height:auto">${body}</div></div></body></html>`;
-    await game.settings.set("eryndor-professions", "conditionOverrides", { season: "", weather: "rain", time: "night" });
+      img{border:none} ${css}</style></head><body><div class="app ${cls} gathering-professions-ui"><header>Window</header><div class="window-content" style="height:auto">${body}</div></div></body></html>`;
+    await game.settings.set("gathering-professions", "conditionOverrides", { season: "", weather: "rain", time: "night" });
     const shown = gatherUi.buildGatherModel(moonPage, actor, { isGM: false });
-    fs.writeFileSync(`${process.env.EP_PREVIEW}/cond-gather.html`, wrap(gatherUi.renderGatherWindow(shown, { characters: [actor] }), 470));
+    fs.writeFileSync(`${process.env.GP_PREVIEW}/cond-gather.html`, wrap(gatherUi.renderGatherWindow(shown, { characters: [actor] }), 470));
     const condUi = await import("../scripts/conditions-ui.js");
-    await game.settings.set("eryndor-professions", "conditionDc", [{ type: "weather", value: "blizzard", profession: "", dc: 5 }, { type: "time", value: "night", profession: "mining", dc: 2 }]);
-    fs.writeFileSync(`${process.env.EP_PREVIEW}/cond-window-dc.html`, wrap(condUi.renderConditionsWindow({ tab: "dc" }), 860, "ep-node-manager ep-conditions-window"));
-    fs.writeFileSync(`${process.env.EP_PREVIEW}/cond-window-now.html`, wrap(condUi.renderConditionsWindow({ tab: "now" }), 860, "ep-node-manager ep-conditions-window"));
-    fs.writeFileSync(`${process.env.EP_PREVIEW}/cond-rules.html`, wrap(`<div style="padding:1rem">${condUi.rulesEditorHtml(moonItem.flags["eryndor-professions"].material.conditions, "conditions")}</div>`, 560, "ep-node-manager"));
-    await game.settings.set("eryndor-professions", "conditionDc", []);
+    await game.settings.set("gathering-professions", "conditionDc", [{ type: "weather", value: "blizzard", profession: "", dc: 5 }, { type: "time", value: "night", profession: "mining", dc: 2 }]);
+    fs.writeFileSync(`${process.env.GP_PREVIEW}/cond-window-dc.html`, wrap(condUi.renderConditionsWindow({ tab: "dc" }), 860, "gp-node-manager gp-conditions-window"));
+    fs.writeFileSync(`${process.env.GP_PREVIEW}/cond-window-now.html`, wrap(condUi.renderConditionsWindow({ tab: "now" }), 860, "gp-node-manager gp-conditions-window"));
+    fs.writeFileSync(`${process.env.GP_PREVIEW}/cond-rules.html`, wrap(`<div style="padding:1rem">${condUi.rulesEditorHtml(moonItem.flags["gathering-professions"].material.conditions, "conditions")}</div>`, 560, "gp-node-manager"));
+    await game.settings.set("gathering-professions", "conditionDc", []);
   }
-  await game.settings.set("eryndor-professions", "conditionOverrides", {});
+  await game.settings.set("gathering-professions", "conditionOverrides", {});
 }
 
 // Windows construct under Foundry's getter-only ApplicationV2#state (0.7.0 regression).
@@ -499,7 +499,7 @@ assert.equal(api.nodes.read(seam).tools[0].name, "Test Miner's Pick");
 const player = { id: "player1", isGM: false };
 game.users = [player, { id: "gm", isGM: true }];
 const playerChar = (await Actor.implementation.create([{ name: "Player Miner", type: "character",
-  flags: { "eryndor-professions": { selectedProfession: "mining", xp: { mining: 0 } } } }]))[0];
+  flags: { "gathering-professions": { selectedProfession: "mining", xp: { mining: 0 } } } }]))[0];
 playerChar.testUserPermission = (user, level) => user.id === "player1" && level === "OWNER";
 const discoverySilver = items.find(item => item.name === "Test Silver Ore");
 playerChar.items = [{ name: discoverySilver.name }];
@@ -507,24 +507,24 @@ veinPage.testUserPermission = (user, level) => user.id === "player1" && level ==
 const discoveryRequest = { pageUuid: veinPage.uuid, uuids: [discoverySilver.uuid, pickItem.uuid] };
 const updateActor = hooks.get("updateActor");
 game.users.push({ id: "intruder", isGM: false });
-updateActor(playerChar, { flags: { "eryndor-professions": { discoveryRequest } } }, {}, "intruder");
+updateActor(playerChar, { flags: { "gathering-professions": { discoveryRequest } } }, {}, "intruder");
 await new Promise(resolve => setImmediate(resolve));
-assert.equal(veinPage.getFlag("eryndor-professions", "discovered").includes(discoverySilver.uuid), false,
+assert.equal(veinPage.getFlag("gathering-professions", "discovered").includes(discoverySilver.uuid), false,
   "A non-owner cannot submit discoveries through the GM");
-updateActor(playerChar, { flags: { "eryndor-professions": { discoveryRequest } } }, {}, "player1");
+updateActor(playerChar, { flags: { "gathering-professions": { discoveryRequest } } }, {}, "player1");
 await new Promise(resolve => setImmediate(resolve));
-assert.equal(veinPage.getFlag("eryndor-professions", "discovered").includes(discoverySilver.uuid), true,
+assert.equal(veinPage.getFlag("gathering-professions", "discovered").includes(discoverySilver.uuid), true,
   "An owned actor can record a carried material from the page table");
-assert.equal(veinPage.getFlag("eryndor-professions", "discovered").includes(pickItem.uuid), false,
+assert.equal(veinPage.getFlag("gathering-professions", "discovered").includes(pickItem.uuid), false,
   "Other Items cannot be marked as discoveries");
 const assistLib = await import("../scripts/assist.js");
-await actor.setFlag("eryndor-professions", "assist", { pageUuid: veinPage.uuid, at: 1000 });
+await actor.setFlag("gathering-professions", "assist", { pageUuid: veinPage.uuid, at: 1000 });
 actor.unsetFlag = async (scope, key) => { delete actor.flags[scope][key]; };
 const clearRequest = { helperUuid: actor.uuid, pageUuid: veinPage.uuid };
 await assistLib.handleClearAssist(clearRequest, game.users.find(user => user.id === "intruder"), playerChar);
-assert.ok(actor.getFlag("eryndor-professions", "assist"), "A non-owner cannot clear another actor's assist");
+assert.ok(actor.getFlag("gathering-professions", "assist"), "A non-owner cannot clear another actor's assist");
 await assistLib.handleClearAssist(clearRequest, player, playerChar);
-assert.equal(actor.getFlag("eryndor-professions", "assist"), undefined, "An owned gatherer can clear a consumed assist");
+assert.equal(actor.getFlag("gathering-professions", "assist"), undefined, "An owned gatherer can clear a consumed assist");
 game.users.pop();
 const silver = items.find(item => item.name === "Test Silver Ore");
 await assert.rejects(api.nodes.build({ name: "Empty", materials: [{ uuid: copper.uuid, weight: 0 }] }), /at least one material/);
@@ -545,14 +545,14 @@ const sameJournal = await api.nodes.build({ name: "Iron Ridge 2", sceneId: map.i
 assert.equal(sameJournal.parent, built.parent, "One node journal per scene");
 
 // Profession sense: player's character reaches Mining rank 3 → page visible to that player only.
-playerChar.flags["eryndor-professions"].xp.mining = 300;
+playerChar.flags["gathering-professions"].xp.mining = 300;
 await api.nodes.refreshVisibility([built]);
 assert.equal(built.ownership.player1, 2);
 assert.equal(built.ownership.default, 0);
 await api.nodes.setHidden([built], false);
 assert.equal(built.ownership.default, 2, "Revealed to everyone");
 await api.nodes.setHidden([built], true);
-playerChar.flags["eryndor-professions"].xp.mining = 0;
+playerChar.flags["gathering-professions"].xp.mining = 0;
 await api.nodes.refreshVisibility([built]);
 assert.equal(built.ownership.player1, 0, "Sense is lost when the rank drops");
 
@@ -583,13 +583,13 @@ assert.equal(pin.text, "Iron Ridge (edited)");
 
 // Linked placements share one table, but Gatherer tracks pulls on each page.
 await built.setFlag("gatherer", "data", { drawsUsed: 2, firstDrawTime: 2000 });
-await built.setFlag("eryndor-professions", "discovered", [copper.uuid]);
+await built.setFlag("gathering-professions", "discovered", [copper.uuid]);
 const linkedA = await api.nodes.placeLinked(built, map, 300, 400);
 const linkedB = await api.nodes.placeLinked(linkedA, map, 500, 600);
 assert.equal(linkedA.flags.gatherer.table, built.flags.gatherer.table);
 assert.equal(linkedB.flags.gatherer.table, built.flags.gatherer.table);
 assert.equal(nodesLib.nodeUsage(linkedA).used, 0, "Linked placement starts with fresh pulls");
-assert.equal(linkedA.getFlag("eryndor-professions", "discovered"), undefined, "Linked placement starts with separate discoveries");
+assert.equal(linkedA.getFlag("gathering-professions", "discovered"), undefined, "Linked placement starts with separate discoveries");
 assert.equal(nodesLib.nodeUsage(built).used, 2, "Source depletion is unchanged");
 assert.equal(api.nodes.read(linkedA).linkGroup, built.uuid);
 assert.equal(api.nodes.read(linkedB).linkGroup, built.uuid);
@@ -601,7 +601,7 @@ assert.deepEqual(linkedRows.map(row => row.placementNumber), [1, 2, 3]);
 assert.equal(linkedRows[0].groupSize, 3);
 const linkedHtml = nodeUi.renderList(nodeUi.buildListModel(api.nodes.all(), {}), {});
 assert.match(linkedHtml, /3 linked placements/);
-assert.match(linkedHtml, /ep-nm-linked-collapsed/);
+assert.match(linkedHtml, /gp-nm-linked-collapsed/);
 assert.match(nodeUi.renderDetail(built, { selected: built.uuid }), /Add linked placement/);
 await api.nodes.update(linkedA, { name: "Iron Ridge East", materials: [{ uuid: silver.uuid, weight: 3 }], draws: 3, time: 0 });
 assert.equal(builtTable.formula, "1d3", "Material edits rewrite the shared table");
@@ -645,32 +645,32 @@ assert.equal(tables.length, tablesBefore - 1, "Shared builder table is deleted w
 await api.nodes.delete(copy);
 await api.nodes.delete(sameJournal);
 await Actor.implementation.deleteDocuments([playerChar.id]);
-for (const entry of journal.filter(entry => entry.getFlag("eryndor-professions", "nodeJournal"))) await entry.delete();
-for (const folder of folders.filter(folder => folder.getFlag("eryndor-professions", "nodeFolder"))) await Folder.implementation.deleteDocuments([folder.id]);
+for (const entry of journal.filter(entry => entry.getFlag("gathering-professions", "nodeJournal"))) await entry.delete();
+for (const folder of folders.filter(folder => folder.getFlag("gathering-professions", "nodeFolder"))) await Folder.implementation.deleteDocuments([folder.id]);
 
 // Existing 3-point characters lose only this tree's choices and receive the
 // new budget. The GM button can repeat that reset for one character.
 const firstSkill = skillPage("Steady Hands");
 const secondSkill = skillPage("Light Touch");
 const ownedPerk = new Item({ name: firstSkill.name,
-  flags: { "eryndor-professions": { universalSkill: "steadyHands", perk: { enabled: true } } } }, actor);
+  flags: { "gathering-professions": { universalSkill: "steadyHands", perk: { enabled: true } } } }, actor);
 const unrelatedItem = new Item({ name: "Unrelated Item" }, actor);
 actor.items = [ownedPerk, unrelatedItem];
 const otherTreeSkill = { uuid: "JournalEntry.other.Page.other", points: 1 };
 await actor.setFlag("skill-tree", "skills", [{ uuid: firstSkill.uuid, points: 1 }, otherTreeSkill]);
 await actor.setFlag("skill-tree", `skillTreeSkillPoints.${tree.id}`, 2);
-await actor.setFlag("eryndor-professions", `treePoints.${tree.id}`, 3);
-await actor.setFlag("eryndor-professions", `pointRebalanceVersion.${tree.id}`, null);
+await actor.setFlag("gathering-professions", `treePoints.${tree.id}`, 3);
+await actor.setFlag("gathering-professions", `pointRebalanceVersion.${tree.id}`, null);
 assert.deepEqual(await api.syncActor(actor), { granted: 0 });
 assert.equal(game.modules.get("skill-tree").API.getSkillTreePoints(actor, tree).total, 2);
 assert.deepEqual(actor.getFlag("skill-tree", "skills"), [otherTreeSkill]);
 assert.deepEqual(actor.items.map(item => item.name), ["Unrelated Item"]);
-assert.equal(actor.getFlag("eryndor-professions", `pointRebalanceBackup.${tree.id}`).skills.length, 1);
-assert.equal(actor.getFlag("eryndor-professions", `treePoints.${tree.id}`), 2);
+assert.equal(actor.getFlag("gathering-professions", `pointRebalanceBackup.${tree.id}`).skills.length, 1);
+assert.equal(actor.getFlag("gathering-professions", `treePoints.${tree.id}`), 2);
 assert.deepEqual(await api.syncActor(actor), { granted: 0 }, "Rebalance runs once");
 
 const secondPerk = new Item({ name: secondSkill.name,
-  flags: { "eryndor-professions": { universalSkill: "lightTouch", perk: { enabled: true } } } }, actor);
+  flags: { "gathering-professions": { universalSkill: "lightTouch", perk: { enabled: true } } } }, actor);
 actor.items.push(secondPerk);
 await actor.setFlag("skill-tree", "skills", [{ uuid: secondSkill.uuid, points: 1 }, otherTreeSkill]);
 await actor.setFlag("skill-tree", `skillTreeSkillPoints.${tree.id}`, 1);
@@ -678,16 +678,16 @@ assert.deepEqual(await api.resetSkills(actor, tree), { points: 2, removedSkills:
 assert.equal(game.modules.get("skill-tree").API.getSkillTreePoints(actor, tree).total, 2);
 assert.deepEqual(actor.getFlag("skill-tree", "skills"), [otherTreeSkill]);
 assert.deepEqual(actor.items.map(item => item.name), ["Unrelated Item"]);
-assert.equal(actor.getFlag("eryndor-professions", `lastSkillResetBackup.${tree.id}`).skills[0].uuid, secondSkill.uuid);
+assert.equal(actor.getFlag("gathering-professions", `lastSkillResetBackup.${tree.id}`).skills[0].uuid, secondSkill.uuid);
 const retryActor = new Actor.implementation({ name: "Retry Gatherer", type: "character",
-  flags: { "eryndor-professions": { selectedProfession: "mining", xp: { mining: 95 }, treePoints: { [tree.id]: 3 } },
+  flags: { "gathering-professions": { selectedProfession: "mining", xp: { mining: 95 }, treePoints: { [tree.id]: 3 } },
     "skill-tree": { skills: [{ uuid: firstSkill.uuid, points: 1 }], skillTreeSkillPoints: { [tree.id]: 2 } } } });
 retryActor.items = [new Item({ name: firstSkill.name,
-  flags: { "eryndor-professions": { universalSkill: "steadyHands" } } }, retryActor)];
+  flags: { "gathering-professions": { universalSkill: "steadyHands" } } }, retryActor)];
 const deleteItems = retryActor.deleteEmbeddedDocuments.bind(retryActor);
 retryActor.deleteEmbeddedDocuments = async () => { throw new Error("temporary item deletion failure"); };
 await assert.rejects(api.syncActor(retryActor), /temporary item deletion failure/);
-assert.equal(retryActor.getFlag("eryndor-professions", `pointRebalanceBackup.${tree.id}`).skills.length, 1);
+assert.equal(retryActor.getFlag("gathering-professions", `pointRebalanceBackup.${tree.id}`).skills.length, 1);
 retryActor.deleteEmbeddedDocuments = deleteItems;
 assert.deepEqual(await api.syncActor(retryActor), { granted: 0 }, "Interrupted reset resumes from its backup");
 assert.equal(game.modules.get("skill-tree").API.getSkillTreePoints(retryActor, tree).total, 2);
@@ -721,14 +721,14 @@ game.user.isGM = true;
 const treeUuid = tree.uuid;
 // A rare fallback pointing at a deleted table is cleared.
 await api.setProfessions(Object.values(api.getProfessions()).map(entry => entry.key === "logging" ? { ...entry, rareTable: "RollTable.deleted" } : entry));
-await game.settings.set("eryndor-professions", "skillTree", { uuid: "", pointsPerRank: 2, startingPoints: 2 });
+await game.settings.set("gathering-professions", "skillTree", { uuid: "", pointsPerRank: 2, startingPoints: 2 });
 assert.equal(await api.content.ensure(), null, "Already at the content version: nothing to do");
 const report = await api.content.ensure({ force: true });
 assert.deepEqual([report.built, report.tree, report.clearedFallbacks, report.rareTables, report.tools, report.conditionDc > 30], [false, "Gathering Skill Tree", 1, 20, 4, true]);
 // Gathering tools: a basic tool per profession, required for every gather.
 const toolLib = await import("../scripts/nodes.js");
 const basicPick = items.find(item => item.name === "Miner's Pick");
-assert.deepEqual([basicPick.type, basicPick.system.proficient, basicPick.flags["eryndor-professions"].defaultTool], ["tool", 0, "mining"], "Basic tool: no proficiency bonus");
+assert.deepEqual([basicPick.type, basicPick.system.proficient, basicPick.flags["gathering-professions"].defaultTool], ["tool", 0, "mining"], "Basic tool: no proficiency bonus");
 assert.deepEqual(api.getProfessions().mining.tools, [{ uuid: basicPick.uuid, name: "Miner's Pick", img: basicPick.img }]);
 assert.deepEqual(api.getProfessions().skinning.tools.map(tool => tool.name), ["Skinning Knife"]);
 assert.ok(folders.some(folder => folder.name === "Gathering Tools" && folder.type === "Item"));
@@ -764,12 +764,12 @@ assert.equal(api.skillTreeConfig().uuid, treeUuid, "Existing universal tree link
 assert.equal(api.getProfessions().logging.rareTable, "", "Missing fallback table cleared");
 assert.equal(api.getProfessions().mining.rareTable, result.rareOre, "Existing fallback table kept");
 assert.ok(api.getProfessions().skinning.rareTables.every(Boolean), "Tier tables built");
-assert.equal(items.filter(item => item.flags["eryndor-professions"]?.rareFind).length, 60);
+assert.equal(items.filter(item => item.flags["gathering-professions"]?.rareFind).length, 60);
 assert.equal((await api.content.ensure({ force: true })).rareTables, 0, "Rerun builds nothing new");
 assert.equal(settings.worldContentVersion, 3);
 // A world with no tree gets one built, in "Gathering Skill Tree" folders.
 journal.splice(0, journal.length);
-await game.settings.set("eryndor-professions", "skillTree", { uuid: "", pointsPerRank: 2, startingPoints: 2 });
+await game.settings.set("gathering-professions", "skillTree", { uuid: "", pointsPerRank: 2, startingPoints: 2 });
 const fresh = await api.content.ensure({ force: true });
 assert.deepEqual([fresh.built, fresh.rareTables], [true, 0], "Built tree; rare tables already set");
 const builtTree = journal.find(entry => entry.name === "Gathering Skill Tree");
@@ -789,22 +789,22 @@ assert.equal(folders.find(folder => folder.id === builtTree.folder).name, "Gathe
   assert.equal(merged.tools[0].uuid, "Item.newPick", "Saving Professions keeps tools saved in another tab");
   assert.equal(merged.rareTables[0], "RollTable.newRare", "Saving Professions keeps rare tables saved in another tab");
   await api.setProfessions(Object.values(api.getProfessions()).map(entry => entry.key === "mining" ? savedMining : entry));
-  await game.settings.set("eryndor-professions", "conditionDc", (await import("../scripts/conditions.js")).defaultConditionDcRows());
+  await game.settings.set("gathering-professions", "conditionDc", (await import("../scripts/conditions.js")).defaultConditionDcRows());
   const sections = Object.fromEntries(hubLib.HUB_SECTIONS.map(section => [section.id, hubLib.renderHub({ ...hubLib.initialHubView(section.id), section: section.id })]));
   assert.deepEqual(Object.keys(sections), ["professions", "tree", "tools", "rare", "rules", "conditions"]);
-  for (const html of Object.values(sections)) assert.match(html, /ep-hub-nav-item active/);
+  for (const html of Object.values(sections)) assert.match(html, /gp-hub-nav-item active/);
   assert.match(sections.professions, /name="p_label_0" value="Mining"/);
   assert.match(sections.professions, /data-act="prof-add"/);
   assert.match(sections.tools, /Miner(&#39;|')s Pick/, "Tool tiles show names, not UUIDs");
   assert.doesNotMatch(sections.tools, />Item\./);
   assert.match(sections.rare, /Mining Rare Finds — Tier 1/);
-  assert.equal((sections.rare.match(/class="ep-rare-tier"/g) ?? []).length, 5 * Object.keys(api.getProfessions()).length);
+  assert.equal((sections.rare.match(/class="gp-rare-tier"/g) ?? []).length, 5 * Object.keys(api.getProfessions()).length);
   assert.match(sections.rules, /name="excellentRareBonus"/);
   assert.match(sections.rules, /name="gatherAttemptsPerRest"/);
   assert.match(sections.tree, /name="pointsPerRank"/);
   const conditionsHtml = hubLib.renderHub({ ...hubLib.initialHubView("conditions", { conditionsTab: "dc" }), section: "conditions" });
   assert.match(conditionsHtml, /name="dcg_weather__blizzard"[^>]*value="5"/, "Recommended difficulty values shown");
-  if (process.env.EP_PREVIEW) {
+  if (process.env.GP_PREVIEW) {
     const fs = await import("node:fs");
     const css = fs.readFileSync(new URL("../styles/module.css", import.meta.url), "utf8");
     const page = (body, title) => `<!doctype html><html><head><meta charset="utf-8">
@@ -814,11 +814,11 @@ assert.equal(folders.find(folder => folder.id === builtTree.folder).name, "Gathe
       .app>header{padding:.4rem .6rem;background:#1a1620;border-bottom:1px solid #4a3f35;font-weight:600}
       .window-content{flex:1;min-height:0}
       input,select,button{font:inherit;height:28px} img{border:none} ${css}</style></head>
-      <body><div class="app ep-hub-window eryndor-professions-ui"><header>${title}</header><div class="window-content">${body}</div></div></body></html>`;
-    for (const [id, html] of Object.entries(sections)) fs.writeFileSync(`${process.env.EP_PREVIEW}/hub-${id}.html`, page(html, "Eryndor Professions"));
-    fs.writeFileSync(`${process.env.EP_PREVIEW}/hub-conditions-dc.html`, page(conditionsHtml, "Eryndor Professions"));
+      <body><div class="app gp-hub-window gathering-professions-ui"><header>${title}</header><div class="window-content">${body}</div></div></body></html>`;
+    for (const [id, html] of Object.entries(sections)) fs.writeFileSync(`${process.env.GP_PREVIEW}/hub-${id}.html`, page(html, "Gathering Professions"));
+    fs.writeFileSync(`${process.env.GP_PREVIEW}/hub-conditions-dc.html`, page(conditionsHtml, "Gathering Professions"));
     const biomesHtml = hubLib.renderHub({ ...hubLib.initialHubView("conditions", { conditionsTab: "biomes" }), section: "conditions" });
-    fs.writeFileSync(`${process.env.EP_PREVIEW}/hub-conditions-biomes.html`, page(biomesHtml, "Eryndor Professions"));
+    fs.writeFileSync(`${process.env.GP_PREVIEW}/hub-conditions-biomes.html`, page(biomesHtml, "Gathering Professions"));
   }
 }
 game.modules.get("skill-tree").active = false;

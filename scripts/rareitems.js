@@ -23,7 +23,7 @@ export const RARE_FINDS = Object.freeze({
     [find("Adamant Heartstone", "commodities/stone/geode-raw-white.webp", "The dark, unbreakable core of an adamantine seam."),
       find("Phoenix Ruby", "magic/fire/flame-burning-hand-orange.webp", "A ruby with a tiny flame dancing inside that never goes out."),
       find("Titan's Tear Diamond", "commodities/gems/gem-faceted-round-white.webp", "A flawless diamond the size of an egg, said to be a weeping giant's tear.")],
-    [find("Worldvein Crystal", "magic/light/orb-lightbulb-gray.webp", "A crystal pulsing in time with the ley lines that run beneath Eryndor."),
+    [find("Worldvein Crystal", "magic/light/orb-lightbulb-gray.webp", "A crystal pulsing in time with the ley lines that run beneath the world."),
       find("Primordial Ore", "commodities/stone/ore-pile-tan.webp", "A fragment of stone older than the world's making, warm and faintly alive."),
       find("Godforge Ember", "magic/fire/flame-burning-hand-orange.webp", "A coal from a divine forge. It has not stopped burning in ten thousand years.")]
   ],
@@ -40,7 +40,7 @@ export const RARE_FINDS = Object.freeze({
     [find("Moonflower of Ages", "magic/nature/leaf-glow-green.webp", "Blooms once a century, under a full moon, and never wilts once picked."),
       find("Bloodthorn Bloom", "magic/nature/root-vine-entwined-thorns.webp", "A crimson flower that feeds on old battlefields."),
       find("Sylvan Starlotus", "magic/light/orb-lightbulb-gray.webp", "A lotus whose petals hold the reflection of stars, even by day.")],
-    [find("Seed of the World Tree", "magic/nature/tree-spirit-green.webp", "A seed that hums with the life of every forest in Eryndor."),
+    [find("Seed of the World Tree", "magic/nature/tree-spirit-green.webp", "A seed that hums with the life of every forest in the world."),
       find("Everbloom Blossom", "magic/life/heart-cross-strong-flame-green.webp", "A flower that has not wilted since the gods walked the land."),
       find("Ambrosia Petal", "magic/control/buff-luck-fortune-green.webp", "A single petal of the gods' own garden, sweet beyond words.")]
   ],

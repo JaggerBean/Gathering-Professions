@@ -1,6 +1,12 @@
-# Eryndor Professions
+# Gathering Professions
 
 Foundry 14 + dnd5e + Gatherer 5.0.3. Enable this module alongside Gatherer. After updating module files while Foundry is running, restart the Foundry server and reopen the world so the new manifest, script, and stylesheet load.
+
+## Renamed package upgrade (0.18.0)
+
+Version 0.18.0 changes the package ID and installation directory from `eryndor-professions` to `gathering-professions`. Existing worlds must enable **Gathering Professions** once after replacing the old module. On the active GM's first load, the module copies legacy world settings and document flags into the new namespace. Existing values already saved under `gathering-professions` win, retries are safe, and legacy data is retained for rollback.
+
+Macros and integrations must use `game.modules.get("gathering-professions")`, `flags.gathering-professions`, and the `gatheringProfessionsGatherComplete` hook. The built-in Gathering Skill Tree updates its internal group ID during the same load. After confirming the migrated world, the unused old package entry may be disabled or removed.
 
 The module applies one profession roll **after Gatherer selects a reward and before it grants the item**. The existing Gatherer interception holds configured rewards until the asynchronous check and yield finish. The result's margin determines quantity and XP. Gatherer still owns node uses, resets, roll tables, and monster harvest interactions. Its use is consumed on every attempt, including failed and partial extractions.
 
@@ -8,7 +14,7 @@ Each configured material check posts a dice card showing the profession, materia
 
 ## Material yield and extraction results
 
-Set **Base Yield** on a material to a positive whole-number dice formula, such as `1d4`, `1d2 + 1`, or `1`. The source is `flags.eryndor-professions.material.baseYield` on the material Item. Missing or blank values default to `1`.
+Set **Base Yield** on a material to a positive whole-number dice formula, such as `1d4`, `1d2 + 1`, or `1`. The source is `flags.gathering-professions.material.baseYield` on the material Item. Missing or blank values default to `1`.
 
 Margin is `check total − final DC`:
 
@@ -32,7 +38,7 @@ The Items currently in Professions > Mining > Stones, Ores, and Gemstones get de
 
 ## In-game editor
 
-As GM, open the **Items** sidebar and click **Profession Materials**. You can also find **Open Materials Editor** in **Game Settings → Configure Settings → Module Settings → Eryndor Professions**. The manager lists assigned materials with their Base Yield and lets you search, edit a material, assign another world Item, and open **Tier & Rank Rules**. You can also open any world Item and choose **Material** in its sheet header. Both entry points use the same editor. Choose a profession and tier, enter Base Yield, and optionally override DC and XP. **Use mining default** keeps the automatic Mining assignment while allowing Base Yield to be saved. **No profession check** excludes an Item.
+As GM, open the **Items** sidebar and click **Profession Materials**. You can also find **Open Materials Editor** in **Game Settings → Configure Settings → Module Settings → Gathering Professions**. The manager lists assigned materials with their Base Yield and lets you search, edit a material, assign another world Item, and open **Tier & Rank Rules**. You can also open any world Item and choose **Material** in its sheet header. Both entry points use the same editor. Choose a profession and tier, enter Base Yield, and optionally override DC and XP. **Use mining default** keeps the automatic Mining assignment while allowing Base Yield to be saved. **No profession check** excludes an Item.
 
 Click the **hammer (Gathering Profession — Choose / View)** under the left-side **Token Controls** to open the profession menu. It opens a selected owned character token, otherwise your assigned character. If neither is available, it offers an owned-character chooser. The character sheet's **Professions** header entry remains available. The selected profession is displayed prominently at the top of the menu, with a star in its progress row.
 
@@ -66,7 +72,7 @@ Gatherer roll table results should point to actual Item documents. Plain text re
 
 ## Custom professions (0.5.0)
 
-As GM, open **Profession Materials → Professions & Skill Tree**, or **Configure Settings → Module Settings → Eryndor Professions → Edit Professions**. Each row sets a profession's name, check ability (any of the six), and rare-find table. Fill a blank row to add one. A blank key is built from the name, such as `fishing` for Fishing. Keys cannot change after saving, because character XP is stored under them.
+As GM, open **Profession Materials → Professions & Skill Tree**, or **Configure Settings → Module Settings → Gathering Professions → Edit Professions**. Each row sets a profession's name, check ability (any of the six), and rare-find table. Fill a blank row to add one. A blank key is built from the name, such as `fishing` for Fishing. Keys cannot change after saving, because character XP is stored under them.
 
 Removing a profession keeps all character XP. Materials assigned to it fall back to Gatherer's normal awards. A character who chose it shows no profession until the GM picks one. Mining, Herbalism, Logging, and Skinning stay the defaults until the list is first saved. Existing Harvesting selections, XP, ranks, materials, nodes, perks, and condition modifiers are read as Skinning. New changes save the Skinning key.
 
@@ -85,20 +91,20 @@ Skill requirements can read these actor attributes:
 
 | Attribute key | Value |
 | --- | --- |
-| `flags.eryndor-professions.professionRank` | Rank 0–5 in the character's selected profession (available to custom trees) |
-| `flags.eryndor-professions.effectiveRank.mining` | Effective rank 0–5 (0 = untrained) |
-| `flags.eryndor-professions.selectedProfession` | Selected profession key, such as `mining` |
-| `flags.eryndor-professions.xp.mining` | Total XP, including banked XP |
+| `flags.gathering-professions.professionRank` | Rank 0–5 in the character's selected profession (available to custom trees) |
+| `flags.gathering-professions.effectiveRank.mining` | Effective rank 0–5 (0 = untrained) |
+| `flags.gathering-professions.selectedProfession` | Selected profession key, such as `mining` |
+| `flags.gathering-professions.xp.mining` | Total XP, including banked XP |
 
-Example: a "Deep Vein Sense" skill with requirement `flags.eryndor-professions.effectiveRank.mining` greater-or-equals `3`.
+Example: a "Deep Vein Sense" skill with requirement `flags.gathering-professions.effectiveRank.mining` greater-or-equals `3`.
 
 ## Universal gathering skill tree (0.9.0)
 
-One tree serves every gathering profession. In **Professions & Skill Tree**, tick **Build the universal gathering tree and link it**, then save. It creates 30 skill Items in the folder **Gathering Skill Tree** and a Skill Tree journal with the same name. Points: **2 at Rank 1** and **2 per rank-up**, which is 10 over five ranks. Existing 3/3 settings use this 2/2 rate after the module loads. On the active GM's next world load, characters with more than the new point budget have their universal-tree choices and linked perk Items reset, then receive the new point total. Other trees and their Items stay intact. The module also sets it up by itself (see Gathering content). From a macro: `game.modules.get("eryndor-professions").api.skillTree.build()`.
+One tree serves every gathering profession. In **Professions & Skill Tree**, tick **Build the universal gathering tree and link it**, then save. It creates 30 skill Items in the folder **Gathering Skill Tree** and a Skill Tree journal with the same name. Points: **2 at Rank 1** and **2 per rank-up**, which is 10 over five ranks. Existing 3/3 settings use this 2/2 rate after the module loads. On the active GM's next world load, characters with more than the new point budget have their universal-tree choices and linked perk Items reset, then receive the new point total. Other trees and their Items stay intact. The module also sets it up by itself (see Gathering content). From a macro: `game.modules.get("gathering-professions").api.skillTree.build()`.
 
 The tree is a hexagon (0.9.1). The six themes are six spokes. The tier 1 skills form the inner ring: they have no prerequisite, so they are the starting choices. Each spoke grows outward to its capstone at the tip. Each skill opens the next skill on its spoke. Cross-theme links between tier 2 and tier 3 work in both directions, including Conservationist and Reader of Seasons. Nodes need enough skill points and one linked skill; none requires a profession rank. Capstones (tier 5) cost 2 points, and taking one locks the other five. The tree has its own point pool and no group label. An existing universal tree updates its links and label automatically when the GM loads the world; a test tree also loses its `(Test)` title suffix. Existing choices stay unless the point rebalance resets that character. Call `api.skillTree.relayout()` to run the tree update again.
 
-When a GM views a character's linked Gathering Skill Tree, **Reset Skills** appears beside the point total. Confirming clears that character's learned skills in this tree, removes their linked perk Items, and refunds the points earned at their current profession rank. It leaves other trees alone. The module saves a recovery copy of the previous skill entries, point total, and removed Items in the character's `flags.eryndor-professions.lastSkillResetBackup.<treeId>`. The automatic rebalance saves its copy under `pointRebalanceBackup.<treeId>`.
+When a GM views a character's linked Gathering Skill Tree, **Reset Skills** appears beside the point total. Confirming clears that character's learned skills in this tree, removes their linked perk Items, and refunds the points earned at their current profession rank. It leaves other trees alone. The module saves a recovery copy of the previous skill entries, point total, and removed Items in the character's `flags.gathering-professions.lastSkillResetBackup.<treeId>`. The automatic rebalance saves its copy under `pointRebalanceBackup.<treeId>`.
 
 | Tier | Bounty | Fortune | Technique | Craft | Wayfinding | Fellowship |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -118,7 +124,7 @@ When a GM views a character's linked Gathering Skill Tree, **Reset Skills** appe
 
 ## Tiered rare finds (0.10.0)
 
-Each profession has one rare-find table per material tier. Set them in **Module Settings → Eryndor Professions → Rare-Find Tables** (or the **Rare-Find Tables** button in the Profession Materials window). Tick **Build the default rare finds for empty tiers** to create three unique Items per tier for Mining, Herbalism, Logging, and Skinning (60 Items, 20 tables, folders named **Rare Finds**). Each default Item exists only on its table. Rename, re-art, or replace them freely. From a macro: `game.modules.get("eryndor-professions").api.rareFinds.build()`.
+Each profession has one rare-find table per material tier. Set them in **Module Settings → Gathering Professions → Rare-Find Tables** (or the **Rare-Find Tables** button in the Profession Materials window). Tick **Build the default rare finds for empty tiers** to create three unique Items per tier for Mining, Herbalism, Logging, and Skinning (60 Items, 20 tables, folders named **Rare Finds**). Each default Item exists only on its table. Rename, re-art, or replace them freely. From a macro: `game.modules.get("gathering-professions").api.rareFinds.build()`.
 
 **Getting a rare find** (only on Successful, Excellent, or Masterful extractions):
 
@@ -129,7 +135,7 @@ Each profession has one rare-find table per material tier. Set them in **Module 
 **Which table:**
 
 - The find starts on the table for the **material's tier**. A node's or material's own rare table replaces this starting table only.
-- **Climbing:** a natural 20 on the gathering check moves the find up one tier. At each new table, the character's owner uses the **Roll the Fortune die** button on the chat card (or in the gathering window). The active GM resolves that request and awards the result once. A 20 climbs again and asks for another roll; anything else settles the find and draws it. Nothing is drawn until the button is used. Only the character's owners and the GM can start it. **Discerning Eye** makes these rolls climb on 19–20. **Fortune's Favour** rolls them twice and keeps the better. The check's own natural 20 is always exactly one step, and a tier 5 material's natural 20 needs no roll. Waiting rolls are kept on the character (`flags.eryndor-professions.rareClimbs`) and survive a reload. If an item award fails partway through, the find locks for GM review; retrying it cannot award earlier items again.
+- **Climbing:** a natural 20 on the gathering check moves the find up one tier. At each new table, the character's owner uses the **Roll the Fortune die** button on the chat card (or in the gathering window). The active GM resolves that request and awards the result once. A 20 climbs again and asks for another roll; anything else settles the find and draws it. Nothing is drawn until the button is used. Only the character's owners and the GM can start it. **Discerning Eye** makes these rolls climb on 19–20. **Fortune's Favour** rolls them twice and keeps the better. The check's own natural 20 is always exactly one step, and a tier 5 material's natural 20 needs no roll. Waiting rolls are kept on the character (`flags.gathering-professions.rareClimbs`) and survive a reload. If an item award fails partway through, the find locks for GM review; retrying it cannot award earlier items again.
 - **Beyond tier 5:** if a find would climb past tier 5 (a tier 5 material with a natural 20, or a 20 at the tier 5 table), the character still draws from tier 5. The chat card says something more lies hidden, and the GM gets a private whisper to describe a story discovery on the spot.
 - A tier with no table uses the profession's **any-tier rare table** (Professions & Skill Tree). A climbed find whose tier is empty uses the nearest lower tier that has a table.
 - **Rich Find** draws one more time from the final table reached.
@@ -178,7 +184,7 @@ Season, weather, time of day, and biome change what a node gives and how hard it
 
 **Gathering window.** A strip under the banner shows the current conditions. Discovered materials show **Abundant now**, **Scarce now**, or **Not found now**. The GM view shows the current drop %, each material's multiplier, and the chance to find nothing.
 
-Open **Conditions & Biomes** from the cloud button in the Node Manager, from Profession Materials, or from Module Settings. Macros can use `game.modules.get("eryndor-professions").api.conditions`.
+Open **Conditions & Biomes** from the cloud button in the Node Manager, from Profession Materials, or from Module Settings. Macros can use `game.modules.get("gathering-professions").api.conditions`.
 
 ## Gathering window (0.7.0)
 
@@ -204,7 +210,7 @@ Each character starts with **5 free gathering attempts per long rest**, shared a
 
 After the free attempts run out, each further Gather click asks for confirmation before raising that character's dnd5e exhaustion by 1. Canceling leaves both the attempt count and exhaustion unchanged. Gathering stops at the system's maximum exhaustion level (normally 6). A long rest restores free attempts; dnd5e handles any exhaustion reduction normally.
 
-The gathering window shows the selected character's remaining free attempts. The same limit also applies when gathering through Gatherer's original journal sheet or other Gatherer entry points. The GM can change the world limit in **Eryndor Professions → Rules → Free gathering attempts per long rest** (also in **Tier & Rank Rules**); **0** disables the limit and exhaustion penalty.
+The gathering window shows the selected character's remaining free attempts. The same limit also applies when gathering through Gatherer's original journal sheet or other Gatherer entry points. The GM can change the world limit in **Gathering Professions → Rules → Free gathering attempts per long rest** (also in **Tier & Rank Rules**); **0** disables the limit and exhaustion penalty.
 
 The module now uses a socket for party discovery. After updating from 0.6.x, restart the Foundry server once.
 
@@ -213,7 +219,7 @@ The module now uses a socket for party discovery. After updating from 0.6.x, res
 As GM, open the **Node Manager** in any of these places:
 - The mountain button in the left **Token** or **Notes** controls.
 - **Profession Materials → Node Manager**.
-- **Module Settings → Eryndor Professions → Open Node Manager**.
+- **Module Settings → Gathering Professions → Open Node Manager**.
 
 ### Node Manager layout (0.6.1)
 
@@ -260,7 +266,7 @@ Select a node and open **Visibility → Placements** (or use the map-pin/link bu
 
 ### Per-node overrides
 
-Overrides are stored in `flags.eryndor-professions.node` on the Gatherer page.
+Overrides are stored in `flags.gathering-professions.node` on the Gatherer page.
 
 | Setting | Effect |
 | --- | --- |
@@ -285,11 +291,11 @@ The chat card shows the check used, the tool bonus, the node DC modifier, and th
 
 You can filter by scene, profession, or name. Select nodes to reset, reveal, or hide them in bulk. Each row has buttons to open, edit, place a pin, reveal/hide, reset, duplicate, or delete. Delete also removes the node's pins and its builder table.
 
-From macros, use `game.modules.get("eryndor-professions").api.nodes`. It includes `build`, `update`, `duplicate`, `delete`, `reset`, `setHidden`, `placePin`, `placeLinked`, `openManager`, and `openBuilder`.
+From macros, use `game.modules.get("gathering-professions").api.nodes`. It includes `build`, `update`, `duplicate`, `delete`, `reset`, `setHidden`, `placePin`, `placeLinked`, `openManager`, and `openBuilder`.
 
 ## GM hub (0.15.0)
 
-Every GM setting is in one window, **Eryndor Professions**, styled like the gathering window. Open it from **Module Settings → Eryndor Professions** (each button opens its section) or from the Profession Materials toolbar. Sections:
+Every GM setting is in one window, **Gathering Professions**, styled like the gathering window. Open it from **Module Settings → Gathering Professions** (each button opens its section) or from the Profession Materials toolbar. Sections:
 
 - **Professions:** name, key, check ability, and the any-tier rare table (drop a Rollable Table). Add or remove professions (XP is kept).
 - **Skill Tree:** linked tree, points at rank 1 and per rank-up, open the tree, and **Check gathering content** (links or builds the tree, and builds missing rare tables, basic tools, and difficulty values).
@@ -302,7 +308,7 @@ Every GM setting is in one window, **Eryndor Professions**, styled like the gath
 
 ## Gathering tools (0.14.0)
 
-**Every gather needs a tool when its profession requires one.** Each profession has a list of accepted tools (**Module Settings → Eryndor Professions → Gathering Tools**, or the **Gathering Tools** button in Profession Materials). A character without an accepted tool cannot gather ("You need Miner's Pick to gather here"), and no pull is used. This applies to module nodes and plain Gatherer pages. When a table contains materials from several professions, the character needs an accepted tool for every profession that table can produce.
+**Every gather needs a tool when its profession requires one.** Each profession has a list of accepted tools (**Module Settings → Gathering Professions → Gathering Tools**, or the **Gathering Tools** button in Profession Materials). A character without an accepted tool cannot gather ("You need Miner's Pick to gather here"), and no pull is used. This applies to module nodes and plain Gatherer pages. When a table contains materials from several professions, the character needs an accepted tool for every profession that table can produce.
 
 - **Basic tools:** when the GM loads the world, the module creates one tool Item per profession that has none, in the Items folder **Gathering Tools**, and makes it the default: **Miner's Pick** (Mining), **Herbalism Sickle** (Herbalism), **Woodcutter's Axe** (Logging), **Skinning Knife** (Skinning). Basic tools add no bonus. Give characters a copy (drag it onto them).
 - **Better tools:** drop another tool Item into a profession's row to accept it as well. If a character carries several accepted tools, the best one (highest proficiency bonus) is used. A proficient tool adds proficiency to the check.
@@ -315,7 +321,7 @@ Tools wear out on bad luck. When a character gathers at a node that needs a tool
 
 - **Maximum:** the world default is **10** (**Tier & Rank Rules → Default tool durability**). Set a tool's own maximum with **Tool Durability** in its Item sheet header (GM; shown on tool Items, tools in the Node Tool Library, and Items that already have durability). Maximum **0** means the tool never wears.
 - **Broken:** at 0 the tool is broken. It no longer meets the node's tool requirement or adds its bonus, and gathering is refused with "… is broken" unless the character carries another accepted tool. It is not deleted.
-- **Repair:** GM, **Tool Durability → Repair fully** on the character's copy, or `api.durability.repair(item)`. Each character's copy keeps its own current value (`flags.eryndor-professions.durability`).
+- **Repair:** GM, **Tool Durability → Repair fully** on the character's copy, or `api.durability.repair(item)`. Each character's copy keeps its own current value (`flags.gathering-professions.durability`).
 
 ## Gathering content (0.11.0)
 
@@ -324,11 +330,11 @@ Everything the module needs lives in the module and your world; there is no test
 - **Gathering Skill Tree:** when Skill Tree is active, the linked universal tree, or any universal tree in the world, is linked. With none, one is built (journal and 30 skill Items in folders named **Gathering Skill Tree**). When Skill Tree is inactive, the module still sets up other content and waits to create or link the tree until it becomes active.
 - **Rare finds:** any-tier rare tables that point at deleted tables are cleared. If no profession has tier tables, the 60 default rare finds and 20 tables are built (folders **Rare Finds**).
 
-**Module Settings → Eryndor Professions → Gathering Content** runs the check again. From a macro: `api.content.ensure({ force: true })`.
+**Module Settings → Gathering Professions → Gathering Content** runs the check again. From a macro: `api.content.ensure({ force: true })`.
 
 ## Verification
 
-Run `node Data/modules/eryndor-professions/tests/gatherer-check.mjs` from the Foundry data workspace. It runs `tests/gathering.mjs`, the sample-world smoke test `tests/world.mjs` (an in-memory sample world built by `tests/fixtures/sampleworld.js`; automated tests only, never loaded in Foundry), `tests/conditions.mjs`, `tests/perks.mjs`, and `tests/rarefinds.mjs` (universal tree: perk validation, totals, check math, rest uses, odds, layout, sensing, Assist). The isolated tests cover every extraction boundary, Stone `1d4`, `1d2`, fixed `1`, compound formulas, missing Base Yield, Rank 1, higher ranks, another profession, existing stacks, rapid clicks, duplicate completion, zero XP on failed/partial extraction, chat fields, automatic and explicit editor saves, switching advancement modes, preserving current ranks, XP crossing a threshold without promotion, GM promotion, and the resulting profession die and DC reduction. The Roll double rejects synchronous evaluation and checks all async/maximize calls. These tests do not touch a world or replace an in-world Foundry smoke test.
+Run `node Data/modules/gathering-professions/tests/gatherer-check.mjs` from the Foundry data workspace. It runs `tests/gathering.mjs`, the sample-world smoke test `tests/world.mjs` (an in-memory sample world built by `tests/fixtures/sampleworld.js`; automated tests only, never loaded in Foundry), `tests/conditions.mjs`, `tests/perks.mjs`, and `tests/rarefinds.mjs` (universal tree: perk validation, totals, check math, rest uses, odds, layout, sensing, Assist). The isolated tests cover every extraction boundary, Stone `1d4`, `1d2`, fixed `1`, compound formulas, missing Base Yield, Rank 1, higher ranks, another profession, existing stacks, rapid clicks, duplicate completion, zero XP on failed/partial extraction, chat fields, automatic and explicit editor saves, switching advancement modes, preserving current ranks, XP crossing a threshold without promotion, GM promotion, and the resulting profession die and DC reduction. The Roll double rejects synchronous evaluation and checks all async/maximize calls. These tests do not touch a world or replace an in-world Foundry smoke test.
 
 Version 0.5.0 adds tests for custom professions and their validation, the profession editor form, Skill Tree points (Rank 1, rank-up, catch-up, milestone promotion, no double grants, no removal, module inactive), rank mirroring, perk yield on full successes only, the d100 rare-find hit and miss, Masterful rare draws with the setting on and off, material table overrides, missing-table errors, and the perk editor.
 

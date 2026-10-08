@@ -16,8 +16,9 @@ import { resolveRareFind, whisperStoryFind, rollClimb, finishRareFind, climbStat
 import { toolDurability, wearTool, durabilityLabel, normalizeDurability } from "./durability.js";
 import { buildRareFinds, RARE_FINDS } from "./rareitems.js";
 import { gatheringAllowance, reserveGatherAttempt, resetGatherAttempts } from "./gather-limits.js";
+import { LEGACY_MODULE_ID, migrateLegacyNamespace } from "./migration.js";
 
-const RESULT = Symbol("eryndorProfessionResult");
+const RESULT = Symbol("gatheringProfessionResult");
 const actorQueues = new WeakMap();
 
 function queueActorTask(actor, task) {
@@ -144,8 +145,8 @@ async function storePendingClimb(actor, rare, context) {
 
 function climbButton(actorUuid, id, rare) {
   const range = rare.climbThreshold < 20 ? `${rare.climbThreshold}–20` : "20";
-  return `<div class="ep-climb">Tier ${rare.tier} table. Roll the Fortune die: ${escapeHtml(range)} climbs to the next tier${rare.climbAdvantage ? " (roll twice, keep the better)" : ""}.
-    <button type="button" class="ep-climb-roll" data-ep-climb="${escapeHtml(id)}" data-ep-actor="${escapeHtml(actorUuid)}"><i class="fas fa-dice-d20"></i> Roll the Fortune die</button></div>`;
+  return `<div class="gp-climb">Tier ${rare.tier} table. Roll the Fortune die: ${escapeHtml(range)} climbs to the next tier${rare.climbAdvantage ? " (roll twice, keep the better)" : ""}.
+    <button type="button" class="gp-climb-roll" data-gp-climb="${escapeHtml(id)}" data-gp-actor="${escapeHtml(actorUuid)}"><i class="fas fa-dice-d20"></i> Roll the Fortune die</button></div>`;
 }
 
 function climbLines(rare) {
@@ -175,8 +176,8 @@ async function rollPendingClimb(actor, id) {
     const speaker = ChatMessage.getSpeaker({ actor });
     if (state.pending) {
       await actor.setFlag(MODULE_ID, `${CLIMB_FLAG}.${id}`, state);
-      await roll.toMessage({ speaker, flavor: `<div class="eryndor-profession-check"><strong>Fortune die — climbs!</strong>
-        <div class="ep-check-section ep-rare">${climbLines(state).map(escapeHtml).join("<br>")}</div>${climbButton(actor.uuid, id, state)}</div>` });
+      await roll.toMessage({ speaker, flavor: `<div class="gathering-profession-check"><strong>Fortune die — climbs!</strong>
+        <div class="gp-check-section gp-rare">${climbLines(state).map(escapeHtml).join("<br>")}</div>${climbButton(actor.uuid, id, state)}</div>` });
       return state;
     }
     const rare = await finishRareFind(state);
@@ -191,12 +192,12 @@ async function rollPendingClimb(actor, id) {
     const lines = climbLines(rare);
     if (!climbs) lines.push(`Fortune die ${rare.lastRoll}: stays at tier ${rare.tier} (needs ${rare.climbThreshold}+)`);
     const found = [...rare.items.map(item => `${escapeHtml(item.name)} ×1`), ...rare.texts.map(escapeHtml)];
-    await roll.toMessage({ speaker, flavor: `<div class="eryndor-profession-check"><strong>Fortune die</strong>
-      <div class="ep-check-section ep-rare"><strong>Rare Find!</strong> · Tier ${rare.tier}${rare.tableName ? ` (${escapeHtml(rare.tableName)})` : ""}<br>${lines.map(escapeHtml).join("<br>")}
+    await roll.toMessage({ speaker, flavor: `<div class="gathering-profession-check"><strong>Fortune die</strong>
+      <div class="gp-check-section gp-rare"><strong>Rare Find!</strong> · Tier ${rare.tier}${rare.tableName ? ` (${escapeHtml(rare.tableName)})` : ""}<br>${lines.map(escapeHtml).join("<br>")}
       <br>${found.join("<br>") || "Nothing on the table."}
-      ${rare.story ? '<br><strong class="ep-story-flag">Something more lies hidden here… the GM will reveal it.</strong>' : ""}</div></div>` });
+      ${rare.story ? '<br><strong class="gp-story-flag">Something more lies hidden here… the GM will reveal it.</strong>' : ""}</div></div>` });
     if (rare.story) await whisperStoryFind({ actor, item: { name: stored.itemName }, page: { name: stored.pageName }, rare });
-    Hooks.callAll("eryndorRareClimb", { actor, id, rare });
+    Hooks.callAll("gatheringProfessionsRareClimb", { actor, id, rare });
     return rare;
   } finally { climbLocks.delete(key); }
 }
@@ -204,7 +205,7 @@ async function rollPendingClimb(actor, id) {
 /** Chat buttons: enabled for the character's owners while the roll is waiting. */
 function bindClimbButtons(_message, html) {
   const root = html instanceof HTMLElement ? html : html?.[0];
-  for (const button of root?.querySelectorAll?.("[data-ep-climb]") ?? []) {
+  for (const button of root?.querySelectorAll?.("[data-gp-climb]") ?? []) {
     const actor = globalThis.fromUuidSync?.(button.dataset.epActor);
     const waiting = actor?.getFlag?.(MODULE_ID, `${CLIMB_FLAG}.${button.dataset.epClimb}`)?.pending;
     const allowed = Boolean(actor && (game.user.isGM || actor.isOwner) && waiting);
@@ -237,20 +238,20 @@ function escapeHtml(value) {
 function rareFlavor(rare) {
   if (!rare) return "";
   if (rare.pending) {
-    return `<div class="ep-check-section ep-rare"><strong>Rare Find!</strong> (${escapeHtml(rare.trigger)})<br>${climbLines(rare).map(escapeHtml).join("<br>")}
+    return `<div class="gp-check-section gp-rare"><strong>Rare Find!</strong> (${escapeHtml(rare.trigger)})<br>${climbLines(rare).map(escapeHtml).join("<br>")}
       ${climbButton(rare.actorUuid, rare.climbId, rare)}</div>`;
   }
-  if (!rare.trigger) return `<div class="ep-check-section ep-rare">Rare-find roll: ${rare.chanceRoll.total} vs ${rare.chance}% — no rare find.</div>`;
+  if (!rare.trigger) return `<div class="gp-check-section gp-rare">Rare-find roll: ${rare.chanceRoll.total} vs ${rare.chance}% — no rare find.</div>`;
   const found = [...rare.items.map(item => `${escapeHtml(item.name)} ×1`), ...rare.texts.map(escapeHtml)];
   const climbs = (rare.steps ?? []).map(step => step.to > 5
     ? `${step.roll === null ? "Natural 20 on the check" : `Climb roll ${step.roll}`}: beyond tier 5!`
     : `${step.roll === null ? "Natural 20 on the check" : `Climb roll ${step.roll}`}: tier ${step.from} → ${step.to}`);
   if (rare.steps?.length && !rare.story && rare.lastRoll !== null) climbs.push(`Climb roll ${rare.lastRoll}: stays at tier ${rare.tier} (needs ${rare.climbThreshold}+)`);
   const tier = rare.tier ? ` · Tier ${rare.tier}${rare.tableName ? ` (${escapeHtml(rare.tableName)})` : ""}` : "";
-  return `<div class="ep-check-section ep-rare"><strong>Rare Find!</strong> (${escapeHtml(rare.trigger)})${tier}
+  return `<div class="gp-check-section gp-rare"><strong>Rare Find!</strong> (${escapeHtml(rare.trigger)})${tier}
     ${climbs.length ? `<br>${climbs.map(escapeHtml).join("<br>")}` : ""}
     <br>${found.join("<br>") || "Nothing on the table."}
-    ${rare.story ? '<br><strong class="ep-story-flag">Something more lies hidden here… the GM will reveal it.</strong>' : ""}</div>`;
+    ${rare.story ? '<br><strong class="gp-story-flag">Something more lies hidden here… the GM will reveal it.</strong>' : ""}</div>`;
 }
 
 /** Tool durability lost to natural 1s. */
@@ -258,7 +259,7 @@ function wearFlavor(check) {
   const wear = check.wear;
   if (!wear) return "";
   const lost = wear.before - wear.after;
-  return `<div class="ep-check-section ep-wear"><strong>Natural 1!</strong> ${escapeHtml(wear.name)} loses ${lost} durability (${wear.after}/${wear.max}).${wear.broke ? `<br><strong>${escapeHtml(wear.name)} breaks!</strong> It cannot be used until it is repaired.` : ""}</div>`;
+  return `<div class="gp-check-section gp-wear"><strong>Natural 1!</strong> ${escapeHtml(wear.name)} loses ${lost} durability (${wear.after}/${wear.max}).${wear.broke ? `<br><strong>${escapeHtml(wear.name)} breaks!</strong> It cannot be used until it is repaired.` : ""}</div>`;
 }
 
 /** Perk, Assist, reroll, and extra-draw lines for the chat card. */
@@ -273,7 +274,7 @@ function perkFlavor(check, perks) {
   if (check.reroll) lines.push(`Rerolled a failed ${check.reroll.first} (${escapeHtml(check.reroll.label)})`);
   if (check.upgraded) lines.push(`Partial counted as Successful (${sources("partialAsFull")})`);
   for (const extra of check.extras ?? []) lines.push(`Extra draw: ${escapeHtml(extra.item.name)} ×${extra.quantity} (${sources("extraDraws")})`);
-  return lines.length ? `<div class="ep-check-section ep-perks"><strong>Skills</strong><br>${lines.join("<br>")}</div>` : "";
+  return lines.length ? `<div class="gp-check-section gp-perks"><strong>Skills</strong><br>${lines.join("<br>")}</div>` : "";
 }
 
 function checkFlavor(item, rule, check, roll, degree, extraction, xp, perks = { yieldSources: [] }, rare = null) {
@@ -290,20 +291,20 @@ function checkFlavor(item, rule, check, roll, degree, extraction, xp, perks = { 
   const yieldDetail = extraction.roll
     ? `${extraction.maximized ? "Maximum" : "Yield roll"}: ${escapeHtml(extraction.roll.result ?? extraction.baseTotal)} = ${extraction.baseTotal}`
     : degree.id === "partial" ? "Partial extraction: exactly 1; base yield is not rolled." : "Failed extraction: no yield roll.";
-  return `<div class="eryndor-profession-check">
+  return `<div class="gathering-profession-check">
     <strong>${escapeHtml(label)} — ${escapeHtml(item.name)}</strong>
-    <div class="ep-check-section">Tier: ${rule.tier} · Rank: ${check.rank}${check.trained ? " (Selected profession)" : " (Untrained)"}<br>
+    <div class="gp-check-section">Tier: ${rule.tier} · Rank: ${check.rank}${check.trained ? " (Selected profession)" : " (Untrained)"}<br>
     Profession Die: ${check.trained ? `d${check.die}` : "None"}<br>${escapeHtml(ability)} Modifier: ${modifier}${toolLine}</div>
-    <div class="ep-check-section">Base DC: ${rule.dc}<br>
+    <div class="gp-check-section">Base DC: ${rule.dc}<br>
     Rank Reduction: ${check.reduction ? `−${check.reduction}` : "0"}<br>
     Untrained Tier DC: +${check.tierPenalty}<br>
     Untrained Material DC: +${check.materialPenalty}<br>
     ${nodeDcLine}Final DC: <strong>${check.target}</strong></div>
-    ${check.auto ? `<div class="ep-check-section ep-perks"><strong>${escapeHtml(check.auto.label)}</strong>: automatic Masterful extraction. No check was rolled.</div>`
-      : `<div class="ep-check-section">Dice: d20 (${d20}) ${modifier}${check.toolBonus ? ` + ${check.toolBonus}` : ""}${check.trained ? ` + d${check.die} (${professionDie})` : ""}<br>
+    ${check.auto ? `<div class="gp-check-section gp-perks"><strong>${escapeHtml(check.auto.label)}</strong>: automatic Masterful extraction. No check was rolled.</div>`
+      : `<div class="gp-check-section">Dice: d20 (${d20}) ${modifier}${check.toolBonus ? ` + ${check.toolBonus}` : ""}${check.trained ? ` + d${check.die} (${professionDie})` : ""}<br>
     Roll Total: <strong>${roll.total}</strong><br>Margin: <strong>${margin}</strong></div>`}
-    <p class="ep-degree ep-degree-${degree.id}"><strong>${degree.label}</strong>${degree.natural ? " (natural 20)" : ""}</p>
-    <div class="ep-check-section">Base Yield: <strong>${escapeHtml(extraction.baseYield)}</strong><br>
+    <p class="gp-degree gp-degree-${degree.id}"><strong>${degree.label}</strong>${degree.natural ? " (natural 20)" : ""}</p>
+    <div class="gp-check-section">Base Yield: <strong>${escapeHtml(extraction.baseYield)}</strong><br>
     ${yieldDetail}<br>Yield Bonus: +${extraction.bonus}<br>
     ${extraction.nodeBonus ? `Node Yield: ${extraction.nodeBonus > 0 ? "+" : "−"}${Math.abs(extraction.nodeBonus)}<br>` : ""}
     ${extraction.perkBonus ? `Perk Bonus: +${extraction.perkBonus} (${escapeHtml(perks.yieldSources.join(", "))})<br>` : ""}
@@ -311,7 +312,7 @@ function checkFlavor(item, rule, check, roll, degree, extraction, xp, perks = { 
     ${wearFlavor(check)}
     ${perkFlavor(check, perks)}
     ${rareFlavor(rare)}
-    <div class="ep-check-xp">${escapeHtml(label)} XP: <strong>+${xp}</strong>${check.trained ? "" : " (banked; no rank or bonuses until selected)"}</div>
+    <div class="gp-check-xp">${escapeHtml(label)} XP: <strong>+${xp}</strong>${check.trained ? "" : " (banked; no rank or bonuses until selected)"}</div>
   </div>`;
 }
 
@@ -519,7 +520,7 @@ async function resolveCheck({ thing, rule }, actor, sheet, originalToChat) {
 }
 
 function announceComplete(sheet, actor, results) {
-  Hooks.callAll("eryndorGatherComplete", { page: sheet?.document ?? null, actor, results });
+  Hooks.callAll("gatheringProfessionsGatherComplete", { page: sheet?.document ?? null, actor, results });
 }
 
 const plainResults = things => things.filter(thing => thing?.item)
@@ -693,9 +694,24 @@ Hooks.once("init", () => {
     name: "Skill Tree Link", scope: "world", config: false, type: Object,
     default: { ...DEFAULT_SKILL_TREE }
   });
+  game.settings.register(MODULE_ID, "legacyMigrationVersion", {
+    name: "Legacy Namespace Migration", scope: "world", config: false, type: Number, default: 0
+  });
 });
 
-Hooks.once("ready", () => {
+Hooks.once("ready", async () => {
+  if (isActiveGM()) {
+    try {
+      const migration = await migrateLegacyNamespace();
+      if (migration.migrated) {
+        ui.notifications.info(`Gathering Professions migrated ${migration.settings} setting(s) and ${migration.documents} document(s) from ${LEGACY_MODULE_ID}.`);
+      }
+    } catch (error) {
+      console.error(`${MODULE_ID}: legacy namespace migration failed`, error);
+      ui.notifications.error(`Gathering Professions could not migrate legacy data: ${error.message}`);
+      return;
+    }
+  }
   if (!game.modules.get("gatherer")?.active) return;
   integrateGatherer();
   registerUIHooks();
@@ -707,6 +723,7 @@ Hooks.once("ready", () => {
     configuredSkillTree,
     actorPerks,
     perkEffects: PERK_EFFECTS,
+    migration: { legacyId: LEGACY_MODULE_ID, run: () => migrateLegacyNamespace() },
     skillTree: {
       skills: UNIVERSAL_SKILLS,
       /** GM: build the universal tree (perk Items + Skill Tree journal) and link it. */

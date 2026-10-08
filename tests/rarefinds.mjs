@@ -29,7 +29,7 @@ globalThis.fromUuid = async uuid => tables[uuid] ?? (uuid.startsWith("Item.") ? 
 globalThis.fromUuidSync = uuid => tables[uuid] ?? null;
 globalThis.game = {
   settings: { get(_namespace, key) { return settings[key]; }, async set(_namespace, key, value) { settings[key] = value; }, register() {}, registerMenu() {} },
-  modules: new Map([["eryndor-professions", { api: {} }]]), user: { isGM: true }, actors: [], items: []
+  modules: new Map([["gathering-professions", { api: {} }]]), user: { isGM: true }, actors: [], items: []
 };
 
 const rules = await import("../scripts/rules.js");
@@ -176,7 +176,7 @@ const docClass = kind => ({ async create(data) {
 globalThis.Item = { implementation: docClass("Item") };
 globalThis.RollTable = { implementation: docClass("RollTable") };
 globalThis.Folder = { implementation: docClass("Folder") };
-game.modules.get("eryndor-professions").api.setProfessions = async list => { settings.professions = rules.normalizeProfessions(list); return settings.professions; };
+game.modules.get("gathering-professions").api.setProfessions = async list => { settings.professions = rules.normalizeProfessions(list); return settings.professions; };
 settings.professions = [
   { key: "mining", label: "Mining", ability: "str", rareTables: ["RollTable.keep", "", "", "", ""] },
   { key: "herbalism", label: "Herbalism", ability: "wis" },
@@ -192,7 +192,7 @@ const t5 = docs.tables.find(entry => entry.name === "Herbalism Rare Finds — Ti
 assert.equal(t5.results.length, 3);
 assert.equal(t5.formula, "1d3");
 const seed = docs.items.find(entry => entry.name === "Seed of the World Tree");
-assert.deepEqual(seed.flags["eryndor-professions"].rareFind, { profession: "herbalism", tier: 5 });
+assert.deepEqual(seed.flags["gathering-professions"].rareFind, { profession: "herbalism", tier: 5 });
 assert.equal(seed.system.rarity, "artifact");
 assert.equal(rules.getProfessions().fishing.rareTables.join(""), "", "Custom professions untouched");
 
@@ -223,8 +223,8 @@ const holder = { items: [skillItem("a1", "fortunesFavour", { enabled: true, prof
 game.actors = [holder];
 assert.equal(await tree.syncSkillItems(), 2);
 assert.deepEqual(updates.map(([where, list]) => [where, list.map(change => change._id)]), [["world", ["w1"]], ["world", ["w1"]], ["actor", ["a1"]], ["actor", ["a1"]]]);
-assert.deepEqual(updates[1][1][0]["flags.eryndor-professions.perk"], { enabled: true, profession: "any", rareChance: 6 });
-assert.ok("flags.eryndor-professions.-=perk" in updates[0][1][0], "Old perk cleared first, so rareAdvantage does not survive");
+assert.deepEqual(updates[1][1][0]["flags.gathering-professions.perk"], { enabled: true, profession: "any", rareChance: 6 });
+assert.ok("flags.gathering-professions.-=perk" in updates[0][1][0], "Old perk cleared first, so rareAdvantage does not survive");
 
 assert.equal(rolls.length, 0, "Every expected roll was used");
 console.log("PASS: rare finds — tier tables, entry, Excellent bonus, pending nat 20 climbs, Discerning Eye, Fortune's Favour, story discoveries, Rich Find, catalogue, builder, skill rebalance.");

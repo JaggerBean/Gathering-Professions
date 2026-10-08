@@ -245,7 +245,7 @@ export function abundance(multiplier) {
 /**
  * Recommended DC modifiers (moderate, penalties only, every profession).
  * Conditions not listed here are 0. Seeded into the world once; the GM edits
- * them in Eryndor Professions → Conditions → Difficulty.
+ * them in Gathering Professions → Conditions → Difficulty.
  */
 export const DEFAULT_CONDITION_DC = Object.freeze({
   season: { winter: 2 },

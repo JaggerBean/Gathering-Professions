@@ -2,14 +2,14 @@
 // sample world in the in-memory document doubles used by tests/world.mjs.
 // Contents: materials, rare tables, Gatherer nodes, the
 // universal gathering Skill Tree (with its perk Items), and a test character. Every created document carries
-// flags.eryndor-professions.sampleWorld so the sample world can be removed cleanly.
+// flags.gathering-professions.sampleWorld so the sample world can be removed cleanly.
 import { MODULE_ID, PROFESSIONS } from "../../scripts/rules.js";
 import { SKILL_TREE_ID, skillTreeConfig } from "../../scripts/integrations.js";
 import { buildUniversalTree, TREE_NAME } from "../../scripts/skilltree.js";
 import { NODE_DEFAULTS, nodeOwnership, placePin, pinsFor } from "../../scripts/nodes.js";
 
 const SAMPLE_FLAG = { [MODULE_ID]: { sampleWorld: true } };
-const SAMPLE_NAME = "Eryndor Sample World";
+const SAMPLE_NAME = "Gathering Sample World";
 
 function isSample(document) {
   return document?.getFlag?.(MODULE_ID, "sampleWorld") === true;
@@ -51,7 +51,7 @@ async function makeTable(name, entries, folder) {
   });
 }
 
-const GUIDE = `<h2>How to test Eryndor Professions</h2>
+const GUIDE = `<h2>How to test Gathering Professions</h2>
 <ol>
 <li>Open the <strong>Test Gatherer</strong> character. It has Mining selected and 95 Mining XP (Rank 1). Strength and Wisdom are 14.</li>
 <li>Select its token on a scene (or assign it to your user), then open this journal's <strong>Copper Vein</strong> page and click <strong>Gather</strong>.</li>
@@ -141,7 +141,7 @@ export async function createSampleWorld() {
         [MODULE_ID]: { sampleWorld: true, node: nodeData } } };
   };
   const nodes = await JournalEntry.implementation.create({
-    name: "Eryndor Test Nodes", folder: journalFolder.id, ownership: observer(), flags: foundry.utils.deepClone(SAMPLE_FLAG),
+    name: "Gathering Test Nodes", folder: journalFolder.id, ownership: observer(), flags: foundry.utils.deepClone(SAMPLE_FLAG),
     pages: [
       { name: "How to Test", type: "text", text: { content: GUIDE }, flags: foundry.utils.deepClone(SAMPLE_FLAG) },
       node("Copper Vein", miningTable, { profession: "mining", tier: 1 }),

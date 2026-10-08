@@ -17,7 +17,7 @@ const escape = value => String(value ?? "").replace(/[&<>"']/g, character => ({
 function content(html) {
   const element = document.createElement("div");
   // Foundry DialogV2 requires its content element to be a bare div.
-  element.innerHTML = `<div class="eryndor-professions-ui">${html}</div>`;
+  element.innerHTML = `<div class="gathering-professions-ui">${html}</div>`;
   return element;
 }
 
@@ -123,8 +123,8 @@ export async function openRulesEditor() {
   </tr>`).join("");
   const values = await Dialog().input({
     window: { title: "Profession Rules" },
-    content: content(`<div class="form-group"><label for="ep-advancement-mode">Rank advancement</label>
-      <select id="ep-advancement-mode" name="advancementMode">
+    content: content(`<div class="form-group"><label for="gp-advancement-mode">Rank advancement</label>
+      <select id="gp-advancement-mode" name="advancementMode">
         ${option("automatic", "Automatic when XP threshold is reached", rules.milestoneAdvancement ? "milestone" : "automatic")}
         ${option("milestone", "GM awards ranks at milestones", rules.milestoneAdvancement ? "milestone" : "automatic")}
       </select></div>
@@ -138,7 +138,7 @@ export async function openRulesEditor() {
       <p class="hint">In milestone mode, XP keeps accumulating. The GM changes the selected profession's rank in the Professions menu. Current selected ranks are preserved when milestone mode is first enabled. Switching back to automatic recalculates selected ranks from XP.</p>
       <p class="hint">Tier rows set the material DC and XP. Rank rows set the XP needed and the DC reduction.</p>
       <p class="hint">Extra untrained DC adds to the material's full Base DC, plus any extra DC on that material. Trained checks ignore both extras. Untrained successes bank XP but grant no ranks or profession bonuses.</p>
-      <div class="ep-scroll"><table><thead><tr><th>Tier / Rank</th><th>Base DC</th><th>Extra untrained DC</th><th>XP reward</th><th>Rank starts at</th><th>DC reduction</th><th>Die</th></tr></thead><tbody>${rows}</tbody></table></div>`),
+      <div class="gp-scroll"><table><thead><tr><th>Tier / Rank</th><th>Base DC</th><th>Extra untrained DC</th><th>XP reward</th><th>Rank starts at</th><th>DC reduction</th><th>Die</th></tr></thead><tbody>${rows}</tbody></table></div>`),
     position: { width: 940 }, ok: { label: "Save rules" }
   });
   if (!values) return false;
@@ -218,9 +218,9 @@ export async function openProgressEditor(actor) {
   const gmHints = `<p class="hint">Choose one profession. Only it grants a rank, profession die, and DC reduction. Changing the selection keeps all XP and saved ranks. Save, then reopen this menu to edit the new profession’s milestone rank.</p>
     <p class="hint">Other attempts use d20 + ability modifier against full Base DC plus tier and material extras. Successful untrained attempts bank XP without granting a rank or bonuses.</p>
     ${manual ? '<p class="hint">Ranks are awarded by the GM. XP continues to accumulate; the next-rank XP value is a guide.</p>' : ''}`;
-  const html = content(`<p class="ep-selected-profession"><strong>Gathering profession: ${selected ? escape(PROFESSIONS[selected].label) : "None selected"}</strong></p>
+  const html = content(`<p class="gp-selected-profession"><strong>Gathering profession: ${selected ? escape(PROFESSIONS[selected].label) : "None selected"}</strong></p>
     ${selection}<p class="hint">${canEdit ? gmHints : playerHint}</p>
-    <div class="ep-scroll"><table><thead><tr><th>Profession</th><th>Rank</th><th>Die</th><th>Total XP</th>${canEdit ? `<th>${manual ? "Next-rank XP guide" : "Next rank at"}</th>` : ""}</tr></thead><tbody>${rows}</tbody></table></div>${canEdit ? '<button type="button" data-open-rules>Open Tier &amp; Rank Rules</button>' : ""}`);
+    <div class="gp-scroll"><table><thead><tr><th>Profession</th><th>Rank</th><th>Die</th><th>Total XP</th>${canEdit ? `<th>${manual ? "Next-rank XP guide" : "Next rank at"}</th>` : ""}</tr></thead><tbody>${rows}</tbody></table></div>${canEdit ? '<button type="button" data-open-rules>Open Tier &amp; Rank Rules</button>' : ""}`);
   if (!canChoose) {
     await Dialog().prompt({ window: { title: `${actor.name} — Professions` }, content: html, ok: { label: "Close" }, position: { width: 580 } });
     return false;
@@ -332,13 +332,13 @@ export function registerSceneControls() {
   Hooks.on("getSceneControlButtons", controls => {
     if (!controls.tokens?.tools) return;
     const order = Object.keys(controls.tokens.tools).length;
-    controls.tokens.tools["ep-professions"] = {
-      name: "ep-professions", title: "Gathering Profession — Choose / View",
+    controls.tokens.tools["gp-professions"] = {
+      name: "gp-professions", title: "Gathering Profession — Choose / View",
       icon: "fas fa-hammer", order,
       button: true, visible: true, onChange: () => { void openProfessionMenu().catch(report); }
     };
-    controls.tokens.tools["ep-skill-tree"] = {
-      name: "ep-skill-tree", title: "Gathering Skill Tree — Open",
+    controls.tokens.tools["gp-skill-tree"] = {
+      name: "gp-skill-tree", title: "Gathering Skill Tree — Open",
       icon: "fas fa-code-branch", order: order + 1,
       button: true, visible: true, onChange: () => { void openSkillTree().catch(report); }
     };
@@ -358,9 +358,9 @@ export function openMaterialManager() {
   unassigned.sort((a, b) => a.name.localeCompare(b.name));
   const options = unassigned.map(item => option(item.id, item.name, "")).join("");
   const manager = content(`
-    <div class="ep-toolbar"><button type="button" data-rules>Tier &amp; Rank Rules</button><button type="button" data-professions>Professions &amp; Skill Tree</button><button type="button" data-rare-tables>Rare-Find Tables</button><button type="button" data-tools>Gathering Tools</button><button type="button" data-nodes>Node Manager</button><button type="button" data-conditions>Conditions &amp; Biomes</button><label>Assign another Item <select data-add-item><option value="">Choose an Item</option>${options}</select></label><button type="button" data-add>Assign</button></div>
+    <div class="gp-toolbar"><button type="button" data-rules>Tier &amp; Rank Rules</button><button type="button" data-professions>Professions &amp; Skill Tree</button><button type="button" data-rare-tables>Rare-Find Tables</button><button type="button" data-tools>Gathering Tools</button><button type="button" data-nodes>Node Manager</button><button type="button" data-conditions>Conditions &amp; Biomes</button><label>Assign another Item <select data-add-item><option value="">Choose an Item</option>${options}</select></label><button type="button" data-add>Assign</button></div>
     <input type="search" data-filter placeholder="Search assigned materials" aria-label="Search materials">
-    <div class="ep-scroll"><table><thead><tr><th></th><th>Material</th><th>Profession</th><th>Tier</th><th>Base DC</th><th>Untrained DC</th><th>XP</th><th>Base Yield</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="gp-scroll"><table><thead><tr><th></th><th>Material</th><th>Profession</th><th>Tier</th><th>Base DC</th><th>Untrained DC</th><th>XP</th><th>Base Yield</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
   `);
   void Dialog().prompt({
     window: { title: "Profession Materials" }, content: manager,
@@ -371,7 +371,7 @@ export function openMaterialManager() {
         const query = event.target.value.trim().toLowerCase();
         root.querySelectorAll("tr[data-name]").forEach(row => { row.hidden = !row.dataset.name.includes(query); });
       });
-      // GM settings live in the Eryndor Professions hub.
+      // GM settings live in the Gathering Professions hub.
       const hub = section => () => void import("./hub.js").then(module => module.openHub(section)).catch(report);
       root.querySelector("[data-rules]")?.addEventListener("click", hub("rules"));
       root.querySelector("[data-conditions]")?.addEventListener("click", hub("conditions"));
@@ -404,7 +404,7 @@ export function registerSettingsMenu() {
   };
   const hub = section => launcher(() => import("./hub.js").then(module => module.openHub(section)));
   const menu = (key, name, label, hint, icon, type) => game.settings.registerMenu(MODULE_ID, key, { name, label, hint, icon, type, restricted: true });
-  menu("hub", "Eryndor Professions", "Open GM Hub", "Every GM setting in one window: professions, skill tree, tools, rare finds, rules, and conditions.", "fas fa-hammer", hub("professions"));
+  menu("hub", "Gathering Professions", "Open GM Hub", "Every GM setting in one window: professions, skill tree, tools, rare finds, rules, and conditions.", "fas fa-hammer", hub("professions"));
   menu("professions", "Professions & Skill Tree", "Professions", "Add or rename professions and set their check ability.", "fas fa-users-gear", hub("professions"));
   menu("tools", "Gathering Tools", "Tools", "Each profession's accepted tools. Every gather needs one; nodes can require their own.", "fas fa-screwdriver-wrench", hub("tools"));
   menu("rareTables", "Rare-Find Tables", "Rare Finds", "One rare-find table per profession and material tier.", "fas fa-gem", hub("rare"));
@@ -423,10 +423,10 @@ export function registerUIHooks() {
     if (!tree || app.skillTree?.uuid !== tree.uuid || !Array.from(tree.pages ?? []).some(page => page.getFlag?.(MODULE_ID, "universalSkill"))) return;
     const root = globalThis.HTMLElement && html instanceof HTMLElement ? html : html?.[0];
     const nav = root?.querySelector(".standard-form > nav");
-    if (!nav || nav.querySelector(".ep-reset-skills")) return;
+    if (!nav || nav.querySelector(".gp-reset-skills")) return;
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "ep-reset-skills";
+    button.className = "gp-reset-skills";
     button.textContent = "Reset Skills";
     button.title = `Reset ${app.actor.name}'s gathering skills and refund their current profession points`;
     button.addEventListener("click", async () => {
@@ -444,27 +444,27 @@ export function registerUIHooks() {
   }
   Hooks.on("getHeaderControlsActorSheetV2", (app, controls) => {
     if (app.document?.type === "character") controls.push({
-      action: "eryndor-professions", icon: "fas fa-hammer", label: "Professions",
+      action: "gathering-professions", icon: "fas fa-hammer", label: "Professions",
       onClick: () => openProgressEditor(app.document)
     });
   });
   Hooks.on("getActorSheetHeaderButtons", (app, controls) => {
     if (app.actor?.type === "character") controls.unshift({
-      class: "eryndor-professions", icon: "fas fa-hammer", label: "Professions",
+      class: "gathering-professions", icon: "fas fa-hammer", label: "Professions",
       onclick: () => openProgressEditor(app.actor)
     });
   });
   Hooks.on("getHeaderControlsItemSheetV2", (app, controls) => {
     const item = app.document;
     if (game.user.isGM && item?.documentName === "Item" && !item.parent && !item.pack) controls.push({
-      action: "eryndor-material", icon: "fas fa-gem", label: "Material",
+      action: "gathering-material", icon: "fas fa-gem", label: "Material",
       onClick: () => openMaterialEditor(item)
     });
   });
   Hooks.on("getItemSheetHeaderButtons", (app, controls) => {
     const item = app.item;
     if (game.user.isGM && item && !item.parent && !item.pack) controls.unshift({
-      class: "eryndor-material", icon: "fas fa-gem", label: "Material",
+      class: "gathering-material", icon: "fas fa-gem", label: "Material",
       onclick: () => openMaterialEditor(item)
     });
   });
@@ -474,7 +474,7 @@ export function registerUIHooks() {
   Hooks.on("getHeaderControlsItemSheetV2", (app, controls) => {
     const item = app.document;
     if (game.user.isGM && item?.documentName === "Item" && !item.pack && isToolLike(item)) controls.push({
-      action: "eryndor-durability", icon: "fas fa-screwdriver-wrench", label: "Tool Durability",
+      action: "gathering-durability", icon: "fas fa-screwdriver-wrench", label: "Tool Durability",
       onClick: () => openDurabilityEditor(item)
     });
   });
@@ -482,14 +482,14 @@ export function registerUIHooks() {
   Hooks.on("getHeaderControlsItemSheetV2", (app, controls) => {
     const item = app.document;
     if (game.user.isGM && item?.documentName === "Item" && !item.pack) controls.push({
-      action: "eryndor-perk", icon: "fas fa-star", label: "Gathering Perk",
+      action: "gathering-perk", icon: "fas fa-star", label: "Gathering Perk",
       onClick: () => openPerkEditor(item)
     });
   });
   Hooks.on("getItemSheetHeaderButtons", (app, controls) => {
     const item = app.item;
     if (game.user.isGM && item && !item.pack) controls.unshift({
-      class: "eryndor-perk", icon: "fas fa-star", label: "Gathering Perk",
+      class: "gathering-perk", icon: "fas fa-star", label: "Gathering Perk",
       onclick: () => openPerkEditor(item)
     });
   });
@@ -497,10 +497,10 @@ export function registerUIHooks() {
     if (!game.user.isGM) return;
     const root = html instanceof HTMLElement ? html : html?.[0];
     const header = root?.querySelector(".directory-header");
-    if (!header || header.querySelector(".ep-manager-button")) return;
+    if (!header || header.querySelector(".gp-manager-button")) return;
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "ep-manager-button";
+    button.className = "gp-manager-button";
     button.innerHTML = '<i class="fas fa-gem"></i> Profession Materials';
     button.addEventListener("click", openMaterialManager);
     header.appendChild(button);
@@ -544,7 +544,7 @@ export async function openProfessionsEditor() {
     content: content(`<input type="hidden" name="rowCount" value="${current.length + 2}">
       <p class="hint">Fill a blank row to add a profession. A blank key is made from the name. Keys cannot change after saving, because characters store XP under them.</p>
       <p class="hint">Removing a profession keeps every character's XP. Its materials fall back to Gatherer's normal awards, and characters who chose it show no profession until the GM picks one.</p>
-      <div class="ep-scroll"><table><thead><tr><th>Name</th><th>Key</th><th>Ability</th><th>Any-tier rare table</th><th>Remove</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div class="gp-scroll"><table><thead><tr><th>Name</th><th>Key</th><th>Ability</th><th>Any-tier rare table</th><th>Remove</th></tr></thead><tbody>${rows}</tbody></table></div>
       <p class="hint">Per-tier rare tables are set in <strong>Rare-Find Tables</strong>. The any-tier table is used for tiers without their own table.</p>
       <h3>Skill Tree</h3>
       ${treeActive ? "" : '<p class="hint"><strong>The Skill Tree module is not active.</strong> Settings save, but no points are granted until it is enabled.</p>'}
@@ -650,7 +650,7 @@ export async function openPerkEditor(item) {
     window: { title: `Gathering Perk — ${item.name}` },
     content: content(`<p class="hint">A character who owns this Item gains the perk. Link the Item to a Skill Tree skill so unlocking the skill grants it. Hover a field for details. Numbers from several perks add up; dice and shares use the largest.</p>
       <div class="form-group"><label>Applies to</label><select name="profession">${choices}</select></div>
-      <div class="ep-perk-sections">${sections}</div>`),
+      <div class="gp-perk-sections">${sections}</div>`),
     position: { width: 520, height: "auto" }, ok: { label: "Save perk" }
   });
   if (!values) return false;

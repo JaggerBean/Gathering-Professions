@@ -10,9 +10,9 @@ import { SKILL_TREE_ID } from "./integrations.js";
 export const TREE_NAME = "Gathering Skill Tree";
 export const CAPSTONE_POINTS = 2;
 // Layout version stored on the tree; older trees are moved on load.
-export const LAYOUT_VERSION = 7;
+export const LAYOUT_VERSION = 8;
 // Fixed group id so module.css can restyle this tree only (no group box).
-export const GROUP_ID = "eryndorGathering";
+export const GROUP_ID = "gatheringProfessions";
 export const GRID_SIZE = 25;
 const CENTER = (GRID_SIZE - 1) / 2;
 // Spoke direction per theme on the grid: up, upper-right, lower-right, down,

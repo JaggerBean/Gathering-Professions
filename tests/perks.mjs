@@ -8,7 +8,7 @@ globalThis.CONST = { DOCUMENT_OWNERSHIP_LEVELS: { NONE: 0, OBSERVER: 2, OWNER: 3
 globalThis.foundry = { utils: { getProperty: (o, p) => p.split(".").reduce((v, k) => v?.[k], o) }, applications: { api: { ApplicationV2: class {} } } };
 globalThis.game = {
   settings: { get(_namespace, key) { return settings[key]; }, async set(_namespace, key, value) { settings[key] = value; }, register() {}, registerMenu() {} },
-  modules: new Map([["eryndor-professions", { api: {} }]]),
+  modules: new Map([["gathering-professions", { api: {} }]]),
   actors: [], users: [], time: { worldTime: 10000 }, user: { isGM: true }
 };
 
@@ -19,7 +19,7 @@ const { sensesNode } = await import("../scripts/nodes.js");
 const { upgradePartial, getDegreeOfSuccess } = await import("../scripts/gathering.js");
 const { successChance } = await import("../scripts/gather-ui.js");
 
-const item = (name, perk) => ({ name, flags: { "eryndor-professions": { perk: { enabled: true, profession: "any", ...perk } } } });
+const item = (name, perk) => ({ name, flags: { "gathering-professions": { perk: { enabled: true, profession: "any", ...perk } } } });
 function actor(name, { profession = "mining", xp = 0, perkItems = [], flags = {} } = {}) {
   const store = { selectedProfession: profession, xp: { [profession]: xp }, ...flags };
   return {
@@ -48,7 +48,7 @@ const loaded = actor("Loaded", { perkItems: [
   skillItem("lightTouch"), skillItem("conservationist"), skillItem("stewardOfTheWilds"),
   skillItem("expertTechnique"), skillItem("jackOfAllTrades"), skillItem("masterArtisan"),
   item("Herb Only", { profession: "herbalism", yieldBonus: 9 }), item("Off", { enabled: false, yieldBonus: 9 }),
-  { name: "Old style", flags: { "eryndor-professions": { perk: { enabled: true, profession: "mining", yieldBonus: 1, rareChance: 5 } } } }
+  { name: "Old style", flags: { "gathering-professions": { perk: { enabled: true, profession: "mining", yieldBonus: 1, rareChance: 5 } } } }
 ] });
 const totals = perks.actorPerks(loaded, "mining");
 assert.equal(totals.yieldBonus, 5, "1 + 2 + 1 + old perk 1; herbalism and disabled perks skipped");

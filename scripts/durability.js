@@ -1,7 +1,7 @@
 // Tool durability. A natural 1 on a gathering check made with a node's tool
 // costs that tool 1 durability. At 0 the tool is broken: it no longer meets a
 // node's tool requirement or adds its bonus until the GM repairs it (it is not
-// deleted). Stored on the Item: flags.eryndor-professions.durability {value, max}.
+// deleted). Stored on the Item: flags.gathering-professions.durability {value, max}.
 // A missing max uses the world default (Tier & Rank Rules); max 0 = never wears.
 // A missing value means full.
 import { MODULE_ID, activeRules } from "./rules.js";

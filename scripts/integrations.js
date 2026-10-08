@@ -72,7 +72,7 @@ function pointsInTree(api, actor, tree) {
 /** Clear only this universal tree's purchases and refund its current budget. */
 async function resetTreeSkills(actor, api, tree, owed, backupKey, { preserveBackup = false } = {}) {
   const pages = Array.from(tree.pages ?? []).filter(page => page.getFlag?.(MODULE_ID, "universalSkill"));
-  if (!pages.length) throw new Error("The linked tree is not an Eryndor universal skill tree.");
+  if (!pages.length) throw new Error("The linked tree is not a Gathering Professions universal skill tree.");
   const pageByUuid = new Map(pages.map(page => [page.uuid, page]));
   const id = treeKey(tree);
   const pointData = api.getSkillTreePoints(actor, tree);
@@ -140,7 +140,7 @@ export async function resetUniversalTreeSkills(actor, tree = configuredSkillTree
 }
 
 /**
- * Mirror effective ranks into flags.eryndor-professions.effectiveRank.<key>
+ * Mirror effective ranks into flags.gathering-professions.effectiveRank.<key>
  * and the selected profession's rank into professionRank for point awards,
  * then top the actor up to the points their rank has earned in
  * the linked tree. Points are tracked per tree (treePoints.<treeId>), so a new

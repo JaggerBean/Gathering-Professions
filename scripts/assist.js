@@ -1,6 +1,6 @@
 // Assist (Fellowship skills): a character offers help at a node; the next
 // gather there by another character gets the helper's assist bonuses. The
-// offer lives on the helper's actor (flags.eryndor-professions.assist), so
+// offer lives on the helper's actor (flags.gathering-professions.assist), so
 // players need only their own actor's permission to offer. Clearing another
 // player's offer goes through the active GM.
 import { MODULE_ID, selectedProfession } from "./rules.js";

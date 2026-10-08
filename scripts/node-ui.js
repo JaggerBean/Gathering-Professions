@@ -115,7 +115,7 @@ export function buildListModel(pages, state = {}) {
 }
 
 function badgeHtml(badges, compact = false) {
-  return badges.map(badge => `<span class="ep-badge ep-badge-${badge.kind}" title="${escape(badge.title)}"><i class="fas ${badge.icon}"></i>${compact && badge.kind !== "hidden" ? "" : ` ${escape(badge.text)}`}</span>`).join("");
+  return badges.map(badge => `<span class="gp-badge gp-badge-${badge.kind}" title="${escape(badge.title)}"><i class="fas ${badge.icon}"></i>${compact && badge.kind !== "hidden" ? "" : ` ${escape(badge.text)}`}</span>`).join("");
 }
 
 function pullsText(usage) {
@@ -128,14 +128,14 @@ export function renderList(groups, state) {
   const checked = state.checked ?? new Set();
   const scenes = Array.from(game.scenes ?? []);
   const count = groups.reduce((sum, group) => sum + group.rows.length, 0);
-  const toolbar = `<div class="ep-nm-toolbar">
-      <div class="ep-nm-toolbar-row">
-        <button type="button" class="ep-primary" data-act="new"><i class="fas fa-plus"></i> New Node</button>
-        <button type="button" class="ep-icon ${state.bulk ? "active" : ""}" data-act="bulk" title="Select several nodes"><i class="fas fa-list-check"></i></button>
-        <button type="button" class="ep-icon" data-act="conditions" title="Conditions &amp; Biomes"><i class="fas fa-cloud-sun-rain"></i></button>
+  const toolbar = `<div class="gp-nm-toolbar">
+      <div class="gp-nm-toolbar-row">
+        <button type="button" class="gp-primary" data-act="new"><i class="fas fa-plus"></i> New Node</button>
+        <button type="button" class="gp-icon ${state.bulk ? "active" : ""}" data-act="bulk" title="Select several nodes"><i class="fas fa-list-check"></i></button>
+        <button type="button" class="gp-icon" data-act="conditions" title="Conditions &amp; Biomes"><i class="fas fa-cloud-sun-rain"></i></button>
       </div>
       <input type="search" data-filter="search" placeholder="Search nodes or journals" value="${escape(state.search ?? "")}">
-      <div class="ep-nm-toolbar-row">
+      <div class="gp-nm-toolbar-row">
         <select data-filter="scene" title="Scene">${option("", "All scenes", state.scene)}${scenes.map(scene => option(scene.id, scene.name, state.scene)).join("")}</select>
         <select data-filter="profession" title="Profession">${option("", "All professions", state.profession)}${Object.values(PROFESSIONS).map(profession => option(profession.key, profession.label, state.profession)).join("")}</select>
       </div>
@@ -145,27 +145,27 @@ export function renderList(groups, state) {
     const rows = group.rows.map(row => {
       const linked = row.groupSize > 1 && !row.isLeader;
       const open = expandedLinks.has(row.linkGroup);
-      return `<li class="ep-nm-row ${row.uuid === state.selected ? "selected" : ""} ${linked ? "ep-nm-linked" : ""} ${linked && !open ? "ep-nm-linked-collapsed" : ""} ${row.depleted ? "depleted" : ""} ${row.node?.hidden ? "is-hidden" : ""}" data-uuid="${escape(row.uuid)}" data-act="select" tabindex="0">
+      return `<li class="gp-nm-row ${row.uuid === state.selected ? "selected" : ""} ${linked ? "gp-nm-linked" : ""} ${linked && !open ? "gp-nm-linked-collapsed" : ""} ${row.depleted ? "depleted" : ""} ${row.node?.hidden ? "is-hidden" : ""}" data-uuid="${escape(row.uuid)}" data-act="select" tabindex="0">
         ${state.bulk ? `<input type="checkbox" data-check="${escape(row.uuid)}" ${checked.has(row.uuid) ? "checked" : ""} aria-label="Select ${escape(row.name)}">` : ""}
-        <img class="ep-nm-icon" src="${escape(row.icon)}" alt="">
-        <div class="ep-nm-main">
-          <div class="ep-nm-name"><span>${linked ? `Placement ${row.placementNumber}` : escape(row.name)}</span><span class="ep-nm-pulls" title="Pulls left">${pullsText(row.usage)}</span></div>
-          <div class="ep-nm-bar" title="${row.usage.draws ? `${row.usage.remaining} of ${row.usage.draws} pulls left` : "Unlimited pulls"}"><span style="width:${row.fill}%"></span></div>
-          ${linked ? `<div class="ep-nm-meta">${escape(row.pinLabel || row.name)}</div>` : `<div class="ep-nm-meta">
-            <span class="ep-nm-prof">${escape(row.profession || "No profession")}${row.tier ? ` · T${row.tier}` : ""}</span>
-            <span class="ep-nm-mats">${row.materials.slice(0, 4).map(material => `<img src="${escape(material.img)}" title="${escape(material.name)} — ${material.percent}%" alt="">`).join("")}${row.materials.length > 4 ? `<small>+${row.materials.length - 4}</small>` : ""}</span>
+        <img class="gp-nm-icon" src="${escape(row.icon)}" alt="">
+        <div class="gp-nm-main">
+          <div class="gp-nm-name"><span>${linked ? `Placement ${row.placementNumber}` : escape(row.name)}</span><span class="gp-nm-pulls" title="Pulls left">${pullsText(row.usage)}</span></div>
+          <div class="gp-nm-bar" title="${row.usage.draws ? `${row.usage.remaining} of ${row.usage.draws} pulls left` : "Unlimited pulls"}"><span style="width:${row.fill}%"></span></div>
+          ${linked ? `<div class="gp-nm-meta">${escape(row.pinLabel || row.name)}</div>` : `<div class="gp-nm-meta">
+            <span class="gp-nm-prof">${escape(row.profession || "No profession")}${row.tier ? ` · T${row.tier}` : ""}</span>
+            <span class="gp-nm-mats">${row.materials.slice(0, 4).map(material => `<img src="${escape(material.img)}" title="${escape(material.name)} — ${material.percent}%" alt="">`).join("")}${row.materials.length > 4 ? `<small>+${row.materials.length - 4}</small>` : ""}</span>
           </div>`}
-          ${!linked && row.groupSize > 1 ? `<button type="button" class="ep-nm-link-toggle" data-act="links" data-link-group="${escape(row.linkGroup)}" title="Show or hide placements that share this loot table"><i class="fas fa-caret-${open ? "down" : "right"}"></i> ${row.groupSize} linked placements</button>` : !linked && row.pins > 1 ? `<small class="ep-nm-pin-count">${row.pins} pins · shared pulls</small>` : ""}
-          ${!linked && row.badges.length ? `<div class="ep-nm-badges">${badgeHtml(row.badges, true)}</div>` : ""}
+          ${!linked && row.groupSize > 1 ? `<button type="button" class="gp-nm-link-toggle" data-act="links" data-link-group="${escape(row.linkGroup)}" title="Show or hide placements that share this loot table"><i class="fas fa-caret-${open ? "down" : "right"}"></i> ${row.groupSize} linked placements</button>` : !linked && row.pins > 1 ? `<small class="gp-nm-pin-count">${row.pins} pins · shared pulls</small>` : ""}
+          ${!linked && row.badges.length ? `<div class="gp-nm-badges">${badgeHtml(row.badges, true)}</div>` : ""}
         </div>
       </li>`;
     }).join("");
-    return `<div class="ep-nm-group ${isCollapsed ? "collapsed" : ""}" data-group="${escape(group.id)}">
+    return `<div class="gp-nm-group ${isCollapsed ? "collapsed" : ""}" data-group="${escape(group.id)}">
         <header data-act="collapse" data-group="${escape(group.id)}"><i class="fas fa-caret-${isCollapsed ? "right" : "down"}"></i><span>${escape(group.name)}</span><small>${group.familyCount} nodes · ${group.rows.length} placements</small></header>
         <ul>${rows}</ul>
       </div>`;
   }).join("");
-  const bulkBar = state.bulk ? `<div class="ep-nm-bulk">
+  const bulkBar = state.bulk ? `<div class="gp-nm-bulk">
       <span>${checked.size} selected</span>
       <button type="button" data-act="bulk-all" title="Select every shown node">All</button>
       <button type="button" data-act="bulk-none" title="Clear selection">None</button>
@@ -173,7 +173,7 @@ export function renderList(groups, state) {
       <button type="button" data-act="bulk-reveal" title="Reveal to all players"><i class="fas fa-eye"></i></button>
       <button type="button" data-act="bulk-hide" title="Hide from players"><i class="fas fa-eye-slash"></i></button>
     </div>` : "";
-  return `${toolbar}<div class="ep-nm-groups">${body || `<p class="ep-nm-empty">${count ? "" : "No nodes match. Clear the filters or click New Node."}</p>`}</div>${bulkBar}`;
+  return `${toolbar}<div class="gp-nm-groups">${body || `<p class="gp-nm-empty">${count ? "" : "No nodes match. Clear the filters or click New Node."}</p>`}</div>${bulkBar}`;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -195,7 +195,7 @@ function rankSelect(name, selected, zeroLabel) {
 }
 
 function field(label, control, hint = "") {
-  return `<div class="ep-field"><label>${label}</label><div class="ep-control">${control}</div>${hint ? `<p class="ep-hint">${hint}</p>` : ""}</div>`;
+  return `<div class="gp-field"><label>${label}</label><div class="gp-control">${control}</div>${hint ? `<p class="gp-hint">${hint}</p>` : ""}</div>`;
 }
 
 function overviewHtml() {
@@ -204,10 +204,10 @@ function overviewHtml() {
   const depleted = pages.filter(isDepleted).length;
   const hidden = pages.filter(page => readNode(page)?.hidden).length;
   const unplaced = pages.filter(page => !pinsFor(page).length).length;
-  return `<div class="ep-nm-placeholder">
+  return `<div class="gp-nm-placeholder">
       <i class="fas fa-mountain-sun"></i>
       <h2>Gathering Nodes</h2>
-      <div class="ep-nm-stats">
+      <div class="gp-nm-stats">
         <div><strong>${families}</strong><span>nodes</span></div>
         <div><strong>${pages.length}</strong><span>placements</span></div>
         <div><strong>${depleted}</strong><span>depleted</span></div>
@@ -215,7 +215,7 @@ function overviewHtml() {
         <div><strong>${unplaced}</strong><span>without pins</span></div>
       </div>
       <p>Select a node on the left, or create one.</p>
-      <button type="button" class="ep-primary" data-act="new"><i class="fas fa-plus"></i> New Node</button>
+      <button type="button" class="gp-primary" data-act="new"><i class="fas fa-plus"></i> New Node</button>
     </div>`;
 }
 
@@ -223,10 +223,10 @@ function overrideBlock(index, item, node) {
   const uuid = item.uuid;
   const has = Array.isArray(node.materialRules?.[uuid]);
   const own = materialRule(item)?.conditions ?? [];
-  return `<details class="ep-mat-rules" ${has ? "open" : ""}>
+  return `<details class="gp-mat-rules" ${has ? "open" : ""}>
       <summary><i class="fas fa-cloud-sun-rain"></i> ${has ? `Node override: ${escape(rulesSummary(node.materialRules[uuid]))}` : `Material rules: ${escape(rulesSummary(own))}`}</summary>
       <input type="hidden" name="mru_${index}" value="${escape(uuid)}">
-      <label class="ep-check"><input type="checkbox" name="mro_${index}" ${has ? "checked" : ""}> Override the material's condition rules on this node</label>
+      <label class="gp-check"><input type="checkbox" name="mro_${index}" ${has ? "checked" : ""}> Override the material's condition rules on this node</label>
       ${rulesEditorHtml(has ? node.materialRules[uuid] : own, `mr_${index}`)}
     </details>`;
 }
@@ -234,35 +234,35 @@ function overrideBlock(index, item, node) {
 function materialsTab(page, node, isNew) {
   if (!isNew && !node.built) {
     const materials = nodeMaterials(page);
-    return `<p class="ep-hint">This node uses a hand-made Rollable Table. Edit its contents in the table.</p>
-      <div class="ep-mat-list">${materials.map((material, index) => {
+    return `<p class="gp-hint">This node uses a hand-made Rollable Table. Edit its contents in the table.</p>
+      <div class="gp-mat-list">${materials.map((material, index) => {
         const item = material.uuid ? fromUuidSync(material.uuid) : null;
-        return `<div class="ep-mat-row"><img src="${escape(material.img)}" alt=""><span>${escape(material.name)}</span><span class="ep-share">${material.percent}%</span>${item ? overrideBlock(index, item, node) : ""}</div>`;
+        return `<div class="gp-mat-row"><img src="${escape(material.img)}" alt=""><span>${escape(material.name)}</span><span class="gp-share">${material.percent}%</span>${item ? overrideBlock(index, item, node) : ""}</div>`;
       }).join("") || "<p>The table has no results.</p>"}</div>
       <button type="button" data-act="open-table"><i class="fas fa-table-list"></i> Open table</button>`;
   }
   const weights = new Map(isNew ? [] : nodeMaterials(page).map(material => [material.uuid, material.weight]));
   const assigned = Array.from(game.items ?? []).map(item => ({ item, rule: materialRule(item) })).filter(entry => entry.rule)
     .sort((a, b) => (weights.get(b.item.uuid) ?? 0) - (weights.get(a.item.uuid) ?? 0) || a.item.name.localeCompare(b.item.name));
-  if (!assigned.length) return `<p class="ep-hint">No profession materials yet. Assign Items in <strong>Profession Materials</strong> first.</p>`;
-  const rows = assigned.map(({ item, rule }, index) => `<div class="ep-mat-row" data-profession="${escape(rule.profession)}" data-name="${escape(item.name.toLowerCase())}">
-      <img src="${escape(item.img)}" alt=""><span class="ep-mat-name">${escape(item.name)}<small>${escape(PROFESSIONS[rule.profession]?.label ?? rule.profession)} · T${rule.tier} · DC ${rule.dc} · ${escape(rule.baseYield)}</small></span>
-      <span class="ep-share" data-share></span>
+  if (!assigned.length) return `<p class="gp-hint">No profession materials yet. Assign Items in <strong>Profession Materials</strong> first.</p>`;
+  const rows = assigned.map(({ item, rule }, index) => `<div class="gp-mat-row" data-profession="${escape(rule.profession)}" data-name="${escape(item.name.toLowerCase())}">
+      <img src="${escape(item.img)}" alt=""><span class="gp-mat-name">${escape(item.name)}<small>${escape(PROFESSIONS[rule.profession]?.label ?? rule.profession)} · T${rule.tier} · DC ${rule.dc} · ${escape(rule.baseYield)}</small></span>
+      <span class="gp-share" data-share></span>
       ${num(`w_${item.id}`, weights.get(item.uuid) ?? 0, 0, 1000)}
       ${overrideBlock(index, item, node)}
     </div>`).join("");
-  return `<div class="ep-mat-tools">
+  return `<div class="gp-mat-tools">
       <input type="search" data-mat-search placeholder="Filter materials">
-      <label class="ep-check"><input type="checkbox" data-mat-all> All professions</label>
+      <label class="gp-check"><input type="checkbox" data-mat-all> All professions</label>
     </div>
-    <p class="ep-hint">Weight sets how often each material is drawn. 0 leaves it out. The share column updates as you type.</p>
-    <div class="ep-mat-list">${rows}</div>`;
+    <p class="gp-hint">Weight sets how often each material is drawn. 0 leaves it out. The share column updates as you type.</p>
+    <div class="gp-mat-list">${rows}</div>`;
 }
 
 function pinsList(page) {
   const pins = pinsFor(page);
-  if (!pins.length) return `<p class="ep-hint">No pins yet.</p>`;
-  return `<ul class="ep-pin-list">${pins.map(({ scene, note }, index) => `<li><i class="fas fa-map-pin"></i> ${index + 1}. ${escape(scene.name)} (${Math.round(note.x)}, ${Math.round(note.y)})
+  if (!pins.length) return `<p class="gp-hint">No pins yet.</p>`;
+  return `<ul class="gp-pin-list">${pins.map(({ scene, note }, index) => `<li><i class="fas fa-map-pin"></i> ${index + 1}. ${escape(scene.name)} (${Math.round(note.x)}, ${Math.round(note.y)})
       <button type="button" data-act="pin-view" data-scene="${escape(scene.id)}" data-note="${escape(note.id)}" title="Go to pin"><i class="fas fa-crosshairs"></i></button>
       <button type="button" data-act="pin-remove" data-scene="${escape(scene.id)}" data-note="${escape(note.id)}" title="Remove pin"><i class="fas fa-xmark"></i></button></li>`).join("")}</ul>`;
 }
@@ -288,18 +288,18 @@ function iconPicker(node, fallback) {
   const groups = iconGroups();
   const currentName = groups.flatMap(group => group.icons).find(icon => icon.img === current)?.names[0];
   const label = current ? currentName ?? "Custom image" : "Default (first material)";
-  const grid = groups.map(group => `<details class="ep-icon-group" ${group.key === node.profession || groups.length === 1 ? "open" : ""}>
+  const grid = groups.map(group => `<details class="gp-icon-group" ${group.key === node.profession || groups.length === 1 ? "open" : ""}>
       <summary>${escape(group.label)} <small>${group.icons.length}</small></summary>
-      <div class="ep-icon-grid">${group.icons.map(icon => `<button type="button" class="ep-icon-choice ${icon.img === current ? "active" : ""}" data-act="icon-pick" data-img="${escape(icon.img)}" data-label="${escape(icon.names[0])}" title="${escape(icon.names.join(", "))}"><img src="${escape(icon.img)}" alt=""></button>`).join("")}</div>
+      <div class="gp-icon-grid">${group.icons.map(icon => `<button type="button" class="gp-icon-choice ${icon.img === current ? "active" : ""}" data-act="icon-pick" data-img="${escape(icon.img)}" data-label="${escape(icon.names[0])}" title="${escape(icon.names.join(", "))}"><img src="${escape(icon.img)}" alt=""></button>`).join("")}</div>
     </details>`).join("");
-  return `<div class="ep-icon-picker" data-icon-picker>
+  return `<div class="gp-icon-picker" data-icon-picker>
       <input type="hidden" name="icon" value="${escape(current)}">
-      <button type="button" class="ep-icon-current" data-act="icon-toggle">
+      <button type="button" class="gp-icon-current" data-act="icon-toggle">
         <img src="${escape(current || fallback)}" alt="" data-icon-preview><span data-icon-label>${escape(label)}</span><i class="fas fa-caret-down"></i>
       </button>
-      <div class="ep-icon-panel">
-        <button type="button" class="ep-icon-default ${current ? "" : "active"}" data-act="icon-pick" data-img="" data-label="Default (first material)"><i class="fas fa-rotate-left"></i> Default (first material's image)</button>
-        ${grid || '<p class="ep-hint">Assign materials in Profession Materials to get icons here.</p>'}
+      <div class="gp-icon-panel">
+        <button type="button" class="gp-icon-default ${current ? "" : "active"}" data-act="icon-pick" data-img="" data-label="Default (first material)"><i class="fas fa-rotate-left"></i> Default (first material's image)</button>
+        ${grid || '<p class="gp-hint">Assign materials in Profession Materials to get icons here.</p>'}
       </div>
     </div>`;
 }
@@ -309,19 +309,19 @@ const toolKey = tool => tool.uuid || `name:${String(tool.name).toLowerCase()}`;
 export function toolsSection(selected) {
   const library = getToolLibrary();
   const chosenKeys = new Set(selected.map(toolKey));
-  const chips = selected.map(tool => `<span class="ep-tool-chip" title="${escape(tool.uuid || "Matched by name only")}">
+  const chips = selected.map(tool => `<span class="gp-tool-chip" title="${escape(tool.uuid || "Matched by name only")}">
       ${tool.img ? `<img src="${escape(tool.img)}" alt="">` : '<i class="fas fa-screwdriver-wrench"></i>'}${escape(tool.name)}${tool.uuid ? "" : " <small>(name)</small>"}
       <a data-act="tool-remove" data-key="${escape(toolKey(tool))}" title="Remove from this node"><i class="fas fa-xmark"></i></a></span>`).join("");
   const available = library.filter(tool => !chosenKeys.has(toolKey(tool)));
   return `<input type="hidden" name="tools" value="${escape(JSON.stringify(selected))}">
-    <div class="ep-tool-chips">${chips || "<span class='ep-hint'>No node tools: the profession's default tools (Gathering Tools) are required. Add tools here to require specific ones on this node instead.</span>"}</div>
-    <div class="ep-tool-add">
+    <div class="gp-tool-chips">${chips || "<span class='gp-hint'>No node tools: the profession's default tools (Gathering Tools) are required. Add tools here to require specific ones on this node instead.</span>"}</div>
+    <div class="gp-tool-add">
       <select data-tool-select>${option("", available.length ? "Add a tool from the library…" : "Library is empty — drop an Item", "")}${available.map(tool => option(tool.uuid, tool.name, "")).join("")}</select>
-      <div class="ep-dropzone" data-tool-drop><i class="fas fa-hand-holding"></i> Drop an Item</div>
+      <div class="gp-dropzone" data-tool-drop><i class="fas fa-hand-holding"></i> Drop an Item</div>
     </div>
-    ${library.length ? `<details class="ep-tool-library"><summary>Tool library (${library.length})</summary><ul>${library.map(tool => `<li>
+    ${library.length ? `<details class="gp-tool-library"><summary>Tool library (${library.length})</summary><ul>${library.map(tool => `<li>
         ${tool.img ? `<img src="${escape(tool.img)}" alt="">` : ""}<span>${escape(tool.name)}</span>
-        <button type="button" class="ep-icon" data-act="tool-forget" data-uuid="${escape(tool.uuid)}" title="Remove from library (nodes keep it)"><i class="fas fa-xmark"></i></button></li>`).join("")}</ul></details>` : ""}`;
+        <button type="button" class="gp-icon" data-act="tool-forget" data-uuid="${escape(tool.uuid)}" title="Remove from library (nodes keep it)"><i class="fas fa-xmark"></i></button></li>`).join("")}</ul></details>` : ""}`;
 }
 
 export function rareTableOptions(selected) {
@@ -339,13 +339,13 @@ export function rareTableOptions(selected) {
 }
 
 export function rarePreview(uuid) {
-  if (!uuid) return '<p class="ep-hint">Rare finds use each material\'s rare table, or its profession\'s.</p>';
+  if (!uuid) return '<p class="gp-hint">Rare finds use each material\'s rare table, or its profession\'s.</p>';
   const table = fromUuidSync(uuid);
-  if (!table) return '<p class="ep-hint">Table not found.</p>';
+  if (!table) return '<p class="gp-hint">Table not found.</p>';
   const results = Array.from(table.results ?? []);
   const total = results.reduce((sum, result) => sum + (Number(result.weight) || 0), 0) || 1;
-  if (!results.length) return '<p class="ep-hint">This table is empty.</p>';
-  return `<div class="ep-rare-list">${results.map(result => `<div class="ep-rare-row"><img src="${escape(result.img || FALLBACK_ICON)}" alt=""><span>${escape(result.name ?? result.text ?? "Result")}</span><span class="ep-share">${Math.round(((Number(result.weight) || 0) / total) * 100)}%</span></div>`).join("")}</div>`;
+  if (!results.length) return '<p class="gp-hint">This table is empty.</p>';
+  return `<div class="gp-rare-list">${results.map(result => `<div class="gp-rare-row"><img src="${escape(result.img || FALLBACK_ICON)}" alt=""><span>${escape(result.name ?? result.text ?? "Result")}</span><span class="gp-share">${Math.round(((Number(result.weight) || 0) / total) * 100)}%</span></div>`).join("")}</div>`;
 }
 
 export function renderDetail(page, state) {
@@ -360,12 +360,12 @@ export function renderDetail(page, state) {
   const scenes = Array.from(game.scenes ?? []);
 
   const header = isNew
-    ? `<header class="ep-nm-head"><img src="${FALLBACK_ICON}" alt=""><div><h2>New Node</h2><div class="ep-sub">Fill in the tabs, then Create node.</div></div></header>`
-    : `<header class="ep-nm-head">
+    ? `<header class="gp-nm-head"><img src="${FALLBACK_ICON}" alt=""><div><h2>New Node</h2><div class="gp-sub">Fill in the tabs, then Create node.</div></div></header>`
+    : `<header class="gp-nm-head">
         <img src="${escape(icon)}" alt="">
-        <div class="ep-nm-title"><h2>${escape(page.name)}</h2>
-          <div class="ep-sub">${escape(page.parent?.name ?? "")} · ${escape(node.profession ? PROFESSIONS[node.profession]?.label ?? node.profession : "No profession")} · Tier ${node.tier}</div></div>
-        <div class="ep-nm-actions">
+        <div class="gp-nm-title"><h2>${escape(page.name)}</h2>
+          <div class="gp-sub">${escape(page.parent?.name ?? "")} · ${escape(node.profession ? PROFESSIONS[node.profession]?.label ?? node.profession : "No profession")} · Tier ${node.tier}</div></div>
+        <div class="gp-nm-actions">
           <button type="button" data-act="gather-window" title="Open the gathering window (player view)"><i class="fas fa-hand-sparkles"></i></button>
           <button type="button" data-act="open" title="Open the Gatherer page"><i class="fas fa-book-open"></i></button>
           <button type="button" data-act="place" title="Add another pin sharing this node's pulls"><i class="fas fa-map-pin"></i></button>
@@ -373,15 +373,15 @@ export function renderDetail(page, state) {
           <button type="button" data-act="reset" title="Refill pulls"><i class="fas fa-rotate"></i></button>
           <button type="button" data-act="toggle" title="${node.hidden ? "Reveal to all players" : "Hide from players"}"><i class="fas ${node.hidden ? "fa-eye" : "fa-eye-slash"}"></i></button>
           <button type="button" data-act="duplicate" title="Duplicate as a separate node and loot table"><i class="fas fa-copy"></i></button>
-          <button type="button" class="ep-danger" data-act="delete" title="Delete this node and its pins; shared table stays until the last linked node is deleted"><i class="fas fa-trash"></i></button>
+          <button type="button" class="gp-danger" data-act="delete" title="Delete this node and its pins; shared table stays until the last linked node is deleted"><i class="fas fa-trash"></i></button>
         </div>
       </header>
-      <div class="ep-nm-summary">
-        <div class="ep-nm-bigbar ${isDepleted(page) ? "depleted" : ""}"><span style="width:${fill}%"></span><label>${usage.draws ? `${usage.remaining} / ${usage.draws} pulls left` : "Unlimited pulls"}</label></div>
+      <div class="gp-nm-summary">
+        <div class="gp-nm-bigbar ${isDepleted(page) ? "depleted" : ""}"><span style="width:${fill}%"></span><label>${usage.draws ? `${usage.remaining} / ${usage.draws} pulls left` : "Unlimited pulls"}</label></div>
         <span><i class="fas fa-hourglass-half"></i> ${usage.time ? `Resets ${usage.time} h after first pull` : "No timed reset"}</span>
         <span><i class="fas fa-map-pin"></i> ${pinsFor(page).length} pin(s)</span>
         ${linkGroupFor(page) ? `<span><i class="fas fa-link"></i> Linked loot table · independent pulls</span>` : ""}
-        <div class="ep-nm-badges">${badgeHtml(nodeBadges(node))}</div>
+        <div class="gp-nm-badges">${badgeHtml(nodeBadges(node))}</div>
       </div>`;
 
   const basics = `
@@ -394,7 +394,7 @@ export function renderDetail(page, state) {
     ${field("Pulls", num("draws", usage.draws ?? 0, 0, 1000), "0 = unlimited.")}
     ${field("Reset after (hours)", num("time", usage.time ?? 0, 0, 100000, 0.5), "In-game hours after the first pull. 0 = never.")}
     ${field("Pin icon", iconPicker(node, materials[0]?.img || FALLBACK_ICON), "Pick a material image. Default uses the first material in the node.")}
-    ${isNew ? field("Pin", `<label class="ep-check"><input type="checkbox" name="placePin" ${canvas?.scene ? "checked" : ""}> Place a pin after creating it</label>`) : ""}`;
+    ${isNew ? field("Pin", `<label class="gp-check"><input type="checkbox" name="placePin" ${canvas?.scene ? "checked" : ""}> Place a pin after creating it</label>`) : ""}`;
 
   const rules = `
     ${field("Check", `<select name="check">${checkOptions(checkValue(node))}</select>`, "A skill adds its full bonus (ability + proficiency or expertise), plus the profession die.")}
@@ -402,28 +402,28 @@ export function renderDetail(page, state) {
     ${field("Yield modifier", num("yieldModifier", node.yieldModifier, -10, 10), "Added to full successes. A success always gives at least 1.")}
     ${field("Minimum rank", rankSelect("minRank", node.minRank, "None"), "Below this rank in the node's profession, the attempt is refused. No pull is used.")}
     <h3>Required tools</h3>
-    <div class="ep-tools">${toolsSection(nodeTools(node))}</div>
-    <p class="ep-hint ep-hint-block">Carrying any one listed tool is enough. A character's copy matches by its source Item, or by the same name. When several are carried, the highest proficiency bonus is used. It is not added to a skill check.</p>
+    <div class="gp-tools">${toolsSection(nodeTools(node))}</div>
+    <p class="gp-hint gp-hint-block">Carrying any one listed tool is enough. A character's copy matches by its source Item, or by the same name. When several are carried, the highest proficiency bonus is used. It is not added to a skill check.</p>
     <h3>Rare finds</h3>
     ${field("Rare-find bonus %", num("rareChance", node.rareChance, 0, 100), "Added to the character's perk chance on full successes.")}
-    ${field("Rare-find table", `<select name="rareTable" data-rare-select data-table-drop>${rareTableOptions(node.rareTable)}</select><button type="button" class="ep-icon" data-act="rare-create" title="Create a rare-find table"><i class="fas fa-plus"></i></button>`, "Pick a table, drag one from the sidebar onto this box, or create one with +.")}
-    <div class="ep-rare-preview" data-rare-preview>${rarePreview(node.rareTable)}</div>`;
+    ${field("Rare-find table", `<select name="rareTable" data-rare-select data-table-drop>${rareTableOptions(node.rareTable)}</select><button type="button" class="gp-icon" data-act="rare-create" title="Create a rare-find table"><i class="fas fa-plus"></i></button>`, "Pick a table, drag one from the sidebar onto this box, or create one with +.")}
+    <div class="gp-rare-preview" data-rare-preview>${rarePreview(node.rareTable)}</div>`;
 
   const visibility = `
-    ${field("Players", `<label class="ep-check"><input type="checkbox" name="hidden" ${node.hidden ? "checked" : ""}> Hidden until revealed</label>`, "Hidden nodes and their pins are invisible to players.")}
+    ${field("Players", `<label class="gp-check"><input type="checkbox" name="hidden" ${node.hidden ? "checked" : ""}> Hidden until revealed</label>`, "Hidden nodes and their pins are invisible to players.")}
     ${field("Profession sense", rankSelect("senseRank", node.senseRank, "Off"), "While hidden, characters with the node's profession at this rank or higher still see it.")}
-    ${isNew ? "" : `<h3>Placements</h3><p class="ep-hint">Another pin shares this node's pulls. A linked placement uses the same loot table but has its own pulls and reset timer. Material edits to the table affect every linked placement.</p>${pinsList(page)}<button type="button" data-act="place"><i class="fas fa-map-pin"></i> Add shared-pool pin</button> <button type="button" data-act="place-linked"><i class="fas fa-link"></i> Add linked placement</button>`}`;
+    ${isNew ? "" : `<h3>Placements</h3><p class="gp-hint">Another pin shares this node's pulls. A linked placement uses the same loot table but has its own pulls and reset timer. Material edits to the table affect every linked placement.</p>${pinsList(page)}<button type="button" data-act="place"><i class="fas fa-map-pin"></i> Add shared-pool pin</button> <button type="button" data-act="place-linked"><i class="fas fa-link"></i> Add linked placement</button>`}`;
 
   const panels = { basics, materials: materialsTab(page, node, isNew), rules, visibility };
-  const nav = TABS.map(([id, label, iconClass]) => `<a class="ep-tab ${id === tab ? "active" : ""}" data-act="tab" data-tab="${id}"><i class="fas ${iconClass}"></i> ${escape(label)}</a>`).join("");
-  const sections = TABS.map(([id]) => `<section class="ep-panel ${id === tab ? "active" : ""}" data-panel="${id}">${panels[id]}</section>`).join("");
+  const nav = TABS.map(([id, label, iconClass]) => `<a class="gp-tab ${id === tab ? "active" : ""}" data-act="tab" data-tab="${id}"><i class="fas ${iconClass}"></i> ${escape(label)}</a>`).join("");
+  const sections = TABS.map(([id]) => `<section class="gp-panel ${id === tab ? "active" : ""}" data-panel="${id}">${panels[id]}</section>`).join("");
   return `${header}
-    <nav class="ep-tabs">${nav}</nav>
-    <form class="ep-node-form" autocomplete="off">${sections}
-      <footer class="ep-form-footer">
-        <span class="ep-dirty" ${state.dirty ? "" : "hidden"}><i class="fas fa-circle"></i> Unsaved changes</span>
+    <nav class="gp-tabs">${nav}</nav>
+    <form class="gp-node-form" autocomplete="off">${sections}
+      <footer class="gp-form-footer">
+        <span class="gp-dirty" ${state.dirty ? "" : "hidden"}><i class="fas fa-circle"></i> Unsaved changes</span>
         ${isNew ? `<button type="button" data-act="cancel">Cancel</button>` : `<button type="button" data-act="revert">Revert</button>`}
-        <button type="submit" class="ep-primary"><i class="fas fa-floppy-disk"></i> ${isNew ? "Create node" : "Save changes"}</button>
+        <button type="submit" class="gp-primary"><i class="fas fa-floppy-disk"></i> ${isNew ? "Create node" : "Save changes"}</button>
       </footer>
     </form>`;
 }
@@ -473,8 +473,8 @@ function defineClass() {
   const { ApplicationV2 } = foundry.applications.api;
   return class NodeManager extends ApplicationV2 {
     static DEFAULT_OPTIONS = {
-      id: "eryndor-node-manager",
-      classes: ["eryndor-professions-ui", "ep-node-manager"],
+      id: "gathering-node-manager",
+      classes: ["gathering-professions-ui", "gp-node-manager"],
       tag: "div",
       window: { title: "Gathering Nodes", icon: "fas fa-mountain-sun", resizable: true },
       position: { width: 1080, height: 720 }
@@ -504,13 +504,13 @@ function defineClass() {
     }
 
     _replaceHTML(result, content) {
-      if (!content.querySelector(".ep-nm")) content.innerHTML = '<div class="ep-nm"><aside class="ep-nm-list"></aside><section class="ep-nm-detail"></section></div>';
+      if (!content.querySelector(".gp-nm")) content.innerHTML = '<div class="gp-nm"><aside class="gp-nm-list"></aside><section class="gp-nm-detail"></section></div>';
       if (result.list !== undefined) {
-        const list = content.querySelector(".ep-nm-list");
-        const scroll = list.querySelector(".ep-nm-groups")?.scrollTop ?? 0;
+        const list = content.querySelector(".gp-nm-list");
+        const scroll = list.querySelector(".gp-nm-groups")?.scrollTop ?? 0;
         const focusSearch = document.activeElement?.matches?.("[data-filter='search']");
         list.innerHTML = result.list;
-        const groups = list.querySelector(".ep-nm-groups");
+        const groups = list.querySelector(".gp-nm-groups");
         if (groups) groups.scrollTop = scroll;
         if (focusSearch) {
           const input = list.querySelector("[data-filter='search']");
@@ -519,7 +519,7 @@ function defineClass() {
         }
       }
       if (result.detail !== undefined) {
-        content.querySelector(".ep-nm-detail").innerHTML = result.detail;
+        content.querySelector(".gp-nm-detail").innerHTML = result.detail;
         this.#updateShares();
         this.#filterMaterials();
       }
@@ -531,7 +531,7 @@ function defineClass() {
       bindRulesEditors(root, () => this.#markDirty());
       root.addEventListener("click", event => this.#onClick(event));
       root.addEventListener("keydown", event => {
-        if (event.key === "Enter" && event.target.matches?.(".ep-nm-row")) this.#select(event.target.dataset.uuid);
+        if (event.key === "Enter" && event.target.matches?.(".gp-nm-row")) this.#select(event.target.dataset.uuid);
       });
       root.addEventListener("change", event => this.#onChange(event));
       root.addEventListener("input", event => this.#onInput(event));
@@ -587,12 +587,12 @@ function defineClass() {
     #markDirty() {
       if (this.view.dirty) return;
       this.view.dirty = true;
-      const marker = this.element.querySelector(".ep-dirty");
+      const marker = this.element.querySelector(".gp-dirty");
       if (marker) marker.hidden = false;
     }
 
     #updateShares() {
-      const rows = Array.from(this.element?.querySelectorAll(".ep-mat-row[data-profession]") ?? []);
+      const rows = Array.from(this.element?.querySelectorAll(".gp-mat-row[data-profession]") ?? []);
       const total = rows.reduce((sum, row) => sum + Math.max(0, Number(row.querySelector("input")?.value) || 0), 0);
       for (const row of rows) {
         const weight = Math.max(0, Number(row.querySelector("input")?.value) || 0);
@@ -608,7 +608,7 @@ function defineClass() {
       const profession = root.querySelector("[data-prof-select]")?.value ?? "";
       const all = root.querySelector("[data-mat-all]")?.checked;
       const search = (root.querySelector("[data-mat-search]")?.value ?? "").trim().toLowerCase();
-      for (const row of root.querySelectorAll(".ep-mat-row[data-profession]")) {
+      for (const row of root.querySelectorAll(".gp-mat-row[data-profession]")) {
         const inUse = Number(row.querySelector("input")?.value) > 0;
         const matchesProfession = all || !profession || row.dataset.profession === profession;
         row.hidden = !(inUse || (matchesProfession && (!search || row.dataset.name.includes(search))));
@@ -620,7 +620,7 @@ function defineClass() {
     }
 
     #setTools(tools) {
-      const container = this.element.querySelector(".ep-tools");
+      const container = this.element.querySelector(".gp-tools");
       if (container) container.innerHTML = toolsSection(tools);
       this.#markDirty();
     }
@@ -655,15 +655,15 @@ function defineClass() {
     async #quickCreateRareTable() {
       const page = this.selectedPage;
       const items = Array.from(game.items ?? []).sort((a, b) => a.name.localeCompare(b.name));
-      const rows = items.map(item => `<div class="ep-mat-row" data-name="${escape(item.name.toLowerCase())}" hidden>
-          <img src="${escape(item.img)}" alt=""><span class="ep-mat-name">${escape(item.name)}<small>${escape(item.folder?.name ?? "")}</small></span>
+      const rows = items.map(item => `<div class="gp-mat-row" data-name="${escape(item.name.toLowerCase())}" hidden>
+          <img src="${escape(item.img)}" alt=""><span class="gp-mat-name">${escape(item.name)}<small>${escape(item.folder?.name ?? "")}</small></span>
           <span></span>${num(`w_${item.id}`, 0, 0, 1000)}</div>`).join("");
       const element = document.createElement("div");
-      element.innerHTML = `<div class="eryndor-professions-ui ep-nm ep-quick-rare">
-          <div class="ep-field"><label>Table name</label><div class="ep-control"><input name="name" type="text" value="${escape(page ? `${page.name} — Rare Finds` : "Rare Finds")}"></div></div>
-          <div class="ep-field"><label>Find items</label><div class="ep-control"><input type="search" data-quick-search placeholder="Type at least 2 letters"></div></div>
-          <p class="ep-hint ep-hint-block">Give each rare item a weight. Items with a weight stay listed.</p>
-          <div class="ep-mat-list ep-quick-list">${rows}</div></div>`;
+      element.innerHTML = `<div class="gathering-professions-ui gp-nm gp-quick-rare">
+          <div class="gp-field"><label>Table name</label><div class="gp-control"><input name="name" type="text" value="${escape(page ? `${page.name} — Rare Finds` : "Rare Finds")}"></div></div>
+          <div class="gp-field"><label>Find items</label><div class="gp-control"><input type="search" data-quick-search placeholder="Type at least 2 letters"></div></div>
+          <p class="gp-hint gp-hint-block">Give each rare item a weight. Items with a weight stay listed.</p>
+          <div class="gp-mat-list gp-quick-list">${rows}</div></div>`;
       const values = await Dialog().input({
         window: { title: "Create Rare-Find Table" }, content: element, position: { width: 560, height: 560 },
         ok: { label: "Create table" },
@@ -671,14 +671,14 @@ function defineClass() {
           const root = dialog.element;
           const filter = () => {
             const query = (root.querySelector("[data-quick-search]")?.value ?? "").trim().toLowerCase();
-            root.querySelectorAll(".ep-quick-list .ep-mat-row").forEach(row => {
+            root.querySelectorAll(".gp-quick-list .gp-mat-row").forEach(row => {
               const used = Number(row.querySelector("input")?.value) > 0;
               row.hidden = !(used || (query.length >= 2 && row.dataset.name.includes(query)));
               row.classList.toggle("in-use", used);
             });
           };
           root.querySelector("[data-quick-search]")?.addEventListener("input", filter);
-          root.querySelector(".ep-quick-list")?.addEventListener("input", filter);
+          root.querySelector(".gp-quick-list")?.addEventListener("input", filter);
         }
       });
       if (!values) return;
@@ -700,7 +700,7 @@ function defineClass() {
         return;
       }
       if (target.matches("[data-mat-search]")) return this.#filterMaterials();
-      if (target.closest(".ep-node-form")) {
+      if (target.closest(".gp-node-form")) {
         this.#markDirty();
         if (target.name?.startsWith("w_")) this.#updateShares();
       }
@@ -713,7 +713,7 @@ function defineClass() {
       if (target.matches("[data-check]")) {
         if (target.checked) this.view.checked.add(target.dataset.check);
         else this.view.checked.delete(target.dataset.check);
-        const label = this.element.querySelector(".ep-nm-bulk span");
+        const label = this.element.querySelector(".gp-nm-bulk span");
         if (label) label.textContent = `${this.view.checked.size} selected`;
         return;
       }
@@ -724,7 +724,7 @@ function defineClass() {
         return;
       }
       if (target.matches("[data-rare-select]")) this.#renderRarePreview();
-      if (target.closest(".ep-node-form")) {
+      if (target.closest(".gp-node-form")) {
         this.#markDirty();
         if (target.name?.startsWith("w_")) this.#updateShares();
       }
@@ -770,8 +770,8 @@ function defineClass() {
           case "revert": this.view.dirty = false; return this.render({ parts: ["detail"] });
           case "tab": {
             this.view.tab = button.dataset.tab;
-            this.element.querySelectorAll(".ep-tab").forEach(tab => tab.classList.toggle("active", tab.dataset.tab === this.view.tab));
-            this.element.querySelectorAll(".ep-panel").forEach(panel => panel.classList.toggle("active", panel.dataset.panel === this.view.tab));
+            this.element.querySelectorAll(".gp-tab").forEach(tab => tab.classList.toggle("active", tab.dataset.tab === this.view.tab));
+            this.element.querySelectorAll(".gp-panel").forEach(panel => panel.classList.toggle("active", panel.dataset.panel === this.view.tab));
             return;
           }
           case "collapse": {
@@ -806,7 +806,7 @@ function defineClass() {
             const fallback = nodeMaterials(this.selectedPage)[0]?.img || FALLBACK_ICON;
             picker.querySelector("[data-icon-preview]").src = img || fallback;
             picker.querySelector("[data-icon-label]").textContent = button.dataset.label ?? "Custom image";
-            picker.querySelectorAll(".ep-icon-choice, .ep-icon-default").forEach(choice => choice.classList.toggle("active", choice === button));
+            picker.querySelectorAll(".gp-icon-choice, .gp-icon-default").forEach(choice => choice.classList.toggle("active", choice === button));
             picker.classList.remove("open");
             return this.#markDirty();
           }
@@ -858,7 +858,7 @@ function defineClass() {
     }
 
     async #save() {
-      const form = this.element.querySelector(".ep-node-form");
+      const form = this.element.querySelector(".gp-node-form");
       if (!form) return;
       const isNew = this.view.selected === "new";
       const page = this.selectedPage;
@@ -947,8 +947,8 @@ export function registerNodeUI() {
     if (!game.user?.isGM) return;
     for (const layer of ["tokens", "notes"]) {
       if (!controls[layer]?.tools) continue;
-      controls[layer].tools["ep-nodes"] = {
-        name: "ep-nodes", title: "Gathering Nodes (Node Manager)", icon: "fas fa-mountain-sun",
+      controls[layer].tools["gp-nodes"] = {
+        name: "gp-nodes", title: "Gathering Nodes (Node Manager)", icon: "fas fa-mountain-sun",
         order: Object.keys(controls[layer].tools).length, button: true, visible: true,
         onChange: () => { void openNodeManager().catch(report); }
       };
@@ -957,7 +957,7 @@ export function registerNodeUI() {
   // Node Settings button on a Gatherer page opened in its own window.
   Hooks.on("getHeaderControlsDocumentSheetV2", (app, controls) => {
     if (!game.user.isGM || !isGathererPage(app.document)) return;
-    controls.push({ action: "eryndor-node", icon: "fas fa-mountain-sun", label: "Node Settings",
+    controls.push({ action: "gathering-node", icon: "fas fa-mountain-sun", label: "Node Settings",
       onClick: () => { void openNodeBuilder(app.document).catch(report); } });
   });
 }

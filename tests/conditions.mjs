@@ -13,7 +13,7 @@ globalThis.game = {
     async set(_namespace, key, value) { settings[key] = value; },
     register() {}, registerMenu() {}
   },
-  modules: new Map([["simple-timekeeping", { active: true }], ["eryndor-professions", { api: {} }]]),
+  modules: new Map([["simple-timekeeping", { active: true }], ["gathering-professions", { api: {} }]]),
   i18n: { localize: key => ({ "simple-timekeeping.weather.rain": "Rain", "simple-timekeeping.weather.cloudy": "Cloudy", "simple-timekeeping.weather.partlyCloudy": "Partly Cloudy", "simple-timekeeping.weather.blizzard": "Blizzard", "SEASON.Winter": "Winter" })[key] ?? key },
   time: {
     components: { hour: 22, minute: 0, second: 0, season: 1 },
@@ -49,7 +49,7 @@ assert.equal(conditions.matchWeather("Ember Haze").key, "ember-haze", "Unknown w
 let now = conditions.currentConditions({});
 assert.deepEqual([now.season.key, now.weather.key, now.time.key, now.biome], ["winter", "rain", "night", null]);
 assert.equal(now.season.label, "Winter");
-const scene = { id: "s1", flags: { "eryndor-professions": { biome: "forest" } } };
+const scene = { id: "s1", flags: { "gathering-professions": { biome: "forest" } } };
 assert.equal(conditions.currentConditions({ scene }).biome.key, "forest");
 assert.equal(conditions.currentConditions({ scene, node: { biome: "arctic" } }).biome.source, "node");
 settings.conditionOverrides = { season: "spring", weather: "blizzard", time: "" };
@@ -93,7 +93,7 @@ assert.equal(conditions.weightMultiplier(nightFlower, { ...springRainNight, seas
 assert.equal(conditions.weightMultiplier(nightFlower, {}), 1);
 assert.deepEqual([conditions.abundance(0).key, conditions.abundance(0.5).key, conditions.abundance(1).key, conditions.abundance(3).key], ["none", "scarce", "normal", "abundant"]);
 
-const moonpetal = { uuid: "Item.moon", name: "Moonpetal", flags: { "eryndor-professions": { material: { conditions: nightFlower } } } };
+const moonpetal = { uuid: "Item.moon", name: "Moonpetal", flags: { "gathering-professions": { material: { conditions: nightFlower } } } };
 const stone = { uuid: "Item.stone", name: "Stone", flags: {} };
 items.set(moonpetal.uuid, moonpetal);
 items.set(stone.uuid, stone);
@@ -155,7 +155,7 @@ assert.equal(await table.draw(), "original", "Concurrent gathers restore the ori
 
 // A node's only material turning scarce (×0.5) becomes a 50% chance to find nothing.
 const halfDay = [{ type: "time", value: "day", multiplier: 0.5 }];
-const dayPetal = { uuid: "Item.dayPetal", name: "Day Petal", flags: { "eryndor-professions": { material: { conditions: halfDay } } } };
+const dayPetal = { uuid: "Item.dayPetal", name: "Day Petal", flags: { "gathering-professions": { material: { conditions: halfDay } } } };
 items.set(dayPetal.uuid, dayPetal);
 const solo = { replacement: true, results: [{ id: "p", documentUuid: "Item.dayPetal", weight: 1 }], async draw() { return "original"; } };
 const soloDay = conditions.adjustedResults(solo, null, { time: { key: "day" } });
@@ -188,14 +188,14 @@ assert.deepEqual(conditions.conditionDcModifier({}, "mining"), { total: 0, parts
 // Editors render.
 const editorHtml = ui.rulesEditorHtml(nightFlower, "conditions");
 assert.match(editorHtml, /name="conditions"/);
-assert.equal((editorHtml.match(/class="ep-rule-row"/g) ?? []).length, 3);
+assert.equal((editorHtml.match(/class="gp-rule-row"/g) ?? []).length, 3);
 assert.match(editorHtml, /value="night" selected/);
 assert.deepEqual(ui.parseRules('[{"type":"time","value":"day","multiplier":2}]'), [{ type: "time", value: "day", multiplier: 2 }]);
 assert.deepEqual(ui.parseRules("not json"), []);
 assert.match(ui.rulesSummary(nightFlower), /Night ×3, Winter ×0, Rain ×1.5/);
 for (const tab of ["now", "biomes", "dc"]) {
   const html = ui.renderConditionsWindow({ tab });
-  assert.match(html, /ep-hub-subtabs/);
+  assert.match(html, /gp-hub-subtabs/);
   if (tab === "now") assert.match(html, /Pin a value/);
   if (tab === "biomes") assert.match(html, /Scene default biome/);
   if (tab === "dc") {
@@ -204,7 +204,7 @@ for (const tab of ["now", "biomes", "dc"]) {
     assert.equal((html.match(/data-dc-grid/g) ?? []).length, expected);
     assert.match(html, /name="dcg_weather__blizzard"[^>]*value="5"/);
     assert.match(html, /name="dcg_time__night"[^>]*value="0"/, "Profession rows stay out of the grid");
-    assert.equal((html.match(/class="ep-hub-row ep-dc-row"/g) ?? []).length, 2);
+    assert.equal((html.match(/class="gp-hub-row gp-dc-row"/g) ?? []).length, 2);
   }
 }
 // Recommended values: moderate, penalties only, every profession.

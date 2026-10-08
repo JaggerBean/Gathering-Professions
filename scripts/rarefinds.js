@@ -147,8 +147,8 @@ export function climbState(rare) {
 export async function whisperStoryFind({ actor, item, page, rare }) {
   const gms = typeof ChatMessage?.getWhisperRecipients === "function" ? ChatMessage.getWhisperRecipients("GM") : [];
   const escape = value => String(value ?? "").replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
-  const content = `<div class="eryndor-profession-check ep-story"><strong>Story discovery</strong><br>
+  const content = `<div class="gathering-profession-check gp-story"><strong>Story discovery</strong><br>
     ${escape(actor?.name ?? "A gatherer")} climbed past the tier 5 rare table while gathering ${escape(item?.name ?? "a material")}${page?.name ? ` at ${escape(page.name)}` : ""}.
     They found ${rare.items.map(found => escape(found.name)).join(", ") || "a tier 5 rare find"}, and something more: describe what they uncover.</div>`;
-  await ChatMessage.create({ content, whisper: gms.map(user => user.id ?? user), speaker: { alias: "Eryndor Professions" }, flags: { [MODULE_ID]: { storyFind: true } } });
+  await ChatMessage.create({ content, whisper: gms.map(user => user.id ?? user), speaker: { alias: "Gathering Professions" }, flags: { [MODULE_ID]: { storyFind: true } } });
 }
