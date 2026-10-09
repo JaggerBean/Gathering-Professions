@@ -95,7 +95,7 @@ function recipeRow(row, model, state) {
              ${row.edited ? `<button type="button" data-act="reset-recipe" data-recipe="${escape(row.id)}" title="Reset to the module's default"><i class="fas fa-rotate-left"></i></button>` : ""}`}
         ${row.custom ? '<span class="gp-rw-tag">Yours</span>' : row.disabled ? '<span class="gp-rw-tag off">Disabled</span>' : row.edited ? '<span class="gp-rw-tag">Edited</span>' : ""}
       </div>` : "";
-  return `<div class="gp-rw-recipe ${row.max > 0 ? "craftable" : ""} ${row.disabled ? "disabled" : ""}">
+  return `<div class="gp-rw-recipe ${row.max > 0 ? "craftable" : ""} ${row.disabled ? "gp-rw-off" : ""}">
       <div class="gp-rw-inputs">${inputs}<i class="fas fa-arrow-right gp-rw-arrow"></i><span class="gp-rw-out">${row.quantity}×</span></div>
       <div class="gp-rw-meta">
         <span class="gp-tier-badge tier-${row.tier}">T${row.tier}</span>
