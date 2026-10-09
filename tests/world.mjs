@@ -1122,13 +1122,17 @@ game.modules.get("skill-tree").active = true;
     blocked: (_actor, row) => (row.id === "testsmith:nails" ? null : "Needs Test Smith rank 2"),
     minutes: () => 60, defaultMinutes: () => 60, craft: () => {},
     gm: { scroll: () => null },
-    experiment: async (_actor, names) => { experiments.push(names); return { learned: null, warm: true, message: "Something here could work…" }; }
+    experiment: async (_actor, names) => { experiments.push(names); return { learned: null, warm: true, message: "Something here could work…" }; },
+    carried: () => [{ id: "scroll1", name: "Recipe: Coke", img: "s.webp", note: "" }, { id: "scroll2", name: "Recipe: Nails", img: "s.webp", note: "Already known", disabled: true }],
+    useCarried: () => {}
   });
   const smithModel = recipesUi.buildRecipesModel(smith, { tab: "testsmith" });
   assert.ok(smithModel.tabs.some(tab => tab.key === "testsmith") && smithModel.experiment, "A registered provider becomes a tab with an experiment panel");
   assert.deepEqual(smithModel.products.map(group => [group.name, group.hidden]), [["Copper Ingot", 0], ["Coke", 1]].filter(([, hidden]) => !hidden), "Unknown recipes stay hidden from players");
   const smithHtml = recipesUi.renderRecipesWindow(smithModel, { characters: [smith], experiment: { names: ["Coal"] } });
   assert.match(smithHtml, /data-act="exp-try"/);
+  assert.match(smithHtml, /data-act="use-carried" data-item="scroll1"\s+title/, "Carried scrolls get a Learn button");
+  assert.match(smithHtml, /data-item="scroll2" disabled/, "Scrolls that cannot be used are disabled with a reason");
   assert.match(smithHtml, /> Forge</);
   assert.match(smithHtml, /Test Smith check/);
   const otherActor = { id: "x", name: "Other", items: [], getFlag: () => undefined };

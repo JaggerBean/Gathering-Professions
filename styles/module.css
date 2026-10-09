@@ -640,3 +640,11 @@
 .gp-rw-expresult.learned { color: #9fe0aa; } .gp-rw-expresult.warm { color: #f0c27a; } .gp-rw-expresult.cold { opacity: .7; }
 .gp-rw-picktile small { margin-left: auto; opacity: .6; }
 
+
+/* Recipes window: scrolls the character carries */
+.gp-rw-carried { margin: .5rem .8rem 0; padding: .45rem .6rem; border: 1px solid var(--gp-edge); border-radius: 8px; background: rgba(0,0,0,.28); }
+.gp-rw-carried h4 { margin: 0 0 .3rem; color: var(--gp-gold); border: none; font-size: .9em; }
+.gp-rw-carry { display: flex; align-items: center; gap: .45rem; font-size: .88em; padding: .15rem 0; }
+.gp-rw-carry img { width: 26px; height: 26px; border: none; object-fit: contain; }
+.gp-rw-carry small { opacity: .65; }
+.gp-rw-carry button { margin-left: auto; width: auto; flex: 0 0 auto; }

@@ -73,6 +73,7 @@ export function buildRecipesModel(actor, { isGM = false, tab = "", onlyCraftable
     hiddenHint: provider?.hiddenHint ?? "Not yet discovered", hiddenWord: provider?.hiddenWord ?? "unknown", emptyText: provider?.emptyText ?? "No recipes known yet.",
     gmHint: provider?.gmHint ?? "", canEdit: Boolean(provider?.gm?.create), canScroll: Boolean(provider?.gm?.scroll),
     experiment: Boolean(provider?.experiment), products, jobs, isGM,
+    carried: actor && provider?.carried ? provider.carried(actor) : [], carriedLabel: provider?.carriedLabel ?? "Recipe scrolls you carry", carriedAction: provider?.carriedAction ?? "Learn",
     actor: actor ? { id: actor.id, name: actor.name, img: actor.img } : null
   };
 }
@@ -148,6 +149,16 @@ export function renderExperiment(model, experiment = {}, inventory = []) {
     </section>`;
 }
 
+/** Items the character carries that teach recipes (scrolls), each with a Learn button. */
+export function renderCarried(model) {
+  if (!model.carried?.length) return "";
+  return `<section class="gp-rw-carried"><h4><i class="fas fa-scroll"></i> ${escape(model.carriedLabel)}</h4>
+      ${model.carried.map(entry => `<div class="gp-rw-carry"><img src="${escape(entry.img || FALLBACK_ICON)}" alt=""><span>${escape(entry.name)}</span>
+        ${entry.note ? `<small>${escape(entry.note)}</small>` : ""}
+        <button type="button" class="gp-rw-craft" data-act="use-carried" data-item="${escape(entry.id)}" ${entry.disabled ? "disabled" : ""} title="${escape(entry.note || model.carriedAction)}"><i class="fas fa-book-open-reader"></i> ${escape(model.carriedAction)}</button></div>`).join("")}
+    </section>`;
+}
+
 export function renderRecipesWindow(model, state = {}) {
   const characters = state.characters ?? [];
   const who = characters.length
@@ -179,6 +190,7 @@ export function renderRecipesWindow(model, state = {}) {
     <nav class="gp-rw-tabs">${tabs || '<span class="gp-rw-noactor">No recipes available yet.</span>'}</nav>
     ${jobs}
     ${gmBar}
+    ${renderCarried(model)}
     ${renderExperiment(model, state.experiment, state.inventory)}
     <div class="gp-rw-list">${state.editing && !state.editing.id ? `<section class="gp-rw-card">${renderEditor(state.editing, state.editorItems)}</section>` : ""}${cards || `<p class="gp-rw-empty">${escape(empty)}</p>`}</div>
   </div>`;
@@ -417,6 +429,7 @@ function defineClass() {
       const provider = this.provider;
       if (act === "tab") { this.view.tab = button.dataset.tab; this.view.editing = null; this.view.experiment = freshExperiment(); return this.render(); }
       if (act === "collect") { await deliverDueJobs(this.actor); return this.render(); }
+      if (act === "use-carried") { await provider.useCarried(this.actor, button.dataset.item); return this.render(); }
       // Experiment panel.
       const experiment = this.view.experiment;
       if (act === "exp-pick") { experiment.picker = !experiment.picker; experiment.search = ""; return this.render(); }

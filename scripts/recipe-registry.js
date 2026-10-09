@@ -21,6 +21,9 @@
 //   gm: { create(fields), update(id, fields), disable(id, on), reset(id), delete(id), scroll?(id) }
 //   itemGroups(search)             editor picker groups (optional)
 //   experiment(actor, names)       { learned: row|null, warm: boolean, message } (optional)
+//   carried(actor)                 items the character carries that teach recipes (optional):
+//                                  [{ id, name, img, note, disabled? }]; carriedLabel, carriedAction
+//   useCarried(actor, itemId)      learn from one of them
 const providers = new Map();
 
 export function registerRecipeProvider(provider) {
