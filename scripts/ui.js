@@ -304,6 +304,11 @@ export function registerSceneControls() {
       icon: "fas fa-hammer", order,
       button: true, visible: true, onChange: () => { void openProfessionMenu().catch(report); }
     };
+    controls.tokens.tools["gp-recipes"] = {
+      name: "gp-recipes", title: "Recipes — Refine materials",
+      icon: "fas fa-book-open", order: order + 2,
+      button: true, visible: true, onChange: () => { void import("./recipes-ui.js").then(module => module.openRecipes()).catch(report); }
+    };
     controls.tokens.tools["gp-skill-tree"] = {
       name: "gp-skill-tree", title: "Gathering Skill Tree — Open",
       icon: "fas fa-code-branch", order: order + 1,

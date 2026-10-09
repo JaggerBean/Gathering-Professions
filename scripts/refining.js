@@ -8,6 +8,8 @@ import { MATERIAL_PRESETS, folderPath, worldItem } from "./presets.js";
 
 const KCTG = "kctg-5e.kctg-dnd5e";
 const HELIANA = "helianas-harvest-compendium";
+// Bump when recipes or generated items change: the GM prepares items again.
+export const REFINING_VERSION = 1;
 // Minutes per unit, by tier (crafting time halved).
 export const REFINE_MINUTES = Object.freeze([30, 60, 120, 240, 720]);
 export const DRIED_PREFIX = "Dried ";
@@ -23,7 +25,7 @@ const recipe = (tier, output, quantity, inputs) => Object.freeze({ tier, output,
 
 export const REFINING = Object.freeze({
   mining: Object.freeze({
-    verb: "Smelting", icon: "fa-fire-burner", requires: ["kctg-5e"], packs: [KCTG],
+    verb: "Smelting", action: "Smelt", icon: "fa-fire-burner", requires: ["kctg-5e"], packs: [KCTG],
     folder: ["Professions", "Mining", "Refined"],
     recipes: Object.freeze([
       recipe(1, "Stone Brick", 1, [["Stone", 3]]),
@@ -57,7 +59,7 @@ export const REFINING = Object.freeze({
     ])
   }),
   logging: Object.freeze({
-    verb: "Milling", icon: "fa-tree", requires: ["kctg-5e"], packs: [KCTG],
+    verb: "Milling", action: "Mill", icon: "fa-tree", requires: ["kctg-5e"], packs: [KCTG],
     folder: ["Professions", "Timber", "Timber"],
     recipes: Object.freeze([
       recipe(1, "Charcoal", 1, [["Brushwood Bundle", 2]]),
@@ -86,7 +88,7 @@ export const REFINING = Object.freeze({
     ])
   }),
   skinning: Object.freeze({
-    verb: "Tanning", icon: "fa-scroll", requires: ["kctg-5e", HELIANA],
+    verb: "Tanning", action: "Tan", icon: "fa-scroll", requires: ["kctg-5e", HELIANA],
     packs: [KCTG, `${HELIANA}.beast`, `${HELIANA}.monstrosity`, `${HELIANA}.dragon`],
     folder: ["Professions", "Skinning", "Refined"],
     recipes: Object.freeze([
@@ -120,7 +122,7 @@ export const REFINING = Object.freeze({
   // Herbalism recipes are generated from the world's herbalism materials:
   // 2 of a herb make 1 "Dried <herb>".
   herbalism: Object.freeze({
-    verb: "Preparation", icon: "fa-mortar-pestle", requires: [], packs: [],
+    verb: "Preparation", action: "Prepare", icon: "fa-mortar-pestle", requires: [], packs: [],
     folder: ["Professions", "Herbalism", "Prepared"], dried: true, recipes: Object.freeze([])
   })
 });
@@ -194,7 +196,7 @@ function driedRecipes() {
 export function refiningProfessions() {
   return Object.entries(REFINING).filter(([key, entry]) =>
     PROFESSIONS[key] && entry.requires.every(id => game.modules.get(id)?.active))
-    .map(([key, entry]) => ({ key, label: PROFESSIONS[key].label, verb: entry.verb, icon: entry.icon }));
+    .map(([key, entry]) => ({ key, label: PROFESSIONS[key].label, verb: entry.verb, action: entry.action, icon: entry.icon }));
 }
 
 /** Recipes for one profession, each with a stable id. */

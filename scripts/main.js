@@ -2,7 +2,8 @@ import { MODULE_ID, PROFESSIONS, ABILITY_LABELS, DEFAULT_PROFESSIONS, RANK_XP, R
 import { openMaterialManager, openMaterialEditor, openProgressEditor, openProfessionMenu, openPerkEditor, registerSceneControls, registerUIHooks, registerSettingsMenu } from "./ui.js";
 import { ensureWorldContent } from "./worldcontent.js";
 import { availablePresets, applyMaterialPreset } from "./presets.js";
-import { REFINING, availableRefining, refiningRecipes, buildRefiningBook, refineCheck } from "./refining.js";
+import { REFINING, REFINING_VERSION, GENERATED, refiningProfessions, refiningRecipes, allRecipes, discoveredNames, isKnown, recordDiscoveries, backfillDiscoveries, registerDiscoveryHooks, prepareRefinedItems, craftRecipe, actorJobs, deliverDueJobs, deliverAllDueJobs } from "./refining.js";
+import { openRecipes } from "./recipes-ui.js";
 import { DEFAULT_TOOLS, buildDefaultTools } from "./gatheringtools.js";
 import { DEFAULT_SKILL_TREE, skillTreeConfig, normalizeSkillTreeConfig, syncProfessionState, resetUniversalTreeSkills, drawRareFind, availableSkillTrees, configuredSkillTree } from "./integrations.js";
 import { PERK_EFFECTS, actorPerks, normalizePerk, readPerk, rareChanceTotal, applyPerksToCheck, rerollsLeft, spendReroll, resetRestUses, masterfulLeft, spendMasterful } from "./perks.js";
@@ -697,6 +698,12 @@ Hooks.once("init", () => {
     name: "Skill Tree Link", scope: "world", config: false, type: Object,
     default: { ...DEFAULT_SKILL_TREE }
   });
+  game.settings.register(MODULE_ID, "discoveredItems", {
+    name: "Party Discoveries", scope: "world", config: false, type: Array, default: []
+  });
+  game.settings.register(MODULE_ID, "refiningVersion", {
+    name: "Refined Items Version", scope: "world", config: false, type: Number, default: 0
+  });
   game.settings.register(MODULE_ID, "legacyMigrationVersion", {
     name: "Legacy Namespace Migration", scope: "world", config: false, type: Number, default: 0
   });
@@ -744,16 +751,23 @@ Hooks.once("ready", async () => {
     },
     assist: { power: assistPower, offer: offerAssist, withdraw: withdrawAssist, find: findAssist },
     presets: { list: () => availablePresets(), apply: key => applyMaterialPreset(key) },
-    /** Refining in Mastercrafted: smelting, milling, tanning, preparation. */
+    /** Refining: smelting, milling, tanning, preparation (Recipes window). */
     refining: {
       definitions: REFINING,
-      list: () => availableRefining(),
-      recipes: profession => refiningRecipes(profession),
-      /** GM: create or update a profession's refining recipe book. */
-      build: profession => buildRefiningBook(profession),
-      /** Called by the recipes' Mastercrafted macro before crafting. */
-      check: args => refineCheck(args, { addXp })
+      generated: GENERATED,
+      professions: () => refiningProfessions(),
+      recipes: profession => (profession ? refiningRecipes(profession) : allRecipes()),
+      discovered: () => [...discoveredNames()],
+      isKnown: recipe => isKnown(recipe),
+      /** GM: mark item names as found by the party. */
+      discover: names => recordDiscoveries(Array.isArray(names) ? names : [names]),
+      /** GM: create/import every refined product (visible to players). */
+      prepare: professions => prepareRefinedItems(professions),
+      craft: (actor, recipeId, batch = 1) => craftRecipe(actor, recipeId, batch, { addXp }),
+      jobs: actor => actorJobs(actor),
+      collect: actor => deliverDueJobs(actor)
     },
+    openRecipes,
     rareFinds: {
       catalogue: RARE_FINDS,
       /** GM: create the default rare Items and tier tables, and link them. */
@@ -942,8 +956,10 @@ Hooks.once("ready", async () => {
       .then(report => { if (report) ui.notifications.info(`Gathering content ready: ${report.tree}${report.rareTables ? `, ${report.rareTables} rare-find tables built` : ""}${report.tools ? `, ${report.tools} gathering tools created` : ""}.`); })
       .catch(logFailure("could not set up gathering content"))
       .then(() => migrateUniversalTree()).catch(logFailure("could not update the universal tree"))
-      .finally(() => syncEveryCharacter()), 0);
+      .finally(() => syncEveryCharacter())
+      .then(() => setUpRefining()).catch(logFailure("could not set up refining")), 0);
   }
+  registerDiscoveryHooks(isActiveGM);
   Hooks.on("updateSetting", setting => {
     if (setting?.key === `${MODULE_ID}.skillTree` && isActiveGM()) syncEveryCharacter();
   });
@@ -951,6 +967,19 @@ Hooks.once("ready", async () => {
   registerGatheringHooks();
   console.info(`${MODULE_ID}: Gatherer profession checks active.`);
 });
+
+/** Active GM: record what the party carries, prepare refined Items once per version, deliver finished work. */
+async function setUpRefining() {
+  if (!isActiveGM()) return;
+  await backfillDiscoveries();
+  if ((game.settings.get(MODULE_ID, "refiningVersion") ?? 0) < REFINING_VERSION && refiningProfessions().length) {
+    const result = await prepareRefinedItems();
+    await game.settings.set(MODULE_ID, "refiningVersion", REFINING_VERSION);
+    if (result.created || result.imported) ui.notifications.info(`Refining ready: ${result.created} refined items created, ${result.imported} imported.`);
+    if (result.missing.length) console.warn(`${MODULE_ID}: refining items not found: ${result.missing.join(", ")}`);
+  }
+  await deliverAllDueJobs();
+}
 
 function syncEveryCharacter() {
   for (const actor of game.actors) {
@@ -1001,6 +1030,7 @@ function registerNodeHooks() {
   Hooks.on("createUser", () => { if (isActiveGM()) refreshAllVisibility(); });
   let lastCheck = 0;
   Hooks.on("updateWorldTime", worldTime => {
+    if (isActiveGM()) void deliverAllDueJobs(worldTime).catch(logFailure("refining delivery failed"));
     if (!isActiveGM() || Math.abs(worldTime - lastCheck) < 60) return;
     lastCheck = worldTime;
     void autoResetExpired().catch(logFailure("node timer reset failed"));

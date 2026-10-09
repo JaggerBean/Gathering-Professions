@@ -8,7 +8,7 @@ import { toolDurability } from "./durability.js";
 import { renderConditionsWindow, handleConditionsAction, bindConditionInputs } from "./conditions-ui.js";
 import { saveRulesValues, openMaterialEditor } from "./ui.js";
 import { availablePresets, applyMaterialPreset } from "./presets.js";
-import { availableRefining, buildRefiningBook } from "./refining.js";
+import { refiningProfessions, prepareRefinedItems } from "./refining.js";
 import { nodeManagerCore } from "./node-ui.js";
 import { materialsModel, addRareItem, removeRareResult, setRareWeights, assignMaterial, unassignMaterial } from "./materials.js";
 import { gpDialog } from "./dialogs.js";
@@ -137,8 +137,9 @@ function materialsSection(view) {
       <p class="gp-hub-note">Rare finds come only from these tables (see Rare Finds for how tiers climb). Weight sets how often an item is drawn within its tier.</p>
       ${rare}</section>
     <footer class="gp-hub-footer">${availablePresets().filter(preset => preset.profession === key).map(preset =>
-      `<button type="button" class="gp-hub-ghost" data-act="apply-preset" data-preset="${escape(preset.key)}" title="Import and assign this material set, and fill the tier rare tables"><i class="fas fa-wand-magic-sparkles"></i> Apply preset: ${escape(preset.label)}</button>`).join("")}${availableRefining().filter(entry => entry.key === key).map(entry =>
-      `<button type="button" class="gp-hub-ghost" data-act="build-refining" data-prof="${escape(entry.key)}" title="Create or update the Mastercrafted recipe book (${escape(entry.book)}); recipes roll this profession at the material's tier"><i class="fas fa-fire-burner"></i> Build refining recipes</button>`).join("")}
+      `<button type="button" class="gp-hub-ghost" data-act="apply-preset" data-preset="${escape(preset.key)}" title="Import and assign this material set, and fill the tier rare tables"><i class="fas fa-wand-magic-sparkles"></i> Apply preset: ${escape(preset.label)}</button>`).join("")}${refiningProfessions().filter(entry => entry.key === key).map(entry =>
+      `<button type="button" class="gp-hub-ghost" data-act="prepare-refining" data-prof="${escape(entry.key)}" title="Create or import every ${escape(entry.verb.toLowerCase())} product so players can refine (done automatically once)"><i class="fas ${escape(entry.icon)}"></i> Prepare refined items</button>
+      <button type="button" class="gp-hub-ghost" data-act="open-recipes" data-prof="${escape(entry.key)}" title="Open the Recipes window (GM view shows undiscovered recipes too)"><i class="fas fa-book-open"></i> Recipes</button>`).join("")}
       <button type="button" class="gp-hub-primary" data-act="save-weights"><i class="fas fa-floppy-disk"></i> Save rare weights</button></footer>`;
 }
 
@@ -403,10 +404,14 @@ function defineClass() {
       const values = () => Object.fromEntries(Array.from(form.querySelectorAll("[name]")).map(input =>
         [input.name, input.type === "checkbox" ? input.checked : input.value]));
       switch (act) {
-        case "build-refining": {
-          const result = await buildRefiningBook(button.dataset.prof);
-          ui.notifications.info(`${result.book.name}: ${result.created} recipes created, ${result.updated} updated${result.imported ? `, ${result.imported} Items imported` : ""}.`);
+        case "prepare-refining": {
+          const result = await prepareRefinedItems([button.dataset.prof]);
+          ui.notifications.info(`Refined items: ${result.created} created, ${result.imported} imported, ${result.shared} made visible to players${result.missing.length ? `. Not found: ${result.missing.join(", ")}` : ""}.`);
           return this.render();
+        }
+        case "open-recipes": {
+          const { openRecipes } = await import("./recipes-ui.js");
+          return openRecipes({ tab: button.dataset.prof });
         }
         case "apply-preset": {
           const preset = availablePresets().find(entry => entry.key === button.dataset.preset);
