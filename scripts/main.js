@@ -2,7 +2,7 @@ import { MODULE_ID, PROFESSIONS, ABILITY_LABELS, DEFAULT_PROFESSIONS, RANK_XP, R
 import { openMaterialManager, openMaterialEditor, openProgressEditor, openProfessionMenu, openPerkEditor, registerSceneControls, registerUIHooks, registerSettingsMenu } from "./ui.js";
 import { ensureWorldContent } from "./worldcontent.js";
 import { availablePresets, applyMaterialPreset } from "./presets.js";
-import { REFINING, REFINING_VERSION, GENERATED, refiningProfessions, refiningRecipes, allRecipes, discoveredNames, isKnown, recordDiscoveries, backfillDiscoveries, registerDiscoveryHooks, prepareRefinedItems, craftRecipe, actorJobs, deliverDueJobs, deliverAllDueJobs } from "./refining.js";
+import { REFINING, REFINING_VERSION, GENERATED, refiningProfessions, refiningRecipes, allRecipes, createRecipe, updateRecipe, setRecipeDisabled, resetRecipe, deleteRecipe, setLearnedState, discoveredNames, isKnown, recordDiscoveries, backfillDiscoveries, registerDiscoveryHooks, prepareRefinedItems, craftRecipe, actorJobs, deliverDueJobs, deliverAllDueJobs } from "./refining.js";
 import { openRecipes } from "./recipes-ui.js";
 import { DEFAULT_TOOLS, buildDefaultTools } from "./gatheringtools.js";
 import { DEFAULT_SKILL_TREE, skillTreeConfig, normalizeSkillTreeConfig, syncProfessionState, resetUniversalTreeSkills, drawRareFind, availableSkillTrees, configuredSkillTree } from "./integrations.js";
@@ -701,6 +701,15 @@ Hooks.once("init", () => {
   game.settings.register(MODULE_ID, "discoveredItems", {
     name: "Party Discoveries", scope: "world", config: false, type: Array, default: []
   });
+  game.settings.register(MODULE_ID, "recipeLearned", {
+    name: "Recipes learned or unlearned by the GM", scope: "world", config: false, type: Object, default: {}
+  });
+  game.settings.register(MODULE_ID, "recipeEdits", {
+    name: "Edited built-in recipes", scope: "world", config: false, type: Object, default: {}
+  });
+  game.settings.register(MODULE_ID, "customRecipes", {
+    name: "GM recipes", scope: "world", config: false, type: Array, default: []
+  });
   game.settings.register(MODULE_ID, "refiningVersion", {
     name: "Refined Items Version", scope: "world", config: false, type: Number, default: 0
   });
@@ -756,7 +765,7 @@ Hooks.once("ready", async () => {
       definitions: REFINING,
       generated: GENERATED,
       professions: () => refiningProfessions(),
-      recipes: profession => (profession ? refiningRecipes(profession) : allRecipes()),
+      recipes: (profession, options) => (profession ? refiningRecipes(profession, options) : allRecipes(options)),
       discovered: () => [...discoveredNames()],
       isKnown: recipe => isKnown(recipe),
       /** GM: mark item names as found by the party. */
@@ -764,6 +773,14 @@ Hooks.once("ready", async () => {
       /** GM: create/import every refined product (visible to players). */
       prepare: professions => prepareRefinedItems(professions),
       craft: (actor, recipeId, batch = 1) => craftRecipe(actor, recipeId, batch, { addXp }),
+      /** GM: "learned", "unlearned", or "auto" for the party. */
+      setLearned: (recipeId, state) => setLearnedState(recipeId, state),
+      /** GM: { profession, tier, output, quantity, inputs: [[name, qty]] } (names of world Items). */
+      create: fields => createRecipe(fields),
+      update: (recipeId, fields) => updateRecipe(recipeId, fields),
+      disable: (recipeId, disabled = true) => setRecipeDisabled(recipeId, disabled),
+      reset: recipeId => resetRecipe(recipeId),
+      delete: recipeId => deleteRecipe(recipeId),
       jobs: actor => actorJobs(actor),
       collect: actor => deliverDueJobs(actor)
     },

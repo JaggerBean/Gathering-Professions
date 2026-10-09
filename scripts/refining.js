@@ -200,19 +200,143 @@ export function refiningProfessions() {
 }
 
 /** Recipes for one profession, each with a stable id. */
-export function refiningRecipes(profession) {
+/* GM changes, saved per world:
+ *   recipeEdits   { [builtInId]: { disabled?, tier?, output?, quantity?, inputs? } }
+ *   customRecipes [{ id: "<profession>:custom-<random>", profession, tier, output, quantity, inputs }]
+ *   recipeLearned { [id]: "learned" | "unlearned" }   (missing = auto) */
+function setting(key, fallback) {
+  try { return game.settings.get(MODULE_ID, key) ?? fallback; } catch { return fallback; }
+}
+const plainObject = value => (value && typeof value === "object" && !Array.isArray(value) ? value : {});
+export const recipeEdits = () => plainObject(setting("recipeEdits", {}));
+export const customRecipes = () => (Array.isArray(setting("customRecipes", [])) ? setting("customRecipes", []) : []);
+export const learnedStates = () => plainObject(setting("recipeLearned", {}));
+
+/** Edits keep the built-in recipe's id, so learned states follow the recipe. */
+function applyEdit(row, edit) {
+  if (!edit) return row;
+  const next = { ...row, edited: true };
+  for (const key of ["tier", "output", "quantity"]) if (edit[key] !== undefined) next[key] = edit[key];
+  if (Array.isArray(edit.inputs)) next.inputs = edit.inputs.map(([name, quantity]) => [name, quantity]);
+  if (edit.disabled) next.disabled = true;
+  return next;
+}
+
+/**
+ * Recipes for one profession, each with a stable id: built-ins with the GM's
+ * edits, then the GM's own recipes. Disabled recipes only with `includeDisabled`.
+ */
+export function refiningRecipes(profession, { includeDisabled = false } = {}) {
   const entry = REFINING[profession];
   if (!entry) return [];
-  return (entry.dried ? driedRecipes() : entry.recipes).map(row => withId(profession, row));
+  const edits = recipeEdits();
+  const base = (entry.dried ? driedRecipes() : entry.recipes).map(row => withId(profession, row)).map(row => applyEdit(row, edits[row.id]));
+  const custom = customRecipes().filter(row => row?.profession === profession).map(row => ({ ...row, inputs: row.inputs.map(([name, quantity]) => [name, quantity]), custom: true }));
+  return [...base, ...custom].filter(row => includeDisabled || !row.disabled);
 }
 
-export function allRecipes() {
-  return refiningProfessions().flatMap(({ key }) => refiningRecipes(key));
+export function allRecipes(options = {}) {
+  return refiningProfessions().flatMap(({ key }) => refiningRecipes(key, options));
 }
 
-export function findRecipe(id) {
+export function findRecipe(id, options = {}) {
   const profession = String(id).split(":")[0];
-  return refiningRecipes(profession).find(row => row.id === id) ?? null;
+  return refiningRecipes(profession, options).find(row => row.id === id) ?? null;
+}
+
+/** Validate recipe fields from the GM editor; names must be world Items. */
+export function normalizeRecipeFields({ profession, tier, output, quantity, inputs }) {
+  if (!REFINING[profession] || !PROFESSIONS[profession]) throw new Error("Choose a profession tab.");
+  const level = Number(tier);
+  if (!Number.isInteger(level) || level < 1 || level > 5) throw new Error("Tier must be 1 to 5.");
+  const exists = name => Array.from(game.items ?? []).some(item => item.name === name);
+  const product = String(output ?? "").trim();
+  if (!product) throw new Error("Choose the product Item.");
+  if (!exists(product)) throw new Error(`No world Item is named "${product}". Drag the product from the Items sidebar.`);
+  const made = Number(quantity);
+  if (!Number.isInteger(made) || made < 1 || made > 99) throw new Error("Product quantity must be a whole number from 1 to 99.");
+  const rows = (inputs ?? []).map(([name, count]) => [String(name ?? "").trim(), Number(count)]).filter(([name]) => name);
+  if (!rows.length) throw new Error("Add at least one ingredient.");
+  if (rows.length > 6) throw new Error("A recipe can have at most 6 ingredients.");
+  for (const [name, count] of rows) {
+    if (!exists(name)) throw new Error(`No world Item is named "${name}". Drag ingredients from the Items sidebar.`);
+    if (!Number.isInteger(count) || count < 1 || count > 99) throw new Error(`${name}: quantity must be a whole number from 1 to 99.`);
+  }
+  if (new Set(rows.map(([name]) => name)).size !== rows.length) throw new Error("List each ingredient once.");
+  if (rows.some(([name]) => name === product)) throw new Error("A recipe cannot use its own product.");
+  return { profession, tier: level, output: product, quantity: made, inputs: rows };
+}
+
+/** Players' clients need the product Item: make it Observer. */
+async function shareProduct(name) {
+  const item = Array.from(game.items ?? []).find(entry => entry.name === name);
+  const observer = CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER;
+  if (item && (item.ownership?.default ?? 0) < observer) await item.update({ "ownership.default": observer });
+}
+
+const requireGM = () => { if (!game.user.isGM) throw new Error("Only the GM may change recipes."); };
+
+/** GM: add a recipe. Returns it. */
+export async function createRecipe(fields) {
+  requireGM();
+  const data = normalizeRecipeFields(fields);
+  const row = { id: `${data.profession}:custom-${foundry.utils.randomID()}`, ...data };
+  await game.settings.set(MODULE_ID, "customRecipes", [...customRecipes(), row]);
+  await shareProduct(data.output);
+  return row;
+}
+
+/** GM: change a recipe (built-in: saved as an edit over the default; custom: replaced). */
+export async function updateRecipe(id, fields) {
+  requireGM();
+  const current = findRecipe(id, { includeDisabled: true });
+  if (!current) throw new Error("That recipe no longer exists.");
+  const data = normalizeRecipeFields({ ...fields, profession: current.profession });
+  if (current.custom) {
+    await game.settings.set(MODULE_ID, "customRecipes", customRecipes().map(row => (row.id === id ? { ...row, ...data } : row)));
+  } else {
+    const edits = recipeEdits();
+    await game.settings.set(MODULE_ID, "recipeEdits", { ...edits, [id]: { ...(edits[id] ?? {}), tier: data.tier, output: data.output, quantity: data.quantity, inputs: data.inputs } });
+  }
+  await shareProduct(data.output);
+  return findRecipe(id, { includeDisabled: true });
+}
+
+/** GM: hide a built-in recipe from everyone (or bring it back). */
+export async function setRecipeDisabled(id, disabled = true) {
+  requireGM();
+  const current = findRecipe(id, { includeDisabled: true });
+  if (!current || current.custom) throw new Error("Only built-in recipes can be disabled; delete your own recipes instead.");
+  const edits = { ...recipeEdits() };
+  const edit = { ...(edits[id] ?? {}) };
+  if (disabled) edit.disabled = true; else delete edit.disabled;
+  if (Object.keys(edit).length) edits[id] = edit; else delete edits[id];
+  await game.settings.set(MODULE_ID, "recipeEdits", edits);
+}
+
+/** GM: undo every change to a built-in recipe. */
+export async function resetRecipe(id) {
+  requireGM();
+  const edits = { ...recipeEdits() };
+  delete edits[id];
+  await game.settings.set(MODULE_ID, "recipeEdits", edits);
+}
+
+/** GM: delete one of their own recipes. */
+export async function deleteRecipe(id) {
+  requireGM();
+  if (!customRecipes().some(row => row.id === id)) throw new Error("Only your own recipes can be deleted.");
+  await game.settings.set(MODULE_ID, "customRecipes", customRecipes().filter(row => row.id !== id));
+  await setLearnedState(id, "auto");
+}
+
+/** GM: "learned" (always known), "unlearned" (always hidden), or "auto" (known when the party has every input). */
+export async function setLearnedState(id, state) {
+  requireGM();
+  if (!["learned", "unlearned", "auto"].includes(state)) throw new Error("Choose Auto, Learned, or Unlearned.");
+  const states = { ...learnedStates() };
+  if (state === "auto") delete states[id]; else states[id] = state;
+  await game.settings.set(MODULE_ID, "recipeLearned", states);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -226,7 +350,10 @@ export function discoveredNames() {
 }
 
 /** A recipe is known when the party has had every one of its inputs. */
-export function isKnown(entry, names = discoveredNames()) {
+export function isKnown(entry, names = discoveredNames(), states = learnedStates()) {
+  if (entry.disabled) return false;
+  if (states[entry.id] === "learned") return true;
+  if (states[entry.id] === "unlearned") return false;
   return entry.inputs.every(([name]) => names.has(name));
 }
 
