@@ -307,6 +307,13 @@ Gatherers refine their own materials; no crafting profession is needed, and no o
 
 **Discovery (party-wide).** A recipe appears for everyone once any player character has had every one of its inputs (gathered, looted, bought, or given). Until then the product card says how many recipes are still undiscovered. The active GM records new items as they reach player characters (and everything they already carry when the world loads). Macro: `api.refining.discover(["Stone"])`.
 
+**GM recipe management (0.25.0).** In the Recipes window, the GM view (any character, or none) adds controls to every recipe:
+- **Eye** shows whether players can see it. **Auto / Learned / Unlearned**: Auto = learned once the party has had every ingredient; Learned = always shown, even without the ingredients; Unlearned = hidden even when they have them. Back to Auto anytime.
+- **Edit** (pen): tier, product, product quantity, and up to 6 ingredients with quantities; drag Items from the Items sidebar onto the fields. Built-in recipes keep their identity (learned state follows them), show **Edited**, and get **Reset** to restore the module's default.
+- **Disable / enable** a built-in recipe for everyone (players never see a disabled recipe; the GM sees it greyed).
+- **New <smelting/milling/...> recipe** adds your own recipe on that tab (marked **Yours**; delete with the bin). Products and ingredients must be world Items; the product is shared with players (Observer).
+- Macros: `api.refining.setLearned(id, "learned" | "unlearned" | "auto")`, `api.refining.create({ profession, tier, output, quantity, inputs: [["Stone", 3]] })`, `update(id, fields)`, `disable(id, true/false)`, `reset(id)`, `delete(id)`.
+
 **The check.** One roll per batch, using the gathering profession at the recipe's tier: d20 + ability + profession die vs the tier's Base DC − rank reduction (untrained: no die, plus untrained penalties).
 - Near miss (fail by less than 5): nothing is made; the materials are kept.
 - Fail by 5 or more, or a natural 1: half the batch's materials (rounded up) are lost.
