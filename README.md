@@ -350,7 +350,7 @@ Every GM setting is in one window, **Gathering Professions**, styled like the ga
 - **Skill Tree:** linked tree, points at rank 1 and per rank-up, open the tree, and **Check gathering content** (links or builds the tree, and builds missing rare tables, basic tools, and difficulty values).
 - **Tools:** each profession's accepted tools as tiles (name, bonus, durability). Drop a tool Item to accept it; × to stop accepting it.
 - **Rare Finds:** a slot per profession and tier showing the table and its Items. Drop a table to replace it; build the defaults for empty tiers.
-- **Rules:** advancement, extraction rules, and the tier/rank table.
+- **Rules:** advancement; gathering rules (rare finds, tool durability, attempts); **Ranks** (XP to reach each rank, DC reduction, die — used by every profession check); **Gathering tiers** (Base DC, extra untrained DC, XP); **Refining tiers** (Base DC, XP per unit, time per unit, and whether refining takes world time).
 - **Conditions:** Current pins, Biomes & Scenes, and **Difficulty**: a grid of every season, time of day, weather, and biome with its DC change (0 = none), plus optional profession-specific extras. **Recommended values** fills the grid with the defaults.
 
 **Recommended difficulty** (moderate, penalties only, the same for every profession; seeded once if the world has none): Winter +2; Dawn +1, Dusk +1, Night +2; Overcast, Drizzle, Mist, Windy, Sunshower +1; Rain, Snow, Fog, Celestial Eclipse, Ethereal Drizzle +2; Hail, Ashfall, Blood Rain, Arcane Fog +3; Thunderstorm, Sandstorm, Meteor Shower, Wild Magic Winds +4; Blizzard, Tornado, Hurricane, Mana Storm, Spectral Storm +5; Voidstorm, Frozen Hell +6; Mountain, Swamp +1; Arctic, Desert, Underdark +2. Everything else 0.
