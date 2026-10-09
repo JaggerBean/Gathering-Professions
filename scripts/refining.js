@@ -572,7 +572,11 @@ export function formatMinutes(minutes) {
  * on Excellent, +2 on Masterful or a natural 20) and Refining XP per unit;
  * with timed crafting they arrive after the recipe's time in world time.
  */
-export function craftRecipe(actor, id, batch = 1, options) {
+export async function craftRecipe(actor, id, batch = 1, options) {
+  if (!actor || !(game.user.isGM || actor.isOwner)) throw new Error("Choose a character you own.");
+  const entry = findRecipe(id);
+  if (!entry) throw new Error("That recipe no longer exists.");
+  if (!game.user.isGM && !isKnown(entry)) throw new Error("Your party has not discovered this recipe.");
   return runActorAction(actor, () => craftRecipeUnlocked(actor, id, batch, options));
 }
 
