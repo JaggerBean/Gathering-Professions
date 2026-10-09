@@ -1,7 +1,6 @@
-// Gathering Professions GM hub: one window for every GM setting, in the same
-// dark, gold-edged style as the gathering window. Sections: Professions,
-// Skill Tree, Tools, Rare Finds, Rules, Conditions. Settings-menu buttons and
-// toolbar buttons open it on the matching section.
+// Profession GM Hub: gathering sections and grouped companion-module sections
+// in one dark, gold-edged window. Settings-menu and toolbar buttons open the
+// matching section.
 import { MODULE_ID, PROFESSIONS, ABILITY_LABELS, RANK_DIE, activeRules } from "./rules.js";
 import { SKILL_TREE_ID, skillTreeConfig, availableSkillTrees, configuredSkillTree } from "./integrations.js";
 import { toolDurability } from "./durability.js";
