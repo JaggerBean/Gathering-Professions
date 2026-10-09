@@ -293,11 +293,12 @@ You can filter by scene, profession, or name. Select nodes to reset, reveal, or 
 
 From macros, use `game.modules.get("gathering-professions").api.nodes`. It includes `build`, `update`, `duplicate`, `delete`, `reset`, `setHidden`, `placePin`, `placeLinked`, `openManager`, and `openBuilder`.
 
-## Material presets (0.20.0)
+## Material presets (0.20.1)
 
-**GM hub → Materials → Apply preset** (shown on a profession's tab when its source modules are active) imports a ready-made material set. Missing Items are imported from the compendiums (Items already in the world with the same name are reused), assigned to the profession at their tier, and each tier's rare-find table is replaced with the preset's rare finds. From a macro: `api.presets.apply("herbalism")`.
+**GM hub → Materials → Apply preset** (shown on a profession's tab when Kris's Compendium of Trade Goods, `kctg-5e`, is active) sets up a ready-made material set: missing Items are imported from the compendium (Items already in the world with the same name are reused), assigned at their tier, each tier's rare-find table is replaced with the preset's rare finds, and the profession's other materials are unassigned (Items are kept). From a macro: `api.presets.apply("herbalism")`.
 
-- **Herbalism: Kris's Trade Goods + Heliana's Harvest** (needs `kctg-5e` and `helianas-harvest-compendium`). 40 wild herbs, flowers, and mushrooms from Kris's herbalist supplies, 8 per tier (base yield 1d3 at tier 1, 1d2 at tiers 2–3, 1 at tiers 4–5; crops, seeds, and non-plants left out), into Items folder Professions/Herbalism/Wild. Rare finds, three per tier: T1 Plant Phial of Sap, Plant Tuber, Matsutake; T2 Plant Pouch of Leaves, Plant Bundle of Roots, Plant Pouch of Seeds; T3 Plant Pouch of Hyphae, Plant Pouch of Pollen, Divine Light; T4 Plant Bark, Plant Pouch of Spores, Plant Poison Gland; T5 Plant Membrane, Belladonna Fruit, Wolf Bane's Leaves.
+- **Herbalism** (5 per tier; yield 1d3 / 1d2 / 1d2 / 1 / 1). T1 Clover, Dandelion, Chamomile, Wild Mint, Nettle; T2 Horsetail, Coneflower, Laurel, King Bolete, Puffball; T3 Blue Chanterelle, Indigo Milkcap, Stargazer Lily, Pennyroyal, Death Cap; T4 Last Hope Fire, Roseoflava, Green Elf Cup, Neon-Ront, Nerium; T5 Bearberry, Myrrh, Sunberries, Toadstool, Henbane. Rare (3 per tier): Matsutake, Verdigris Waxcap, Golden Berry / Witchhat Mushroom, Forest Lantern, Jack'o'lantern Mushroom / Divine Light, Purple Emperor, Funeral Bell / The Last Veiled Widow, Daer-Kron, Kurnarac / Silphium, Belladonna Fruit, Wolf Bane's Leaves.
+- **Mining** (ores and stone; gemstones as rare finds). T1 Stone, Cobblestones, Sandstone, Coal, Copper Ore; T2 Granite, Quartzite, Tin, Lead, Iron Ore; T3 Marble, Alabaster, Silver Ore, Gold Ore, Kyanite; T4 Platinum Ore, Kornerupine, Harunite, Ravenar, Benitoite; T5 Mithral (or a world "Mithril"), Hambergite, Adamantine, Cold Iron, Palladium. Rare: Quartz, Agate, Obsidian / Moonstone, Bloodstone, Citrine / Amethyst, Jade, Amber / Aquamarine, Topaz, Peridot / Blue-White Diamond, Red Topaz, Dragon's Heart.
 
 ## Materials browser (0.19.0)
 
