@@ -1014,6 +1014,18 @@ game.modules.get("skill-tree").active = true;
   result = await api.refining.craft(smith, copperId, 1);
   assert.deepEqual([result.degree, result.job, count("Copper Ingot")], ["masterful", null, 6], "Natural 20 Masterful +2; instant when timing is off");
   delete settings.rules.craftingTimed;
+  // Refining has its own DC and XP per tier (default: gathering DC, half the gathering XP).
+  const rulesLib = await import("../scripts/rules.js");
+  assert.deepEqual([rulesLib.activeRules().refineDc, rulesLib.activeRules().refineXp], [[10, 14, 18, 23, 28], [3, 5, 10, 18, 30]]);
+  settings.rules = { ...(settings.rules ?? {}), refineXpPercent: 0 };
+  assert.deepEqual(rulesLib.activeRules().refineXp, [0, 0, 0, 0, 0], "An old 0% setting seeds zero refining XP");
+  settings.rules = { ...settings.rules, refineDc: [6, 14, 18, 23, 28], refineXp: [7, 5, 10, 18, 30] };
+  assert.equal(refiningLib.refineCheckFor(smith, refiningLib.findRecipe(copperId)).target, 6, "Refining uses its own DC");
+  await smith.createEmbeddedDocuments("Item", [{ name: "Coal", type: "loot", system: { quantity: 3 } }]);
+  rolls.push([10, 12]);
+  result = await api.refining.craft(smith, copperId, 1);
+  assert.equal(result.xp, 7, "Refining uses its own XP");
+  delete settings.rules.refineDc; delete settings.rules.refineXp; delete settings.rules.refineXpPercent;
   settings.discoveredItems = [];
   smith.isOwner = true;
   await assert.rejects((async () => { game.user.isGM = false; try { await api.refining.craft(smith, copperId, 1); } finally { game.user.isGM = true; } })(), /not discovered/, "Players cannot craft undiscovered recipes");

@@ -114,6 +114,12 @@ export const REFINE_XP_PERCENT = 50;
 export const REFINE_MINUTES = Object.freeze([30, 60, 120, 240, 720]);
 export const MAX_REFINE_MINUTES = 10080;
 
+// 0.24–0.26 stored refining XP as a share of gathering XP; it now only seeds the refining XP column.
+function legacyRefinePercent(saved) {
+  const value = saved.refineXpPercent;
+  return Number.isInteger(Number(value)) && value !== null && value !== "" && Number(value) >= 0 && Number(value) <= 100 ? Number(value) : REFINE_XP_PERCENT;
+}
+
 export function activeRules() {
   let saved = {};
   try { saved = globalThis.game?.settings?.get(MODULE_ID, "rules") || {}; }
@@ -129,6 +135,10 @@ export function activeRules() {
     rankDcReduction: values("rankDcReduction", RANK_DC_REDUCTION),
     tierUntrainedDc: values("tierUntrainedDc", TIER_UNTRAINED_DC),
     refineMinutes: values("refineMinutes", REFINE_MINUTES).map(value => Math.min(MAX_REFINE_MINUTES, Math.trunc(value))),
+    // Refining has its own DC and XP per tier. Until saved, they follow the
+    // gathering tier DC and the old "% of gathering XP" setting (default 50%).
+    refineDc: values("refineDc", values("tierDc", TIER_DC)),
+    refineXp: values("refineXp", values("tierXp", TIER_XP).map(xp => Math.round(xp * legacyRefinePercent(saved) / 100))),
     milestoneAdvancement: saved.milestoneAdvancement === true,
     // Masterful extractions roll the rare-find table unless the GM turns it off.
     masterfulRareFind: saved.masterfulRareFind !== false,
@@ -139,8 +149,6 @@ export function activeRules() {
       ? Number(saved.toolDurability) : TOOL_DURABILITY,
     gatherAttemptsPerRest: Number.isInteger(Number(saved.gatherAttemptsPerRest)) && Number(saved.gatherAttemptsPerRest) >= 0 && Number(saved.gatherAttemptsPerRest) <= 100
       ? Number(saved.gatherAttemptsPerRest) : GATHER_ATTEMPTS_PER_REST,
-    refineXpPercent: Number.isInteger(Number(saved.refineXpPercent)) && saved.refineXpPercent !== null && saved.refineXpPercent !== "" && Number(saved.refineXpPercent) >= 0 && Number(saved.refineXpPercent) <= 100
-      ? Number(saved.refineXpPercent) : REFINE_XP_PERCENT,
     // Refining takes world time (products arrive later) unless the GM turns it off.
     craftingTimed: saved.craftingTimed !== false
   };

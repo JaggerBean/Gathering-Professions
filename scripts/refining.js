@@ -510,7 +510,7 @@ export function refineCheckFor(actor, entry) {
   const rules = activeRules();
   const tier = Math.min(5, Math.max(1, Math.trunc(Number(entry.tier)) || 1));
   const xp = Math.max(0, Number(professionFlag(actor, "xp", entry.profession)) || 0);
-  return { tier, ...checkFormula(actor, entry.profession, xp, rules.tierDc[tier - 1], { tier }) };
+  return { tier, ...checkFormula(actor, entry.profession, xp, rules.refineDc[tier - 1], { tier }) };
 }
 
 async function removeFromInventory(actor, name, quantity) {
@@ -577,7 +577,7 @@ export async function craftRecipe(actor, id, batch = 1, { addXp }) {
   for (const [name, quantity] of lost) await removeFromInventory(actor, name, quantity);
   const bonus = degree.id === "masterful" ? 2 : degree.id === "excellent" ? 1 : 0;
   const made = success ? entry.quantity * count + bonus : 0;
-  const xp = success ? Math.round(rules.tierXp[check.tier - 1] * rules.refineXpPercent / 100) * count : 0;
+  const xp = success ? rules.refineXp[check.tier - 1] * count : 0;
   if (xp) await addXp(actor, entry.profession, xp);
   let job = null;
   if (made) {

@@ -113,7 +113,7 @@ export async function openMaterialEditor(item) {
 /**
  * Validate and save rule form values (GM hub Rules tab). Throws a
  * readable Error. Field names: advancementMode, masterfulRareFind,
- * excellentRareBonus, toolDurability, gatherAttemptsPerRest, refineXpPercent, craftingTimed, refineMinutes0–4, dc0–4, untrainedDc0–4, tierXp0–4,
+ * excellentRareBonus, toolDurability, gatherAttemptsPerRest, craftingTimed, refineDc0–4, refineXp0–4, refineMinutes0–4, dc0–4, untrainedDc0–4, tierXp0–4,
  * rankXp1–4, reduction0–4.
  */
 export async function saveRulesValues(values) {
@@ -125,9 +125,12 @@ export async function saveRulesValues(values) {
       excellentRareBonus: Number(values.excellentRareBonus ?? rules.excellentRareBonus),
       toolDurability: Number(values.toolDurability ?? rules.toolDurability),
       gatherAttemptsPerRest: Number(values.gatherAttemptsPerRest ?? rules.gatherAttemptsPerRest),
-      refineXpPercent: Number(values.refineXpPercent ?? rules.refineXpPercent),
       craftingTimed: values.craftingTimed === undefined ? rules.craftingTimed : values.craftingTimed === true };
-    if (!Number.isInteger(next.refineXpPercent) || next.refineXpPercent < 0 || next.refineXpPercent > 100) throw new Error("Refining XP must be a whole number from 0 to 100 (% of the tier's gathering XP).");
+    const tierValues = (key, fallback) => Array.from({ length: 5 }, (_, index) => (values[`${key}${index}`] === undefined ? fallback[index] : Number(values[`${key}${index}`])));
+    next.refineDc = tierValues("refineDc", rules.refineDc);
+    next.refineXp = tierValues("refineXp", rules.refineXp);
+    if (next.refineDc.some(value => !Number.isInteger(value) || value < 1 || value > 100)) throw new Error("Refining DC must be a whole number from 1 to 100 per tier.");
+    if (next.refineXp.some(value => !Number.isInteger(value) || value < 0 || value > 100000)) throw new Error("Refining XP must be a whole number of 0 or more per tier.");
     if (!Number.isInteger(next.toolDurability) || next.toolDurability < 0 || next.toolDurability > 1000) throw new Error("Default tool durability must be a whole number from 0 to 1000.");
     if (!Number.isInteger(next.gatherAttemptsPerRest) || next.gatherAttemptsPerRest < 0 || next.gatherAttemptsPerRest > 100) throw new Error("Free gathering attempts must be a whole number from 0 to 100 (0 = unlimited).");
     if (!Number.isInteger(next.excellentRareBonus) || next.excellentRareBonus < 0 || next.excellentRareBonus > 100) throw new Error("The Excellent rare-find bonus must be a whole number from 0 to 100.");
