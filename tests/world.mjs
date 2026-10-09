@@ -1100,6 +1100,36 @@ game.modules.get("skill-tree").active = true;
   await api.refining.delete(mine.id);
   assert.deepEqual([settings.customRecipes, settings.recipeLearned[mine.id]], [[], undefined], "Deleting removes the recipe and its learned state");
   await api.refining.setLearned(glassId, "auto");
+  // Other modules add tabs through api.recipes.register (crafting professions).
+  const experiments = [];
+  api.recipes.register({
+    key: "testsmith", label: "Test Smith", verb: "Smithing", action: "Forge", icon: "fa-hammer", order: 50, perCharacter: true,
+    rollLabel: "Test Smith check", hiddenWord: "unknown", emptyText: "Learn recipes first.",
+    visible: (actor, isGM) => isGM || actor?.name === "Smith",
+    recipes: () => [{ id: "testsmith:nails", tier: 1, output: "Copper Ingot", quantity: 10, inputs: [["Coal", 1]] }, { id: "testsmith:secret", tier: 1, output: "Coke", quantity: 1, inputs: [["Coal", 5]] }],
+    isKnown: row => row.id === "testsmith:nails",
+    learnState: row => (row.id === "testsmith:nails" ? "learned" : "unlearned"),
+    setLearned: () => {}, check: () => ({ target: 12, modifier: 3, die: 4 }),
+    blocked: (_actor, row) => (row.id === "testsmith:nails" ? null : "Needs Test Smith rank 2"),
+    minutes: () => 60, defaultMinutes: () => 60, craft: () => {},
+    gm: { scroll: () => null },
+    experiment: async (_actor, names) => { experiments.push(names); return { learned: null, warm: true, message: "Something here could work…" }; }
+  });
+  const smithModel = recipesUi.buildRecipesModel(smith, { tab: "testsmith" });
+  assert.ok(smithModel.tabs.some(tab => tab.key === "testsmith") && smithModel.experiment, "A registered provider becomes a tab with an experiment panel");
+  assert.deepEqual(smithModel.products.map(group => [group.name, group.hidden]), [["Copper Ingot", 0], ["Coke", 1]].filter(([, hidden]) => !hidden), "Unknown recipes stay hidden from players");
+  const smithHtml = recipesUi.renderRecipesWindow(smithModel, { characters: [smith], experiment: { names: ["Coal"] } });
+  assert.match(smithHtml, /data-act="exp-try"/);
+  assert.match(smithHtml, /> Forge</);
+  assert.match(smithHtml, /Test Smith check/);
+  const otherActor = { id: "x", name: "Other", items: [], getFlag: () => undefined };
+  assert.ok(!recipesUi.buildRecipesModel(otherActor, { tab: "testsmith" }).tabs.some(tab => tab.key === "testsmith"), "Hidden from characters without the profession");
+  const gmSmith = recipesUi.renderRecipesWindow(recipesUi.buildRecipesModel(null, { isGM: true, tab: "testsmith" }), { characters: [smith] });
+  assert.match(gmSmith, /data-learn="testsmith:nails" disabled/, "Per-character learning needs a chosen character");
+  assert.match(gmSmith, /data-act="make-scroll"/);
+  assert.match(recipesUi.renderRecipesWindow(recipesUi.buildRecipesModel(smith, { isGM: true, tab: "testsmith" }), { characters: [smith] }), /Needs Test Smith rank 2/, "Blocked reasons show for the chosen character");
+  assert.deepEqual(recipesUi.inventoryChoices(smith).find(entry => entry.name === "Copper Ingot")?.quantity, smith.items.filter(item => item.name === "Copper Ingot").reduce((sum, item) => sum + item.system.quantity, 0));
+  api.recipes.unregister("testsmith");
   globalThis.Roll = originalRoll;
   game.modules.delete("helianas-harvest-compendium");
   game.modules.delete("kctg-5e");
