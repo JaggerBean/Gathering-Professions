@@ -8,10 +8,12 @@ import { toolDurability } from "./durability.js";
 import { renderConditionsWindow, handleConditionsAction, bindConditionInputs } from "./conditions-ui.js";
 import { saveRulesValues, openMaterialEditor } from "./ui.js";
 import { availablePresets, applyMaterialPreset } from "./presets.js";
+import { nodeManagerCore } from "./node-ui.js";
 import { materialsModel, addRareItem, removeRareResult, setRareWeights, assignMaterial, unassignMaterial } from "./materials.js";
 
 export const HUB_SECTIONS = Object.freeze([
   { id: "professions", label: "Professions", icon: "fa-hammer", blurb: "Gathering professions, their check ability, and a fallback rare table." },
+  { id: "nodes", label: "Nodes", icon: "fa-mountain-sun", blurb: "Build, edit, place, reveal, and reset gathering nodes." },
   { id: "materials", label: "Materials", icon: "fa-cubes", blurb: "Each profession's gathering materials by tier, where they drop, and its rare finds." },
   { id: "tree", label: "Skill Tree", icon: "fa-diagram-project", blurb: "The shared gathering skill tree and how many points each rank grants." },
   { id: "tools", label: "Tools", icon: "fa-screwdriver-wrench", blurb: "Every gather needs one of its profession's accepted tools. Nodes can require their own." },
@@ -245,14 +247,19 @@ export function renderHub(view) {
       <i class="fas ${entry.icon}"></i><span>${escape(entry.label)}</span></a>`).join("");
   const body = {
     professions: () => professionsSection(view), materials: () => materialsSection(view), tree: () => treeSection(), tools: () => toolsSection(view),
-    rare: () => rareSection(view), rules: () => rulesSection(), conditions: () => renderConditionsWindow(view.conditions)
+    rare: () => rareSection(view), rules: () => rulesSection(), conditions: () => renderConditionsWindow(view.conditions),
+    nodes: () => ""
   }[section.id]();
+  // Nodes: the Node Manager mounts itself into this container (node-ui.js).
+  const content = section.id === "nodes"
+    ? '<div class="gp-hub-nodes gp-node-manager" data-section="nodes"></div>'
+    : `<form class="gp-hub-form" autocomplete="off" data-section="${section.id}">${body}</form>`;
   return `<div class="gp-hub">
     <nav class="gp-hub-nav"><div class="gp-hub-brand"><i class="fas fa-hammer"></i><span>Gathering<br>Professions</span></div>${nav}</nav>
     <section class="gp-hub-main">
       <header class="gp-hub-head"><div class="gp-hub-emblem"><i class="fas ${section.icon}"></i></div>
         <div><h1>${escape(section.label)}</h1><p>${escape(section.blurb)}</p></div></header>
-      <form class="gp-hub-form" autocomplete="off" data-section="${section.id}">${body}</form>
+      ${content}
     </section></div>`;
 }
 
@@ -322,20 +329,31 @@ function defineClass() {
     _replaceHTML(result, content) {
       content.innerHTML = result;
       bindConditionInputs(content.querySelector(".gp-hub-form"));
+      const nodesRoot = content.querySelector(".gp-hub-nodes");
+      const core = nodeManagerCore();
+      core.host = this;
+      if (nodesRoot) {
+        core.mount(nodesRoot);
+        void core.render({ parts: ["list", "detail"] });
+      } else core.unmount();
     }
 
     get form() { return this.element?.querySelector(".gp-hub-form"); }
 
     _onFirstRender(context, options) {
       super._onFirstRender?.(context, options);
+      // The Nodes section handles its own events (Node Manager).
+      const inNodes = event => Boolean(event.target.closest?.(".gp-hub-nodes"));
       this.element.addEventListener("click", event => {
+        if (inNodes(event)) return;
         const button = event.target.closest?.("[data-act]");
         if (!button || button.disabled) return;
         event.preventDefault();
         void this.#act(button).catch(report);
       });
-      this.element.addEventListener("dragover", event => { if (event.target.closest?.("[data-drop]")) event.preventDefault(); });
+      this.element.addEventListener("dragover", event => { if (!inNodes(event) && event.target.closest?.("[data-drop]")) event.preventDefault(); });
       this.element.addEventListener("drop", event => {
+        if (inNodes(event)) return;
         const target = event.target.closest?.("[data-drop]");
         if (!target) return;
         event.preventDefault();
@@ -343,7 +361,7 @@ function defineClass() {
       });
     }
 
-    _onClose(options) { super._onClose?.(options); hub = null; }
+    _onClose(options) { super._onClose?.(options); nodeManagerCore().unmount(); hub = null; }
 
     async #drop(target, event) {
       const data = await dropped(event);

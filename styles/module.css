@@ -494,3 +494,7 @@
 .gp-rare-weight { display: flex; align-items: center; gap: .3rem; font-size: .9em; }
 .gp-rare-weight span { opacity: .7; }
 .gp-rare-weight input { width: 56px; height: 24px; text-align: center; }
+
+/* Hub: Nodes section hosts the Node Manager (two panes, full height). */
+.gp-hub-nodes { flex: 1 1 auto; min-height: 0; display: flex; border-top: 1px solid var(--gp-edge); background: rgba(0,0,0,.15); }
+.gp-hub-nodes > .gp-nm { flex: 1 1 auto; height: auto; min-height: 0; }

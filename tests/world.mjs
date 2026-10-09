@@ -483,9 +483,11 @@ if (process.env.GP_PREVIEW) {
 const gatherWindow = await gatherUi.openGatheringWindow(veinPage);
 assert.equal(gatherWindow.view.busy, false);
 assert.equal(gatherWindow.state, 0, "The render state getter is not overwritten");
-const managerWindow = await nodeUi.openNodeManager({ select: "new" });
-assert.equal(managerWindow.view.selected, "new");
-assert.equal(managerWindow.state, 0);
+// The Node Manager lives in the GM hub (Nodes section).
+const managerCore = await nodeUi.openNodeManager({ select: "new" });
+assert.equal(managerCore.view.selected, "new");
+const hubWindow = (await import("../scripts/hub.js"));
+assert.match(hubWindow.renderHub({ ...hubWindow.initialHubView("nodes"), section: "nodes" }), /class="gp-hub-nodes gp-node-manager"/);
 
 // Hidden seam: page ownership NONE for players; revealed nodes OBSERVER.
 const seam = nodes.pages.find(page => page.name === "Deep Silver Seam");
@@ -791,7 +793,7 @@ assert.equal(folders.find(folder => folder.id === builtTree.folder).name, "Gathe
   await api.setProfessions(Object.values(api.getProfessions()).map(entry => entry.key === "mining" ? savedMining : entry));
   await game.settings.set("gathering-professions", "conditionDc", (await import("../scripts/conditions.js")).defaultConditionDcRows());
   const sections = Object.fromEntries(hubLib.HUB_SECTIONS.map(section => [section.id, hubLib.renderHub({ ...hubLib.initialHubView(section.id), section: section.id })]));
-  assert.deepEqual(Object.keys(sections), ["professions", "materials", "tree", "tools", "rare", "rules", "conditions"]);
+  assert.deepEqual(Object.keys(sections), ["professions", "nodes", "materials", "tree", "tools", "rare", "rules", "conditions"]);
   // Materials: each profession's gathering materials by tier (with nodes) and its rare finds.
   assert.match(sections.materials, /data-act="materials-prof" data-prof="mining"/);
   assert.match(sections.materials, /Test Copper Ore/);

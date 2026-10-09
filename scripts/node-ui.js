@@ -469,16 +469,15 @@ function collectData(values, page, isNew) {
   return data;
 }
 
+/**
+ * The Node Manager, mounted inside the GM hub's Nodes section. It renders
+ * into whatever container the hub gives it (`mount(root)`); `render({parts})`
+ * redraws the list and/or detail pane in place.
+ */
 function defineClass() {
-  const { ApplicationV2 } = foundry.applications.api;
-  return class NodeManager extends ApplicationV2 {
-    static DEFAULT_OPTIONS = {
-      id: "gathering-node-manager",
-      classes: ["gathering-professions-ui", "gp-node-manager"],
-      tag: "div",
-      window: { title: "Gathering Nodes", icon: "fas fa-mountain-sun", resizable: true },
-      position: { width: 1080, height: 720 }
-    };
+  return class NodeManagerCore {
+    element = null;
+    host = null;
 
     view = { selected: null, tab: "basics", search: "", scene: "", profession: "", collapsed: new Set(), expandedLinks: new Set(), bulk: false, checked: new Set(), dirty: false };
     #hooks = [];
@@ -490,7 +489,31 @@ function defineClass() {
       return isGathererPage(page) ? page : null;
     }
 
-    async _prepareContext() { return {}; }
+    get rendered() { return Boolean(this.element?.isConnected ?? this.element); }
+
+    /** Attach to a container (the hub re-creates it on each hub render). */
+    mount(root) {
+      if (this.element === root) return;
+      this.unmount();
+      this.element = root;
+      this._onFirstRender();
+    }
+
+    unmount() {
+      if (!this.element) return;
+      this._onClose();
+      this.element = null;
+    }
+
+    async render({ parts = ["list", "detail"] } = {}) {
+      if (!this.element) return this;
+      const result = await this._renderHTML({}, { parts });
+      this._replaceHTML(result, this.element);
+      return this;
+    }
+
+    minimize() { return this.host?.minimize?.(); }
+    maximize() { return this.host?.maximize?.(); }
 
     async _renderHTML(_context, options) {
       const parts = options.parts ?? ["list", "detail"];
@@ -525,8 +548,7 @@ function defineClass() {
       }
     }
 
-    _onFirstRender(context, options) {
-      super._onFirstRender?.(context, options);
+    _onFirstRender() {
       const root = this.element;
       bindRulesEditors(root, () => this.#markDirty());
       root.addEventListener("click", event => this.#onClick(event));
@@ -551,11 +573,9 @@ function defineClass() {
       }
     }
 
-    _onClose(options) {
-      super._onClose?.(options);
+    _onClose() {
       for (const [hook, id] of this.#hooks) Hooks.off(hook, id);
       this.#hooks = [];
-      manager = null;
     }
 
     #scheduleRefresh() {
@@ -884,10 +904,17 @@ function defineClass() {
 }
 
 /** Open (or focus) the Node Manager. Options: select (uuid or "new"), tab. */
+/** The Node Manager controller (one per client), created on first use. */
+export function nodeManagerCore() {
+  NodeManagerClass ??= defineClass();
+  manager ??= new NodeManagerClass();
+  return manager;
+}
+
+/** Open the GM hub on Nodes, optionally selecting a node and tab. */
 export async function openNodeManager({ select = null, tab = null } = {}) {
   if (!game.user.isGM) return false;
-  NodeManagerClass ??= defineClass();
-  if (!manager) manager = new NodeManagerClass();
+  nodeManagerCore();
   if (select) {
     manager.view.selected = select;
     const selectedGroup = select !== "new" ? linkGroupFor(fromUuidSync(select)) : "";
@@ -895,9 +922,9 @@ export async function openNodeManager({ select = null, tab = null } = {}) {
     manager.view.dirty = false;
     if (tab) manager.view.tab = tab;
   }
-  await manager.render({ force: true, parts: ["list", "detail"] });
-  manager.maximize?.();
-  manager.bringToFront?.();
+  const { openHub } = await import("./hub.js");
+  const hub = await openHub("nodes");
+  hub?.maximize?.();
   return manager;
 }
 
