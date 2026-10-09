@@ -113,7 +113,7 @@ export async function openMaterialEditor(item) {
 /**
  * Validate and save rule form values (GM hub Rules tab). Throws a
  * readable Error. Field names: advancementMode, masterfulRareFind,
- * excellentRareBonus, toolDurability, gatherAttemptsPerRest, dc0–4, untrainedDc0–4, tierXp0–4,
+ * excellentRareBonus, toolDurability, gatherAttemptsPerRest, refineXpPercent, dc0–4, untrainedDc0–4, tierXp0–4,
  * rankXp1–4, reduction0–4.
  */
 export async function saveRulesValues(values) {
@@ -124,7 +124,9 @@ export async function saveRulesValues(values) {
       milestoneAdvancement: values.advancementMode === "milestone", masterfulRareFind: values.masterfulRareFind === true,
       excellentRareBonus: Number(values.excellentRareBonus ?? rules.excellentRareBonus),
       toolDurability: Number(values.toolDurability ?? rules.toolDurability),
-      gatherAttemptsPerRest: Number(values.gatherAttemptsPerRest ?? rules.gatherAttemptsPerRest) };
+      gatherAttemptsPerRest: Number(values.gatherAttemptsPerRest ?? rules.gatherAttemptsPerRest),
+      refineXpPercent: Number(values.refineXpPercent ?? rules.refineXpPercent) };
+    if (!Number.isInteger(next.refineXpPercent) || next.refineXpPercent < 0 || next.refineXpPercent > 100) throw new Error("Refining XP must be a whole number from 0 to 100 (% of the tier's gathering XP).");
     if (!Number.isInteger(next.toolDurability) || next.toolDurability < 0 || next.toolDurability > 1000) throw new Error("Default tool durability must be a whole number from 0 to 1000.");
     if (!Number.isInteger(next.gatherAttemptsPerRest) || next.gatherAttemptsPerRest < 0 || next.gatherAttemptsPerRest > 100) throw new Error("Free gathering attempts must be a whole number from 0 to 100 (0 = unlimited).");
     if (!Number.isInteger(next.excellentRareBonus) || next.excellentRareBonus < 0 || next.excellentRareBonus > 100) throw new Error("The Excellent rare-find bonus must be a whole number from 0 to 100.");

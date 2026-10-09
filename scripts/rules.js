@@ -108,6 +108,8 @@ export const EXCELLENT_RARE_BONUS = 10;
 // Durability of a tool with no maximum of its own (0 = tools never wear).
 export const TOOL_DURABILITY = 10;
 export const GATHER_ATTEMPTS_PER_REST = 5;
+// Refining a material gives this share of the tier's gathering XP.
+export const REFINE_XP_PERCENT = 50;
 
 export function activeRules() {
   let saved = {};
@@ -132,7 +134,9 @@ export function activeRules() {
     toolDurability: Number.isInteger(Number(saved.toolDurability)) && Number(saved.toolDurability) >= 0 && Number(saved.toolDurability) <= 1000
       ? Number(saved.toolDurability) : TOOL_DURABILITY,
     gatherAttemptsPerRest: Number.isInteger(Number(saved.gatherAttemptsPerRest)) && Number(saved.gatherAttemptsPerRest) >= 0 && Number(saved.gatherAttemptsPerRest) <= 100
-      ? Number(saved.gatherAttemptsPerRest) : GATHER_ATTEMPTS_PER_REST
+      ? Number(saved.gatherAttemptsPerRest) : GATHER_ATTEMPTS_PER_REST,
+    refineXpPercent: Number.isInteger(Number(saved.refineXpPercent)) && saved.refineXpPercent !== null && saved.refineXpPercent !== "" && Number(saved.refineXpPercent) >= 0 && Number(saved.refineXpPercent) <= 100
+      ? Number(saved.refineXpPercent) : REFINE_XP_PERCENT
   };
 }
 

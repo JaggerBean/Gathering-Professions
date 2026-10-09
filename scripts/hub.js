@@ -8,6 +8,7 @@ import { toolDurability } from "./durability.js";
 import { renderConditionsWindow, handleConditionsAction, bindConditionInputs } from "./conditions-ui.js";
 import { saveRulesValues, openMaterialEditor } from "./ui.js";
 import { availablePresets, applyMaterialPreset } from "./presets.js";
+import { availableRefining, buildRefiningBook } from "./refining.js";
 import { nodeManagerCore } from "./node-ui.js";
 import { materialsModel, addRareItem, removeRareResult, setRareWeights, assignMaterial, unassignMaterial } from "./materials.js";
 import { gpDialog } from "./dialogs.js";
@@ -136,7 +137,8 @@ function materialsSection(view) {
       <p class="gp-hub-note">Rare finds come only from these tables (see Rare Finds for how tiers climb). Weight sets how often an item is drawn within its tier.</p>
       ${rare}</section>
     <footer class="gp-hub-footer">${availablePresets().filter(preset => preset.profession === key).map(preset =>
-      `<button type="button" class="gp-hub-ghost" data-act="apply-preset" data-preset="${escape(preset.key)}" title="Import and assign this material set, and fill the tier rare tables"><i class="fas fa-wand-magic-sparkles"></i> Apply preset: ${escape(preset.label)}</button>`).join("")}
+      `<button type="button" class="gp-hub-ghost" data-act="apply-preset" data-preset="${escape(preset.key)}" title="Import and assign this material set, and fill the tier rare tables"><i class="fas fa-wand-magic-sparkles"></i> Apply preset: ${escape(preset.label)}</button>`).join("")}${availableRefining().filter(entry => entry.key === key).map(entry =>
+      `<button type="button" class="gp-hub-ghost" data-act="build-refining" data-prof="${escape(entry.key)}" title="Create or update the Mastercrafted recipe book (${escape(entry.book)}); recipes roll this profession at the material's tier"><i class="fas fa-fire-burner"></i> Build refining recipes</button>`).join("")}
       <button type="button" class="gp-hub-primary" data-act="save-weights"><i class="fas fa-floppy-disk"></i> Save rare weights</button></footer>`;
 }
 
@@ -232,6 +234,7 @@ function rulesSection() {
           <label class="gp-field"><span>Excellent rare-find bonus %</span>${number("excellentRareBonus", rules.excellentRareBonus, 0, 100)}</label>
           <label class="gp-field"><span>Default tool durability</span>${number("toolDurability", rules.toolDurability, 0, 1000)}</label>
           <label class="gp-field"><span>Free gathering attempts per long rest</span>${number("gatherAttemptsPerRest", rules.gatherAttemptsPerRest, 0, 100)}</label>
+          <label class="gp-field" title="Refining (smelting, milling, tanning, preparation in Mastercrafted) gives this share of the tier's gathering XP"><span>Refining XP (% of tier XP)</span>${number("refineXpPercent", rules.refineXpPercent, 0, 100)}</label>
         </div>
         <p class="gp-hub-note">A natural 20 is always Masterful. Tools without their own maximum use the default durability; 0 = tools never wear. Gathering attempts count across every profession and Gatherer page. Beyond the free limit, each confirmed attempt adds 1 exhaustion. 0 attempts = unlimited. A long rest resets attempts.</p></section>
     </div>
@@ -399,6 +402,11 @@ function defineClass() {
       const values = () => Object.fromEntries(Array.from(form.querySelectorAll("[name]")).map(input =>
         [input.name, input.type === "checkbox" ? input.checked : input.value]));
       switch (act) {
+        case "build-refining": {
+          const result = await buildRefiningBook(button.dataset.prof);
+          ui.notifications.info(`${result.book.name}: ${result.created} recipes created, ${result.updated} updated${result.imported ? `, ${result.imported} Items imported` : ""}.`);
+          return this.render();
+        }
         case "apply-preset": {
           const preset = availablePresets().find(entry => entry.key === button.dataset.preset);
           if (!preset) return;
