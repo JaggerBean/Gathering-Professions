@@ -2,8 +2,19 @@
 
 Foundry 14 + dnd5e + Gatherer 5.0.3. Enable this module alongside Gatherer. After updating module files while Foundry is running, restart the Foundry server and reopen the world so the new manifest, script, and stylesheet load.
 
+## Reliability update (0.30.0)
+
+Update both modules together: Crafting Professions 0.4.1 requires Gathering Professions 0.30.0. Restart Foundry and reconnect every player client after updating.
+
+Profession actions now use an active-GM-granted character lock. Keep a GM connected for player crafting, bounty hunts, abilities, scroll learning, collection and gathering reservations. A disconnected client's lock expires after two minutes; normal actions renew it while a prompt is open. Inventory, limits and eligibility are rechecked inside the lock.
+
+Timed jobs remain queued until their rewards are delivered. Gold has an atomic delivery receipt; delivered items carry a job receipt, so retries after partial failures do not duplicate rewards. Equipment and pending-perk items remain separate; other items stack only when their relevant data matches.
+
+Checks use dnd5e's ability, skill or tool rolling APIs, including conditions, bonuses and advantage/disadvantage. Displayed success odds are base estimates, not promises about system-modified rolls. Conservation refunds reverse at most one pull per reservation ticket. Existing settings, progress and world documents are preserved.
+
+Automated checks: `node tests/gatherer-check.mjs`. Live multi-client, roll-condition and GUI smoke tests remain required after reconnecting; see `REVIEW-2026-10-09.md`.
+
 ## Renamed package upgrade (0.18.0)
- 
 
 Version 0.18.0 changes the package ID and installation directory from `eryndor-professions` to `gathering-professions`. Existing worlds must enable **Gathering Professions** once after replacing the old module. On the active GM's first load, the module copies legacy world settings and document flags into the new namespace. Existing values already saved under `gathering-professions` win, retries are safe, and legacy data is retained for rollback.
 
