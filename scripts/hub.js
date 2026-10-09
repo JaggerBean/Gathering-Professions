@@ -222,7 +222,8 @@ function rulesSection() {
       <td>${number(`tierXp${index}`, rules.tierXp[index], 0, 100000)}</td>
       <td>${index ? number(`rankXp${index}`, rules.rankXp[index], 1, 1000000) : '<span class="gp-hub-muted">0 XP</span>'}</td>
       <td>${number(`reduction${index}`, rules.rankDcReduction[index], 0, 100)}</td>
-      <td><span class="gp-die-badge">d${RANK_DIE[index]}</span></td></tr>`).join("");
+      <td><span class="gp-die-badge">d${RANK_DIE[index]}</span></td>
+      <td>${number(`refineMinutes${index}`, rules.refineMinutes[index], 0, 10080)}</td></tr>`).join("");
   return `<div class="gp-hub-grid gp-hub-grid-2">
       <section class="gp-hub-card"><div class="gp-hub-card-head"><i class="fas fa-arrow-up-right-dots"></i> Advancement</div>
         <label class="gp-field"><span>Rank advancement</span><select name="advancementMode">
@@ -236,13 +237,13 @@ function rulesSection() {
           <label class="gp-field"><span>Default tool durability</span>${number("toolDurability", rules.toolDurability, 0, 1000)}</label>
           <label class="gp-field"><span>Free gathering attempts per long rest</span>${number("gatherAttemptsPerRest", rules.gatherAttemptsPerRest, 0, 100)}</label>
           <label class="gp-field" title="Refining (smelting, milling, tanning, preparation) gives this share of the tier's gathering XP"><span>Refining XP (% of tier XP)</span>${number("refineXpPercent", rules.refineXpPercent, 0, 100)}</label>
-          <label class="gp-check" title="Off: refined goods appear immediately"><input type="checkbox" name="craftingTimed" ${rules.craftingTimed ? "checked" : ""}> Refining takes world time (30 min per unit at tier 1 … 12 h at tier 5)</label>
+          <label class="gp-check" title="Off: refined goods appear immediately"><input type="checkbox" name="craftingTimed" ${rules.craftingTimed ? "checked" : ""}> Refining takes world time (times per tier in the table below)</label>
         </div>
         <p class="gp-hub-note">A natural 20 is always Masterful. Tools without their own maximum use the default durability; 0 = tools never wear. Gathering attempts count across every profession and Gatherer page. Beyond the free limit, each confirmed attempt adds 1 exhaustion. 0 attempts = unlimited. A long rest resets attempts.</p></section>
     </div>
     <section class="gp-hub-card"><div class="gp-hub-card-head"><i class="fas fa-table"></i> Tiers and ranks</div>
-      <table class="gp-hub-table"><thead><tr><th>Tier / Rank</th><th>Base DC</th><th>Extra untrained DC</th><th>XP reward</th><th>Rank starts at</th><th>DC reduction</th><th>Die</th></tr></thead><tbody>${rows}</tbody></table>
-      <p class="gp-hub-note">Tier columns set each material tier's DC and XP. Rank columns set the XP needed and the DC reduction. Untrained checks add the extra untrained DC and bank XP without ranks.</p></section>
+      <table class="gp-hub-table"><thead><tr><th>Tier / Rank</th><th>Base DC</th><th>Extra untrained DC</th><th>XP reward</th><th>Rank starts at</th><th>DC reduction</th><th>Die</th><th title="Default minutes per unit for refining recipes of this tier (a recipe can set its own)">Refining time (min)</th></tr></thead><tbody>${rows}</tbody></table>
+      <p class="gp-hub-note">Tier columns set each material tier's DC and XP. Rank columns set the XP needed and the DC reduction. Untrained checks add the extra untrained DC and bank XP without ranks. Refining time is the default minutes per unit for that tier (60 = 1 hour, 1440 = 1 day, 0 = instant); a recipe can set its own time in the Recipes window.</p></section>
     <footer class="gp-hub-footer"><button type="button" class="gp-hub-primary" data-act="save-rules"><i class="fas fa-floppy-disk"></i> Save rules</button></footer>`;
 }
 

@@ -2,7 +2,7 @@
 // milling, tanning, preparation) with their gathering profession. Recipes are
 // module data; the Recipes window (recipes-ui.js) shows the ones the party has
 // discovered, and this file runs the craft: check, consume, produce or queue.
-import { MODULE_ID, PROFESSIONS, activeRules, checkFormula, materialRule, professionFlag } from "./rules.js";
+import { MODULE_ID, PROFESSIONS, MAX_REFINE_MINUTES, activeRules, checkFormula, materialRule, professionFlag } from "./rules.js";
 import { getDegreeOfSuccess, naturalMasterful } from "./gathering.js";
 import { MATERIAL_PRESETS, folderPath, worldItem } from "./presets.js";
 
@@ -10,8 +10,15 @@ const KCTG = "kctg-5e.kctg-dnd5e";
 const HELIANA = "helianas-harvest-compendium";
 // Bump when recipes or generated items change: the GM prepares items again.
 export const REFINING_VERSION = 1;
-// Minutes per unit, by tier (crafting time halved).
-export const REFINE_MINUTES = Object.freeze([30, 60, 120, 240, 720]);
+export { REFINE_MINUTES } from "./rules.js";
+
+/** Minutes per unit: the recipe's own time, else the tier default (Rules). */
+export function recipeMinutes(entry, rules = activeRules()) {
+  const own = entry?.minutes;
+  if (own !== undefined && own !== null && own !== "" && Number.isInteger(Number(own))) return Number(own);
+  const tier = Math.min(5, Math.max(1, Math.trunc(Number(entry?.tier)) || 1));
+  return rules.refineMinutes[tier - 1];
+}
 export const DRIED_PREFIX = "Dried ";
 
 const escape = value => String(value ?? "").replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
@@ -216,7 +223,7 @@ export const learnedStates = () => plainObject(setting("recipeLearned", {}));
 function applyEdit(row, edit) {
   if (!edit) return row;
   const next = { ...row, edited: true };
-  for (const key of ["tier", "output", "quantity"]) if (edit[key] !== undefined) next[key] = edit[key];
+  for (const key of ["tier", "output", "quantity", "minutes"]) if (edit[key] !== undefined) next[key] = edit[key];
   if (Array.isArray(edit.inputs)) next.inputs = edit.inputs.map(([name, quantity]) => [name, quantity]);
   if (edit.disabled) next.disabled = true;
   return next;
@@ -245,7 +252,7 @@ export function findRecipe(id, options = {}) {
 }
 
 /** Validate recipe fields from the GM editor; names must be world Items. */
-export function normalizeRecipeFields({ profession, tier, output, quantity, inputs }) {
+export function normalizeRecipeFields({ profession, tier, output, quantity, inputs, minutes = null }) {
   if (!REFINING[profession] || !PROFESSIONS[profession]) throw new Error("Choose a profession tab.");
   const level = Number(tier);
   if (!Number.isInteger(level) || level < 1 || level > 5) throw new Error("Tier must be 1 to 5.");
@@ -264,7 +271,13 @@ export function normalizeRecipeFields({ profession, tier, output, quantity, inpu
   }
   if (new Set(rows.map(([name]) => name)).size !== rows.length) throw new Error("List each ingredient once.");
   if (rows.some(([name]) => name === product)) throw new Error("A recipe cannot use its own product.");
-  return { profession, tier: level, output: product, quantity: made, inputs: rows };
+  // Blank = the tier's default time (Rules).
+  let time = null;
+  if (minutes !== null && minutes !== undefined && String(minutes).trim() !== "") {
+    time = Number(minutes);
+    if (!Number.isInteger(time) || time < 0 || time > MAX_REFINE_MINUTES) throw new Error("Time must be whole minutes from 0 to 10080 (one week), or blank for the tier default.");
+  }
+  return { profession, tier: level, output: product, quantity: made, inputs: rows, minutes: time };
 }
 
 /** Players' clients need the product Item: make it Observer. */
@@ -296,7 +309,7 @@ export async function updateRecipe(id, fields) {
     await game.settings.set(MODULE_ID, "customRecipes", customRecipes().map(row => (row.id === id ? { ...row, ...data } : row)));
   } else {
     const edits = recipeEdits();
-    await game.settings.set(MODULE_ID, "recipeEdits", { ...edits, [id]: { ...(edits[id] ?? {}), tier: data.tier, output: data.output, quantity: data.quantity, inputs: data.inputs } });
+    await game.settings.set(MODULE_ID, "recipeEdits", { ...edits, [id]: { ...(edits[id] ?? {}), tier: data.tier, output: data.output, quantity: data.quantity, inputs: data.inputs, minutes: data.minutes } });
   }
   await shareProduct(data.output);
   return findRecipe(id, { includeDisabled: true });
@@ -568,7 +581,7 @@ export async function craftRecipe(actor, id, batch = 1, { addXp }) {
   if (xp) await addXp(actor, entry.profession, xp);
   let job = null;
   if (made) {
-    const minutes = rules.craftingTimed ? REFINE_MINUTES[check.tier - 1] * count : 0;
+    const minutes = rules.craftingTimed ? recipeMinutes(entry, rules) * count : 0;
     const data = product.toObject();
     if (minutes) job = await queueJob(actor, { name: entry.output, img: product.img, quantity: made, data, ready: (game.time?.worldTime ?? 0) + minutes * 60, recipe: id, minutes });
     else await addToInventory(actor, data, made);

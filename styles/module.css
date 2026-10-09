@@ -621,3 +621,6 @@
 .gp-rw-picktile:hover { border-color: var(--gp-gold); }
 .gp-rw-picktile img { width: 22px; height: 22px; border: none; object-fit: contain; }
 .gp-rw-pickmore { grid-column: 1 / -1; font-size: .78em; opacity: .65; }
+
+.gp-rw-editopts { display: flex; align-items: center; gap: .8rem; }
+.gp-rw-editopts input[type="number"] { width: 64px; text-align: center; }

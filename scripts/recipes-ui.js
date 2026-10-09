@@ -5,7 +5,7 @@ import { MODULE_ID, PROFESSIONS, materialRule } from "./rules.js";
 import { successChance, formatDuration } from "./gather-ui.js";
 import { gpDialog } from "./dialogs.js";
 import {
-  REFINE_MINUTES, refiningProfessions, refiningRecipes, allRecipes, discoveredNames, isKnown, learnedStates, findRecipe, inventoryCount, maxBatch,
+  recipeMinutes, refiningProfessions, refiningRecipes, allRecipes, discoveredNames, isKnown, learnedStates, findRecipe, inventoryCount, maxBatch,
   refineCheckFor, actorJobs, deliverDueJobs, formatMinutes, productItem
 } from "./refining.js";
 
@@ -56,7 +56,7 @@ export function buildRecipesModel(actor, { isGM = false, names = discoveredNames
     }
     group.recipes.push({ id: row.id, tier: row.tier, quantity: row.quantity, inputs, max, chance, target, known,
       learn: states[row.id] ?? "auto", disabled: Boolean(row.disabled), edited: Boolean(row.edited), custom: Boolean(row.custom),
-      minutes: REFINE_MINUTES[row.tier - 1], time: formatMinutes(REFINE_MINUTES[row.tier - 1]) });
+      minutes: recipeMinutes(row), time: formatMinutes(recipeMinutes(row)), ownTime: row.minutes !== undefined && row.minutes !== null });
   }
   let products = [...groups.values()].filter(group => group.recipes.length)
     .sort((a, b) => a.tier - b.tier || a.name.localeCompare(b.name));
@@ -101,7 +101,7 @@ function recipeRow(row, model, state) {
         <span class="gp-tier-badge tier-${row.tier}">T${row.tier}</span>
         ${row.target !== null ? `<span title="Check DC">DC ${row.target}</span>` : ""}
         ${chanceWord(row.chance)}
-        <span title="Time per unit"><i class="fas fa-hourglass-half"></i> ${escape(row.time)}</span>
+        <span title="${row.ownTime ? "Time per unit (this recipe)" : "Time per unit (tier default)"}"><i class="fas fa-hourglass-half"></i> ${escape(row.minutes ? row.time : "Instant")}</span>
       </div>
       ${gm}
       <div class="gp-rw-make">
@@ -168,6 +168,7 @@ const MAX_INPUTS = 6;
 /** Editor state for a recipe (row) or a new one on a profession's tab. */
 export function editorDraft(row, profession) {
   return { id: row?.id ?? null, profession: row?.profession ?? profession, tier: row?.tier ?? 1, output: row?.output ?? "", quantity: row?.quantity ?? 1,
+    minutes: row?.minutes ?? "",
     inputs: (row?.inputs?.length ? row.inputs : [["", 1]]).map(([name, quantity]) => [name, quantity]), picker: null, search: "" };
 }
 
@@ -220,7 +221,10 @@ export function renderEditor(draft, groups = []) {
     </div>${picker(String(index))}`).join("");
   return `<div class="gp-rw-edit">
     <div class="gp-rw-edithead"><strong>${draft.id ? "Edit recipe" : "New recipe"}</strong>
-      <label>Tier <select data-draft="tier">${[1, 2, 3, 4, 5].map(tier => `<option value="${tier}" ${tier === Number(draft.tier) ? "selected" : ""}>${tier}</option>`).join("")}</select></label></div>
+      <span class="gp-rw-editopts">
+        <label>Tier <select data-draft="tier">${[1, 2, 3, 4, 5].map(tier => `<option value="${tier}" ${tier === Number(draft.tier) ? "selected" : ""}>${tier}</option>`).join("")}</select></label>
+        <label title="Minutes per unit. Blank = the tier's default from GM hub → Rules (60 = 1 hour, 1440 = 1 day, 0 = instant)">Time <input type="number" min="0" max="10080" step="1" data-draft="minutes" data-focus-key="minutes" value="${escape(draft.minutes ?? "")}" placeholder="${escape(recipeMinutes({ tier: draft.tier }))}"> min</label>
+      </span></div>
     <div class="gp-rw-editlabel">Makes</div>
     <div class="gp-rw-editrow">${slotButton("output", draft.output, draft.picker === "output")}
       <input type="number" min="1" max="99" value="${draft.quantity}" data-draft="quantity" aria-label="Quantity made"></div>
@@ -238,6 +242,7 @@ export function renderEditor(draft, groups = []) {
 /** The draft as recipe fields for the API. */
 export function draftFields(draft) {
   return { profession: draft.profession, tier: Number(draft.tier), output: draft.output, quantity: Number(draft.quantity),
+    minutes: String(draft.minutes ?? "").trim() === "" ? null : Number(draft.minutes),
     inputs: draft.inputs.filter(([name]) => String(name ?? "").trim()).map(([name, quantity]) => [name, Number(quantity)]) };
 }
 
@@ -341,6 +346,8 @@ function defineClass() {
       if (draft && field) {
         if (field === "tier") draft.tier = Number(target.value);
         if (field === "quantity") draft.quantity = Number(target.value);
+        if (field === "minutes") draft.minutes = target.value;
+        if (field === "tier") return this.render();
         if (field === "qty") draft.inputs[Number(target.dataset.index)][1] = Number(target.value);
         if (field === "search") { draft.search = target.value; return this.#refresh(); }
         return;

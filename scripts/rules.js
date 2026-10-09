@@ -110,6 +110,9 @@ export const TOOL_DURABILITY = 10;
 export const GATHER_ATTEMPTS_PER_REST = 5;
 // Refining a material gives this share of the tier's gathering XP.
 export const REFINE_XP_PERCENT = 50;
+// Refining time per unit, by tier (minutes; 0 = instant for that tier).
+export const REFINE_MINUTES = Object.freeze([30, 60, 120, 240, 720]);
+export const MAX_REFINE_MINUTES = 10080;
 
 export function activeRules() {
   let saved = {};
@@ -125,6 +128,7 @@ export function activeRules() {
     tierXp: values("tierXp", TIER_XP),
     rankDcReduction: values("rankDcReduction", RANK_DC_REDUCTION),
     tierUntrainedDc: values("tierUntrainedDc", TIER_UNTRAINED_DC),
+    refineMinutes: values("refineMinutes", REFINE_MINUTES).map(value => Math.min(MAX_REFINE_MINUTES, Math.trunc(value))),
     milestoneAdvancement: saved.milestoneAdvancement === true,
     // Masterful extractions roll the rare-find table unless the GM turns it off.
     masterfulRareFind: saved.masterfulRareFind !== false,

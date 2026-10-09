@@ -113,7 +113,7 @@ export async function openMaterialEditor(item) {
 /**
  * Validate and save rule form values (GM hub Rules tab). Throws a
  * readable Error. Field names: advancementMode, masterfulRareFind,
- * excellentRareBonus, toolDurability, gatherAttemptsPerRest, refineXpPercent, craftingTimed, dc0–4, untrainedDc0–4, tierXp0–4,
+ * excellentRareBonus, toolDurability, gatherAttemptsPerRest, refineXpPercent, craftingTimed, refineMinutes0–4, dc0–4, untrainedDc0–4, tierXp0–4,
  * rankXp1–4, reduction0–4.
  */
 export async function saveRulesValues(values) {
@@ -132,6 +132,8 @@ export async function saveRulesValues(values) {
     if (!Number.isInteger(next.gatherAttemptsPerRest) || next.gatherAttemptsPerRest < 0 || next.gatherAttemptsPerRest > 100) throw new Error("Free gathering attempts must be a whole number from 0 to 100 (0 = unlimited).");
     if (!Number.isInteger(next.excellentRareBonus) || next.excellentRareBonus < 0 || next.excellentRareBonus > 100) throw new Error("The Excellent rare-find bonus must be a whole number from 0 to 100.");
     if (!['automatic', 'milestone'].includes(values.advancementMode)) throw new Error("Choose an advancement mode.");
+    next.refineMinutes = Array.from({ length: 5 }, (_, index) => (values[`refineMinutes${index}`] === undefined ? rules.refineMinutes[index] : Number(values[`refineMinutes${index}`])));
+    if (next.refineMinutes.some(value => !Number.isInteger(value) || value < 0 || value > 10080)) throw new Error("Refining time must be whole minutes from 0 to 10080 (one week) per tier.");
     for (let index = 0; index < 5; index++) {
       next.tierDc.push(Number(values[`dc${index}`]));
       next.tierUntrainedDc.push(Number(values[`untrainedDc${index}`] ?? 0));

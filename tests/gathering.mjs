@@ -61,6 +61,7 @@ globalThis.foundry = {
     async confirm(options) { confirmPrompts.push(options); return confirmAnswers.length ? confirmAnswers.shift() : false; }
   } } }
 };
+globalThis.CONST ??= { DOCUMENT_OWNERSHIP_LEVELS: { NONE: 0, LIMITED: 1, OBSERVER: 2, OWNER: 3 } };
 globalThis.game = {
   settings: {
     get(namespace, key) {
