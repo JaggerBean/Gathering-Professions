@@ -293,6 +293,12 @@ You can filter by scene, profession, or name. Select nodes to reset, reveal, or 
 
 From macros, use `game.modules.get("gathering-professions").api.nodes`. It includes `build`, `update`, `duplicate`, `delete`, `reset`, `setHidden`, `placePin`, `placeLinked`, `openManager`, and `openBuilder`.
 
+## Material presets (0.20.0)
+
+**GM hub → Materials → Apply preset** (shown on a profession's tab when its source modules are active) imports a ready-made material set. Missing Items are imported from the compendiums (Items already in the world with the same name are reused), assigned to the profession at their tier, and each tier's rare-find table is replaced with the preset's rare finds. From a macro: `api.presets.apply("herbalism")`.
+
+- **Herbalism: Kris's Trade Goods + Heliana's Harvest** (needs `kctg-5e` and `helianas-harvest-compendium`). 40 wild herbs, flowers, and mushrooms from Kris's herbalist supplies, 8 per tier (base yield 1d3 at tier 1, 1d2 at tiers 2–3, 1 at tiers 4–5; crops, seeds, and non-plants left out), into Items folder Professions/Herbalism/Wild. Rare finds, three per tier: T1 Plant Phial of Sap, Plant Tuber, Matsutake; T2 Plant Pouch of Leaves, Plant Bundle of Roots, Plant Pouch of Seeds; T3 Plant Pouch of Hyphae, Plant Pouch of Pollen, Divine Light; T4 Plant Bark, Plant Pouch of Spores, Plant Poison Gland; T5 Plant Membrane, Belladonna Fruit, Wolf Bane's Leaves.
+
 ## Materials browser (0.19.0)
 
 **GM hub → Materials** (also the **Profession Materials** settings button) shows one profession at a time (tabs across the top):
