@@ -5,7 +5,7 @@ import { availablePresets, applyMaterialPreset } from "./presets.js";
 import { REFINING, REFINING_VERSION, GENERATED, refiningProfessions, refiningRecipes, allRecipes, createRecipe, updateRecipe, setRecipeDisabled, resetRecipe, deleteRecipe, setLearnedState, discoveredNames, isKnown, recordDiscoveries, backfillDiscoveries, registerDiscoveryHooks, prepareRefinedItems, craftRecipe, actorJobs, deliverDueJobs, deliverAllDueJobs } from "./refining.js";
 import { openRecipes } from "./recipes-ui.js";
 import { registerRecipeProvider, unregisterRecipeProvider, recipeProviders, providerFor } from "./recipe-registry.js";
-import { refiningProvider, inventoryCount, maxBatch, removeFromInventory, addToInventory, queueJob, formatMinutes, itemPickerGroups } from "./refining.js";
+import { refiningProvider, inventoryCount, maxBatch, removeFromInventory, addToInventory, addGold, queueJob, formatMinutes, itemPickerGroups } from "./refining.js";
 import { successChance } from "./gather-ui.js";
 import { DEFAULT_TOOLS, buildDefaultTools } from "./gatheringtools.js";
 import { DEFAULT_SKILL_TREE, skillTreeConfig, normalizeSkillTreeConfig, syncProfessionState, resetUniversalTreeSkills, drawRareFind, availableSkillTrees, configuredSkillTree } from "./integrations.js";
@@ -794,7 +794,7 @@ Hooks.once("ready", async () => {
       unregister: key => unregisterRecipeProvider(key),
       providers: () => recipeProviders(),
       provider: key => providerFor(key),
-      inventoryCount, maxBatch, removeFromInventory, addToInventory, queueJob, formatMinutes, itemPickerGroups, successChance,
+      inventoryCount, maxBatch, removeFromInventory, addToInventory, addGold, queueJob, formatMinutes, itemPickerGroups, successChance,
       degree: (total, target) => getDegreeOfSuccess(total, target),
       naturalMasterful: degree => naturalMasterful(degree),
       openRecipes

@@ -24,6 +24,10 @@
 //   carried(actor)                 items the character carries that teach recipes (optional):
 //                                  [{ id, name, img, note, disabled? }]; carriedLabel, carriedAction
 //   useCarried(actor, itemId)      learn from one of them
+//   isDone(row, actor)             a finished one-time recipe: hidden from players, tagged for the GM (optional)
+//   panel(actor, isGM) / onPanel(act, button, actor)   a provider's own panel above the list (optional)
+// Optional row fields: group / groupLabel / groupImg (cards group by these instead of the output),
+//   title, brief, rewardText (instead of "N×"), actionLabel, noBatch, inputMeta: [{ mode: "used"|"kept"|"risk", reason }]
 const providers = new Map();
 
 export function registerRecipeProvider(provider) {

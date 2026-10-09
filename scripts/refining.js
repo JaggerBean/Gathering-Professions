@@ -527,6 +527,14 @@ export async function removeFromInventory(actor, name, quantity) {
   if (deletes.length) await actor.deleteEmbeddedDocuments("Item", deletes);
 }
 
+/** Add gold pieces to a character's dnd5e currency. */
+export async function addGold(actor, amount) {
+  const gold = Math.round(Number(amount) || 0);
+  if (!gold) return;
+  const current = Number(actor.system?.currency?.gp) || 0;
+  await actor.update({ "system.currency.gp": current + gold });
+}
+
 /** Add an item (by data) to an inventory, stacking onto an item with the same name. */
 export async function addToInventory(actor, data, quantity) {
   const existing = Array.from(actor.items).find(item => item.name === data.name);
@@ -622,9 +630,10 @@ export async function deliverDueJobs(actor, now = game.time?.worldTime ?? 0) {
   for (const job of due) {
     // Remove first so a second client cannot deliver the same job twice.
     await actor.update({ [`flags.${MODULE_ID}.refiningJobs.-=${job.id}`]: null });
-    await addToInventory(actor, job.data, job.quantity);
+    if (job.gold) await addGold(actor, job.gold);
+    if (job.data) await addToInventory(actor, job.data, job.quantity);
   }
-  if (due.length) ui.notifications.info(`${actor.name}: ${due.map(job => `${job.quantity} ${job.name}`).join(", ")} ready.`);
+  if (due.length) ui.notifications.info(`${actor.name}: ${due.map(job => job.gold && !job.data ? `${job.gold} gp (${job.name})` : `${job.quantity} ${job.name}`).join(", ")} ready.`);
   return due;
 }
 

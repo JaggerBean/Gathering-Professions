@@ -648,3 +648,15 @@
 .gp-rw-carry img { width: 26px; height: 26px; border: none; object-fit: contain; }
 .gp-rw-carry small { opacity: .65; }
 .gp-rw-carry button { margin-left: auto; width: auto; flex: 0 0 auto; }
+
+/* Recipes window: titled rows (bounty contracts), gear notes, provider panel */
+.gp-rw-recipe { grid-template-areas: "title make" "inputs make" "reasons make" "meta make" "gm gm"; }
+.gp-rw-titlebox { grid-area: title; }
+.gp-rw-title { color: var(--gp-ink); font-size: 1em; }
+.gp-rw-brief { margin: .1rem 0 .25rem; font-size: .85em; opacity: .8; font-style: italic; }
+.gp-rw-bring { font-size: .8em; opacity: .7; margin-right: .1rem; }
+.gp-rw-mode { font-size: .75em; opacity: .75; }
+.gp-rw-input.mode-risk .gp-rw-mode { color: #f0b07a; opacity: 1; }
+.gp-rw-reasons { grid-area: reasons; margin: .1rem 0 0; padding-left: 1.1rem; font-size: .8em; opacity: .85; }
+.gp-rw-reasons em { opacity: .75; }
+.gp-rw-panel { margin: .5rem .8rem 0; padding: .45rem .6rem; border: 1px dashed rgba(217,180,90,.5); border-radius: 8px; background: rgba(0,0,0,.28); }

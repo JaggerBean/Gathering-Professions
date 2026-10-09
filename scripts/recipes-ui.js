@@ -38,14 +38,17 @@ export function buildRecipesModel(actor, { isGM = false, tab = "", onlyCraftable
   });
   const groups = new Map();
   for (const row of provider ? provider.recipes({ includeDisabled: isGM }) : []) {
+    const done = Boolean(provider.isDone?.(row, actor));
+    if (done && !isGM) continue;
     const known = provider.isKnown(row, actor);
-    const group = groups.get(row.output) ?? { name: row.output, img: imgFor(row.output), tier: row.tier, recipes: [], hidden: 0 };
-    groups.set(row.output, group);
+    const key = row.group ?? row.output;
+    const group = groups.get(key) ?? { name: row.groupLabel ?? row.group ?? row.output, img: row.groupImg ?? imgFor(row.output), tier: row.tier, recipes: [], hidden: 0 };
+    groups.set(key, group);
     group.tier = Math.min(group.tier, row.tier);
     if (!known && !isGM) { group.hidden++; continue; }
-    const inputs = row.inputs.map(([name, need]) => {
+    const inputs = row.inputs.map(([name, need], index) => {
       const have = actor ? inventoryCount(actor, name) : 0;
-      return { name, img: imgFor(name), need, have, ok: have >= need };
+      return { name, img: imgFor(name), need, have, ok: have >= need, mode: row.inputMeta?.[index]?.mode ?? null, reason: row.inputMeta?.[index]?.reason ?? "" };
     });
     const max = actor ? maxBatch(actor, row) : 0;
     const blocked = actor ? provider.blocked?.(actor, row) ?? null : null;
@@ -57,7 +60,8 @@ export function buildRecipesModel(actor, { isGM = false, tab = "", onlyCraftable
       chance = Math.round(successChance(check.modifier, check.die ?? 0, check.target, check.extraDice ?? []) * 100);
     }
     const minutes = provider.minutes(row);
-    group.recipes.push({ id: row.id, tier: row.tier, quantity: row.quantity, inputs, max, chance, target, known, blocked,
+    group.recipes.push({ id: row.id, tier: row.tier, quantity: row.quantity, inputs, max: row.noBatch ? Math.min(max, 1) : max, chance, target, known, blocked, done,
+      title: row.title ?? "", brief: row.brief ?? "", rewardText: row.rewardText ?? "", actionLabel: row.actionLabel ?? "", noBatch: Boolean(row.noBatch),
       learn: provider.learnState(row, actor), disabled: Boolean(row.disabled), edited: Boolean(row.edited), custom: Boolean(row.custom),
       minutes, time: formatMinutes(minutes), ownTime: row.minutes !== undefined && row.minutes !== null });
   }
@@ -73,6 +77,7 @@ export function buildRecipesModel(actor, { isGM = false, tab = "", onlyCraftable
     hiddenHint: provider?.hiddenHint ?? "Not yet discovered", hiddenWord: provider?.hiddenWord ?? "unknown", emptyText: provider?.emptyText ?? "No recipes known yet.",
     gmHint: provider?.gmHint ?? "", canEdit: Boolean(provider?.gm?.create), canScroll: Boolean(provider?.gm?.scroll),
     experiment: Boolean(provider?.experiment), products, jobs, isGM,
+    panel: provider?.panel ? provider.panel(actor, isGM) : "", providerKey: provider?.key ?? "",
     carried: actor && provider?.carried ? provider.carried(actor) : [], carriedLabel: provider?.carriedLabel ?? "Recipe scrolls you carry", carriedAction: provider?.carriedAction ?? "Learn",
     actor: actor ? { id: actor.id, name: actor.name, img: actor.img } : null
   };
@@ -106,13 +111,17 @@ function gmControls(row, model) {
 }
 
 function recipeRow(row, model, state) {
-  const inputs = row.inputs.map(input => `<span class="gp-rw-input ${input.ok ? "ok" : "missing"}" title="${escape(input.name)}: have ${input.have}, need ${input.need}">
-      <img src="${escape(input.img)}" alt=""><span>${input.need}× ${escape(input.name)}</span><small>${input.have}</small></span>`).join('<i class="fas fa-plus gp-rw-plus"></i>');
+  const MODES = { used: "used up", kept: "kept", risk: "kept, at risk on a bad failure" };
+  const inputs = row.inputs.map(input => `<span class="gp-rw-input ${input.ok ? "ok" : "missing"} ${input.mode ? `mode-${escape(input.mode)}` : ""}" title="${escape(input.name)}: have ${input.have}, need ${input.need}${input.mode ? ` (${MODES[input.mode] ?? input.mode})` : ""}${input.reason ? ` — ${escape(input.reason)}` : ""}">
+      <img src="${escape(input.img)}" alt=""><span>${input.need}× ${escape(input.name)}</span><small>${input.have}</small>${input.mode && input.mode !== "used" ? `<i class="fas ${input.mode === "risk" ? "fa-triangle-exclamation" : "fa-rotate"} gp-rw-mode" title="${escape(MODES[input.mode])}"></i>` : ""}</span>`).join(row.reasons ? "" : '<i class="fas fa-plus gp-rw-plus"></i>');
+  const reasons = row.inputs.some(input => input.reason) ? `<ul class="gp-rw-reasons">${row.inputs.filter(input => input.reason).map(input => `<li><strong>${escape(input.name)}</strong> — ${escape(input.reason)}${input.mode && input.mode !== "used" ? ` <em>(${escape(MODES[input.mode])})</em>` : ""}</li>`).join("")}</ul>` : "";
   const batch = Math.min(Math.max(1, Number(state.batch?.[row.id]) || 1), Math.max(1, row.max));
   const canCraft = model.actor && row.max > 0 && !row.blocked && !state.busy && !row.disabled;
   const why = !model.actor ? "Choose a character" : row.blocked ? row.blocked : row.max > 0 ? `Up to ${row.max}` : "Not enough materials";
   return `<div class="gp-rw-recipe ${canCraft ? "craftable" : ""} ${row.disabled ? "gp-rw-off" : ""}">
-      <div class="gp-rw-inputs">${inputs}<i class="fas fa-arrow-right gp-rw-arrow"></i><span class="gp-rw-out">${row.quantity}×</span></div>
+      ${row.title || row.brief ? `<div class="gp-rw-titlebox">${row.title ? `<strong class="gp-rw-title">${escape(row.title)}</strong>` : ""}${row.done ? ' <span class="gp-rw-tag">Completed</span>' : ""}${row.brief ? `<p class="gp-rw-brief">${escape(row.brief)}</p>` : ""}</div>` : ""}
+      <div class="gp-rw-inputs">${row.title ? '<span class="gp-rw-bring">Bring:</span>' : ""}${inputs}${row.rewardText ? `<i class="fas fa-arrow-right gp-rw-arrow"></i><span class="gp-rw-out">${escape(row.rewardText)}</span>` : `<i class="fas fa-arrow-right gp-rw-arrow"></i><span class="gp-rw-out">${row.quantity}×</span>`}</div>
+      ${reasons}
       <div class="gp-rw-meta">
         <span class="gp-tier-badge tier-${row.tier}">T${row.tier}</span>
         ${row.target !== null ? `<span title="Check DC">DC ${row.target}</span>` : ""}
@@ -122,8 +131,8 @@ function recipeRow(row, model, state) {
       </div>
       ${gmControls(row, model)}
       <div class="gp-rw-make">
-        <input type="number" min="1" max="${Math.max(1, row.max)}" value="${batch}" data-batch="${escape(row.id)}" ${row.max > 1 ? "" : "disabled"} aria-label="How many">
-        <button type="button" class="gp-rw-craft" data-act="craft" data-recipe="${escape(row.id)}" ${canCraft ? "" : "disabled"} title="${escape(why)}"><i class="fas fa-hammer"></i> ${escape(model.action)}</button>
+        ${row.noBatch ? "" : `<input type="number" min="1" max="${Math.max(1, row.max)}" value="${batch}" data-batch="${escape(row.id)}" ${row.max > 1 ? "" : "disabled"} aria-label="How many">`}
+        <button type="button" class="gp-rw-craft" data-act="craft" data-recipe="${escape(row.id)}" ${canCraft ? "" : "disabled"} title="${escape(why)}"><i class="fas fa-hammer"></i> ${escape(row.actionLabel || model.action)}</button>
       </div>
     </div>`;
 }
@@ -190,6 +199,7 @@ export function renderRecipesWindow(model, state = {}) {
     <nav class="gp-rw-tabs">${tabs || '<span class="gp-rw-noactor">No recipes available yet.</span>'}</nav>
     ${jobs}
     ${gmBar}
+    ${model.panel ? `<section class="gp-rw-panel" data-panel="${escape(model.providerKey)}">${model.panel}</section>` : ""}
     ${renderCarried(model)}
     ${renderExperiment(model, state.experiment, state.inventory)}
     <div class="gp-rw-list">${state.editing && !state.editing.id ? `<section class="gp-rw-card">${renderEditor(state.editing, state.editorItems)}</section>` : ""}${cards || `<p class="gp-rw-empty">${escape(empty)}</p>`}</div>
@@ -430,6 +440,7 @@ function defineClass() {
       if (act === "tab") { this.view.tab = button.dataset.tab; this.view.editing = null; this.view.experiment = freshExperiment(); return this.render(); }
       if (act === "collect") { await deliverDueJobs(this.actor); return this.render(); }
       if (act === "use-carried") { await provider.useCarried(this.actor, button.dataset.item); return this.render(); }
+      if (act === "panel") { await provider.onPanel?.(button.dataset.panelAct, button, this.actor); return this.render(); }
       // Experiment panel.
       const experiment = this.view.experiment;
       if (act === "exp-pick") { experiment.picker = !experiment.picker; experiment.search = ""; return this.render(); }
