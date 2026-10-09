@@ -227,8 +227,10 @@ export async function buildRefiningBook(profession) {
     if (page) updates.push({ _id: page.id, ...data });
     else creates.push(data);
   }
-  if (creates.length) report.created = (await book.createEmbeddedDocuments("JournalEntryPage", creates)).length;
-  if (updates.length) report.updated = (await book.updateEmbeddedDocuments("JournalEntryPage", updates)).length;
+  if (creates.length) await book.createEmbeddedDocuments("JournalEntryPage", creates);
+  if (updates.length) await book.updateEmbeddedDocuments("JournalEntryPage", updates);
+  report.created = creates.length;
+  report.updated = updates.length;
   return { book, ...report };
 }
 
