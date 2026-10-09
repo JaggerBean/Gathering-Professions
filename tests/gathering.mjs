@@ -1147,12 +1147,10 @@ assert.equal(await nodeSheet(undefined)._onGather(true, null, makeActor()), "gat
   assert.equal(fortuneButton.disabled, false, "The actual chat handler resolves the current gp datasets");
   rolls.push({ formula: "1d20", total: 6 });
   clickFortune({ preventDefault() {} });
-  while (api.rareFinds.pending(lucky)[climbId]) await delay();
-  await delay(); await delay();
-  const settled = { tier: 2, pending: false };
+  for (let wait = 0; wait < 100 && !lucky.inventory.some(entry => entry.name === "Tier Two Gem"); wait++) await delay();
+  assert.equal(api.rareFinds.pending(lucky)[climbId], undefined, "Clicking the chat button settles its pending climb");
   globalThis.HTMLElement = savedHTMLElement;
   globalThis.fromUuidSync = savedResolver;
-  assert.deepEqual([settled.tier, settled.pending], [2, false]);
   assert.equal(lucky.inventory.find(entry => entry.name === "Tier Two Gem").system.quantity, 1);
   assert.match(posted.at(-1).flavor, /Rare Find!<\/strong> · Tier 2 \(Mining Rare Finds — Tier 2\)/);
   assert.match(posted.at(-1).flavor, /Fortune die 6: stays at tier 2 \(needs 20\+\)/);
@@ -1297,6 +1295,39 @@ assert.equal(await nodeSheet(undefined)._onGather(true, null, makeActor()), "gat
   await api.durability.repair(pick);
   assert.deepEqual(durability.toolDurability(pick), { value: 2, max: 2, unbreakable: false, broken: false }, "Repaired to full");
   savedRules.toolDurability = 10;
+}
+
+// A stale refund snapshot must not roll back someone else's pull, and a ticket
+// can only be claimed once. Exercise the actual authenticated GM handler.
+{
+  const refundActor = nodeActor();
+  refundActor.uuid = "Actor.refundReview";
+  refundActor.inventory.push(new Item("Conservationist", { enabled: true, profession: "any", conserveChance: 100 }, null));
+  refundActor.unsetFlag = async (_scope, key) => {
+    const parts = key.split("."); const leaf = parts.pop();
+    const parent = parts.reduce((value, part) => value?.[part], refundActor.flags);
+    if (parent) delete parent[leaf];
+  };
+  const refundPage = { uuid: "JournalEntry.review.JournalEntryPage.refund", type: "gatherer.gatherer",
+    flags: { gatherer: { draws: "5", data: { drawsUsed: 3 } } },
+    getFlag(scope, key) { return this.flags[scope]?.[key]; },
+    async update(changes) { this.flags.gatherer.data.drawsUsed = changes["flags.gatherer.data.drawsUsed"]; } };
+  const previousResolver = globalThis.fromUuid;
+  const previousUser = game.user;
+  const previousUsers = game.users;
+  globalThis.fromUuid = async uuid => uuid === refundPage.uuid ? refundPage : uuid === refundActor.uuid ? refundActor : previousResolver(uuid);
+  game.user = { id: "gm", isGM: true };
+  game.users = [{ id: "gm", isGM: true }];
+  await refundActor.setFlag("gathering-professions", "gatherTickets.reviewRefund", { pageUuid: refundPage.uuid, expires: Date.now() + 120000 });
+  const request = { actorUuid: refundActor.uuid, pageUuid: refundPage.uuid, ticket: "reviewRefund", before: 1 };
+  rolls.push({ formula: "1d100", total: 1, options: { allowInteractive: false } });
+  hooks.get("updateActor")(refundActor, { flags: { "gathering-professions": { refundRequest: request } } }, {}, "gm");
+  for (let wait = 0; wait < 100 && refundPage.flags.gatherer.data.drawsUsed !== 2; wait++) await delay();
+  assert.equal(refundPage.flags.gatherer.data.drawsUsed, 2, "Refund removes only its own pull, not all pulls since the snapshot");
+  hooks.get("updateActor")(refundActor, { flags: { "gathering-professions": { refundRequest: request } } }, {}, "gm");
+  await delay(); await delay();
+  assert.equal(refundPage.flags.gatherer.data.drawsUsed, 2, "Replaying a claimed ticket cannot refund again");
+  globalThis.fromUuid = previousResolver; game.user = previousUser; game.users = previousUsers;
 }
 
 assert.deepEqual(errors, [], "No hidden integration errors");
