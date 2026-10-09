@@ -182,6 +182,9 @@ export function itemMatchesTool(item, tool) {
   if (tool.uuid) {
     const sources = [item.uuid, item._stats?.compendiumSource, item._stats?.duplicateSource, item.flags?.core?.sourceId, item.flags?.[MODULE_ID]?.toolSource];
     if (sources.includes(tool.uuid)) return true;
+    const original = globalThis.fromUuidSync?.(tool.uuid);
+    const defaultType = original?.flags?.[MODULE_ID]?.defaultTool;
+    if (defaultType && item.flags?.[MODULE_ID]?.defaultTool === defaultType) return true;
   }
   const name = String(liveName(tool) ?? "").trim().toLowerCase();
   return Boolean(name) && String(item.name ?? "").trim().toLowerCase() === name;
@@ -286,6 +289,7 @@ export function applyNodeCheck(check, actor, node, profession = null) {
   } else if (node.checkType === "skill" && node.checkKey) {
     skill = node.checkKey;
     const data = actor?.system?.skills?.[skill];
+    ability = data?.ability ?? globalThis.CONFIG?.DND5E?.skills?.[skill]?.ability ?? ability;
     // dnd5e's prepared skill total already includes ability, proficiency, and expertise.
     modifier = Number(data?.total ?? data?.mod) || Number(actor?.system?.abilities?.[data?.ability]?.mod) || 0;
     checkLabel = skillLabel(skill);

@@ -91,7 +91,7 @@ export function buildRecipesModel(actor, { isGM = false, tab = "", onlyCraftable
 function chanceWord(chance) {
   if (chance === null) return "";
   const word = chance >= 85 ? "Sure" : chance >= 60 ? "Likely" : chance >= 35 ? "Even" : chance >= 15 ? "Risky" : "Long shot";
-  return `<span class="gp-rw-chance gp-chance-${word.toLowerCase().replace(" ", "-")}" title="Chance of a success or better">${chance}% · ${word}</span>`;
+  return `<span class="gp-rw-chance gp-chance-${word.toLowerCase().replace(" ", "-")}" title="Base estimate; dnd5e conditions, bonuses and advantage can change the actual odds">~${chance}% · ${word}</span>`;
 }
 
 function gmControls(row, model) {
@@ -117,7 +117,7 @@ function recipeRow(row, model, state) {
       <img src="${escape(input.img)}" alt=""><span>${input.need}× ${escape(input.name)}</span><small>${input.have}</small>${input.mode && input.mode !== "used" ? `<i class="fas ${input.mode === "risk" ? "fa-triangle-exclamation" : "fa-rotate"} gp-rw-mode" title="${escape(MODES[input.mode])}"></i>` : ""}</span>`).join(row.reasons ? "" : '<i class="fas fa-plus gp-rw-plus"></i>');
   const reasons = row.inputs.some(input => input.reason) ? `<ul class="gp-rw-reasons">${row.inputs.filter(input => input.reason).map(input => `<li><strong>${escape(input.name)}</strong> — ${escape(input.reason)}${input.mode && input.mode !== "used" ? ` <em>(${escape(MODES[input.mode])})</em>` : ""}</li>`).join("")}</ul>` : "";
   const batch = Math.min(Math.max(1, Number(state.batch?.[row.id]) || 1), Math.max(1, row.max));
-  const canCraft = model.actor && row.max > 0 && !row.blocked && !state.busy && !row.disabled;
+  const canCraft = model.actor && row.max > 0 && !row.blocked && !row.done && !state.busy && !row.disabled;
   const why = !model.actor ? "Choose a character" : row.blocked ? row.blocked : row.max > 0 ? `Up to ${row.max}` : "Not enough materials";
   return `<div class="gp-rw-recipe ${canCraft ? "craftable" : ""} ${row.disabled ? "gp-rw-off" : ""}">
       ${row.title || row.brief ? `<div class="gp-rw-titlebox">${row.title ? `<strong class="gp-rw-title">${escape(row.title)}</strong>` : ""}${row.done ? ' <span class="gp-rw-tag">Completed</span>' : ""}${row.brief ? `<p class="gp-rw-brief">${escape(row.brief)}</p>` : ""}</div>` : ""}

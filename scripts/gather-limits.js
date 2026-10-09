@@ -20,6 +20,8 @@ export function gatheringAllowance(actor) {
     if (exhaustion >= pending) pendingExhaustion.delete(actor);
     else exhaustion = pending;
   }
+  const sharedPending = actor?.getFlag?.(MODULE_ID, "gatherExhaustionPending");
+  if (sharedPending?.used === used && sharedPending.expires > Date.now()) exhaustion = Math.max(exhaustion, sharedPending.value);
   const configuredMax = Number(globalThis.CONFIG?.DND5E?.conditionTypes?.exhaustion?.levels);
   const maxExhaustion = Number.isInteger(configuredMax) && configuredMax > 0 ? configuredMax : 6;
   return { limit, used, remaining: limit ? Math.max(0, limit - used) : null, exhaustion, maxExhaustion };
@@ -59,7 +61,10 @@ export function reserveGatherAttempt(actor, { pageUuid = null, onReserved = null
           if (record.expires <= Date.now()) changes[`flags.${MODULE_ID}.gatherTickets.-=${id}`] = null;
         }
       }
-      if (exhausted) changes["system.attributes.exhaustion"] = exhaustion + 1;
+      if (exhausted) {
+        changes["system.attributes.exhaustion"] = exhaustion + 1;
+        changes[`flags.${MODULE_ID}.gatherExhaustionPending`] = { used: used + 1, value: exhaustion + 1, expires: Date.now() + 5000 };
+      }
       if (!await actor.update(changes)) throw new Error("Could not save the gathering attempt on this character.");
       if (exhausted) pendingExhaustion.set(actor, exhaustion + 1);
       onReserved?.(ticket);
@@ -72,5 +77,6 @@ export async function resetGatherAttempts(actor) {
   // A rest may occur while the exhaustion confirmation is open. The reservation
   // deliberately rereads this value after the prompt; do not wait on its lease.
   pendingExhaustion.delete(actor);
+  if (actor?.getFlag?.(MODULE_ID, "gatherExhaustionPending")) await actor.unsetFlag(MODULE_ID, "gatherExhaustionPending");
   if (actor?.getFlag?.(MODULE_ID, "gatherAttemptsUsed")) await actor.unsetFlag(MODULE_ID, "gatherAttemptsUsed");
 }

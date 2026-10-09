@@ -169,7 +169,7 @@ function chanceText(actor) {
   const range = actor.chanceMin === actor.chanceMax ? percent(actor.chanceMin) : `${percent(actor.chanceMin)}–${percent(actor.chanceMax)}`;
   const mid = (actor.chanceMin + actor.chanceMax) / 2;
   const word = mid >= 0.75 ? "Easy" : mid >= 0.5 ? "Fair" : mid >= 0.25 ? "Hard" : "Very hard";
-  return `<div class="gp-gw-chance gp-chance-${word.toLowerCase().replace(" ", "-")}"><span>${word}</span> ${range} chance of a full success</div>`;
+  return `<div class="gp-gw-chance gp-chance-${word.toLowerCase().replace(" ", "-")}" title="Base estimate; dnd5e conditions, bonuses and advantage can change the actual odds"><span>${word}</span> ~${range} base chance of a full success</div>`;
 }
 
 export function renderGatherWindow(model, state = {}) {

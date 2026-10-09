@@ -18,7 +18,7 @@ function enqueue(map, key, task) {
 }
 
 export async function handleActionRequest(actor, request, sender) {
-  if (!isAuthority() || !request?.id || !sender
+  if (!isAuthority() || typeof request?.id !== "string" || !/^[A-Za-z0-9]{1,64}$/.test(request.id) || !sender
     || !(sender.isGM || actor.testUserPermission?.(sender, "OWNER"))) return;
   return enqueue(authority, actor.uuid, async () => {
     const lease = actor.getFlag(MODULE_ID, "actionLease");
@@ -38,8 +38,8 @@ export function registerActionHooks() {
   if (registered) return;
   registered = true;
   Hooks.on("updateActor", (actor, changes, _options, userId) => {
-    const request = changes.flags?.[MODULE_ID]?.actionRequest;
-    if (request) void handleActionRequest(actor, request, game.users?.get?.(userId))
+    const request = changes.flags?.[MODULE_ID]?.actionRequest ?? changes[`flags.${MODULE_ID}.actionRequest`];
+    if (request) void handleActionRequest(actor, request, game.users?.get?.(userId) ?? Array.from(game.users ?? []).find(user => user.id === userId))
       .catch(error => console.error(`${MODULE_ID}: action lock failed`, error));
   });
 }
