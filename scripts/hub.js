@@ -98,6 +98,15 @@ function rareTile(entry, group) {
     </div>`;
 }
 
+const ROMAN = ["I", "II", "III", "IV", "V"];
+
+/** Header bar above a tier's tiles: numeral badge, label, and count. */
+function tierHeader(tier, count, noun) {
+  return `<div class="gp-mat-tier tier-${tier}"><span class="gp-tier-badge">${ROMAN[tier - 1] ?? tier}</span>
+      <span class="gp-tier-label">Tier ${tier}</span><span class="gp-tier-rule"></span>
+      <small>${count} ${noun}${count === 1 ? "" : "s"}</small></div>`;
+}
+
 function materialsSection(view) {
   const professions = Object.values(PROFESSIONS);
   const key = PROFESSIONS[view.materialsProf] ? view.materialsProf : professions[0]?.key;
@@ -106,10 +115,10 @@ function materialsSection(view) {
   const model = materialsModel(key);
   const count = model.gathering.reduce((sum, group) => sum + group.materials.length, 0);
   const rareCount = model.rare.reduce((sum, group) => sum + group.entries.length, 0);
-  const gathering = model.gathering.map(group => `<div class="gp-mat-row"><div class="gp-mat-tier">Tier ${group.tier}<small>${group.materials.length}</small></div>
+  const gathering = model.gathering.map(group => `<div class="gp-mat-row">${tierHeader(group.tier, group.materials.length, "material")}
       <div class="gp-mat-tiles">${group.materials.map(materialTile).join("")}
         <div class="gp-slot gp-mat-drop" data-drop="material" data-prof="${escape(key)}" data-tier="${group.tier}"><span class="gp-slot-empty"><i class="fas fa-hand-holding"></i> Drop an Item to add it at tier ${group.tier}</span></div></div></div>`).join("");
-  const rare = model.rare.map(group => `<div class="gp-mat-row"><div class="gp-mat-tier">Tier ${group.tier}<small>${group.entries.length}</small></div>
+  const rare = model.rare.map(group => `<div class="gp-mat-row">${tierHeader(group.tier, group.entries.length, "rare find")}
       <div class="gp-mat-rare">
         <div class="gp-mat-table">${group.tableUuid ? `<i class="fas fa-table-list"></i> <a data-act="rare-open" data-uuid="${escape(group.tableUuid)}">${escape(group.tableName)}</a>${group.fallback ? ' <span class="gp-pill gp-pill-gold" title="No table for this tier; the any-tier table is used">any-tier</span>' : ""}` : '<span class="gp-hub-muted">No table yet: dropping an Item creates one.</span>'}</div>
         <div class="gp-mat-tiles">${group.entries.map(entry => rareTile(entry, group)).join("")}
