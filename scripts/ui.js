@@ -349,7 +349,7 @@ export function registerSettingsMenu() {
   };
   const hub = section => launcher(() => import("./hub.js").then(module => module.openHub(section)));
   const menu = (key, name, label, hint, icon, type) => game.settings.registerMenu(MODULE_ID, key, { name, label, hint, icon, type, restricted: true });
-  menu("hub", "Gathering Professions", "Open GM Hub", "Every GM setting in one window: professions, skill tree, tools, rare finds, rules, and conditions.", "fas fa-hammer", hub("professions"));
+  menu("hub", "Profession GM Hub", "Open GM Hub", "Gathering and crafting profession settings in one window, grouped in the sidebar.", "fas fa-hammer", hub("professions"));
   menu("professions", "Professions & Skill Tree", "Professions", "Add or rename professions and set their check ability.", "fas fa-users-gear", hub("professions"));
   menu("tools", "Gathering Tools", "Tools", "Each profession's accepted tools. Every gather needs one; nodes can require their own.", "fas fa-screwdriver-wrench", hub("tools"));
   menu("rareTables", "Rare-Find Tables", "Rare Finds", "One rare-find table per profession and material tier.", "fas fa-gem", hub("rare"));

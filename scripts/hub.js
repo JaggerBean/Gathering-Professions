@@ -25,7 +25,7 @@ export const HUB_SECTIONS = Object.freeze([
 ]);
 
 // Sections added by other modules (e.g. Crafting Professions):
-// { id, label, icon, blurb, order?, render() -> html, onClick(event, { hub, root }) -> Promise }
+// { id, label, icon, blurb, group?, order?, render() -> html, onClick(event, { hub, root }) -> Promise }
 const EXTERNAL_SECTIONS = new Map();
 export function registerHubSection(section) {
   if (!section?.id || typeof section.render !== "function") throw new Error("A hub section needs an id and render().");
@@ -275,8 +275,16 @@ function rulesSection() {
 export function renderHub(view) {
   const sections = hubSections();
   const section = sections.find(entry => entry.id === view.section) ?? sections[0];
-  const nav = sections.map(entry => `<a class="gp-hub-nav-item ${entry.id === section.id ? "active" : ""}" data-act="section" data-section="${entry.id}">
-      <i class="fas ${entry.icon}"></i><span>${escape(entry.label)}</span></a>`).join("");
+  const navGroups = new Map([["Gathering Professions", HUB_SECTIONS]]);
+  for (const entry of sections.slice(HUB_SECTIONS.length)) {
+    const group = entry.group || "Additional Settings";
+    if (!navGroups.has(group)) navGroups.set(group, []);
+    navGroups.get(group).push(entry);
+  }
+  const nav = [...navGroups].map(([label, entries]) => `<div class="gp-hub-nav-group" role="group" aria-label="${escape(label)}">
+      <h2 class="gp-hub-nav-heading">${escape(label)}</h2>
+      ${entries.map(entry => `<a class="gp-hub-nav-item ${entry.id === section.id ? "active" : ""}" data-act="section" data-section="${escape(entry.id)}">
+        <i class="fas ${escape(entry.icon)}"></i><span>${escape(entry.label)}</span></a>`).join("")}</div>`).join("");
   const external = EXTERNAL_SECTIONS.get(section.id);
   const body = external ? "" : {
     professions: () => professionsSection(view), materials: () => materialsSection(view), tree: () => treeSection(), tools: () => toolsSection(view),
@@ -290,7 +298,7 @@ export function renderHub(view) {
     : external ? `<div class="gp-hub-external" data-section="${escape(section.id)}">${external.render()}</div>`
       : `<form class="gp-hub-form" autocomplete="off" data-section="${section.id}">${body}</form>`;
   return `<div class="gp-hub">
-    <nav class="gp-hub-nav"><div class="gp-hub-brand"><i class="fas fa-hammer"></i><span>Gathering<br>Professions</span></div>${nav}</nav>
+    <nav class="gp-hub-nav"><div class="gp-hub-brand"><i class="fas fa-hammer"></i><span>Profession<br>GM Hub</span></div>${nav}</nav>
     <section class="gp-hub-main">
       <header class="gp-hub-head"><div class="gp-hub-emblem"><i class="fas ${section.icon}"></i></div>
         <div><h1>${escape(section.label)}</h1><p>${escape(section.blurb)}</p></div></header>
@@ -353,7 +361,7 @@ function defineClass() {
       id: "gathering-professions-hub",
       classes: ["gathering-professions-ui", "gp-hub-window"],
       tag: "div",
-      window: { title: "Gathering Professions", icon: "fas fa-hammer", resizable: true },
+      window: { title: "Profession GM Hub", icon: "fas fa-hammer", resizable: true },
       position: { width: 1080, height: 760 }
     };
 
