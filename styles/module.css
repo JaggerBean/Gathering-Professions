@@ -498,3 +498,27 @@
 /* Hub: Nodes section hosts the Node Manager (two panes, full height). */
 .gp-hub-nodes { flex: 1 1 auto; min-height: 0; display: flex; border-top: 1px solid var(--gp-edge); background: rgba(0,0,0,.15); }
 .gp-hub-nodes > .gp-nm { flex: 1 1 auto; height: auto; min-height: 0; }
+
+/* ---- Pop-up dialogs (gpDialog): hub palette ---- */
+.application.gp-dialog { --gp-gold: #d9b45a; --gp-ink: #efe6d8; --gp-edge: rgba(217,180,90,.35); --gp-good: #6fbf7f; --gp-bad: #e07b74;
+  color: var(--gp-ink); border: 1px solid var(--gp-edge);
+  background: radial-gradient(120% 60% at 60% 0%, rgba(212,168,74,.16), transparent 70%), linear-gradient(180deg, #221c24, #17131a); }
+.application.gp-dialog .window-header { color: var(--gp-gold); border-bottom: 1px solid var(--gp-edge); background: rgba(0,0,0,.35); }
+.application.gp-dialog .window-content { color: var(--gp-ink); background: transparent; }
+.gp-dialog h2, .gp-dialog h3, .gp-dialog h4, .gp-dialog legend { color: var(--gp-gold); font-weight: 700; letter-spacing: .03em; }
+.gathering-professions-ui.gp-dialog h3 { border-bottom-color: var(--gp-edge); }
+.gp-dialog fieldset { border: 1px solid var(--gp-edge); border-radius: 6px; background: rgba(255,255,255,.03); }
+.gp-dialog .form-group > label { color: var(--gp-ink); opacity: .85; }
+.gp-dialog input:not([type="checkbox"]):not([type="radio"]):not([type="color"]), .gp-dialog select, .gp-dialog textarea {
+  color: var(--gp-ink); border: 1px solid rgba(255,255,255,.14); border-radius: 4px; background: rgba(0,0,0,.35); }
+.gp-dialog input:focus, .gp-dialog select:focus, .gp-dialog textarea:focus { border-color: var(--gp-gold); box-shadow: 0 0 0 1px rgba(217,180,90,.4); outline: none; }
+.gp-dialog select option { color: var(--gp-ink); background: #1d181f; }
+.gp-dialog input[type="checkbox"] { accent-color: var(--gp-gold); }
+.gp-dialog .hint, .gp-dialog .notes { color: var(--gp-ink); opacity: .65; }
+.gp-dialog table th { color: var(--gp-gold); border-bottom: 1px solid var(--gp-edge); text-align: left; }
+.gp-dialog table tr + tr td { border-top: 1px solid rgba(255,255,255,.06); }
+.gp-dialog a { color: var(--gp-gold); }
+.gp-dialog .form-footer button, .gp-dialog footer button { color: var(--gp-ink); border: 1px solid var(--gp-edge); border-radius: 6px; background: rgba(0,0,0,.3); }
+.gp-dialog .form-footer button:hover, .gp-dialog footer button:hover { border-color: var(--gp-gold); }
+.gp-dialog .form-footer button.default, .gp-dialog .form-footer button[autofocus], .gp-dialog footer button.default {
+  font-weight: 700; color: #1b1408; border-color: #f1d58d; background: linear-gradient(180deg, #f0d18a, #c99a3c); box-shadow: 0 0 12px rgba(217,180,90,.35); }

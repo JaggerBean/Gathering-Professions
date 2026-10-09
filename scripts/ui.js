@@ -88,7 +88,7 @@ export async function openMaterialEditor(item) {
     window: { title: `Material — ${item.name}` }, content: form,
     position: { width: 480 }, ok: { label: "Save material" },
     render: (_event, dialog) => {
-      dialog.element.querySelector("[data-open-rules]")?.addEventListener("click", () => openRulesEditor());
+      dialog.element.querySelector("[data-open-rules]")?.addEventListener("click", () => openRulesHub());
       attachTableDrops(dialog.element);
       bindRulesEditors(dialog.element);
     }
@@ -110,45 +110,8 @@ export async function openMaterialEditor(item) {
   } catch (error) { report(error); return false; }
 }
 
-export async function openRulesEditor() {
-  if (!game.user.isGM) return false;
-  const rules = activeRules();
-  const rows = Array.from({ length: 5 }, (_, index) => `<tr>
-    <th>${index + 1}</th>
-    <td>${number(rules.tierDc[index], `dc${index}`, 1, 100)}</td>
-    <td>${number(rules.tierUntrainedDc[index], `untrainedDc${index}`, 0)}</td>
-    <td>${number(rules.tierXp[index], `tierXp${index}`, 0)}</td>
-    <td>${index ? number(rules.rankXp[index], `rankXp${index}`, 1) : "Starts at 0 XP"}</td>
-    <td>${number(rules.rankDcReduction[index], `reduction${index}`, 0, 100)}</td>
-    <td>d${RANK_DIE[index]}</td>
-  </tr>`).join("");
-  const values = await Dialog().input({
-    window: { title: "Profession Rules" },
-    content: content(`<div class="form-group"><label for="gp-advancement-mode">Rank advancement</label>
-      <select id="gp-advancement-mode" name="advancementMode">
-        ${option("automatic", "Automatic when XP threshold is reached", rules.milestoneAdvancement ? "milestone" : "automatic")}
-        ${option("milestone", "GM awards ranks at milestones", rules.milestoneAdvancement ? "milestone" : "automatic")}
-      </select></div>
-      <div class="form-group"><label><input type="checkbox" name="masterfulRareFind" ${rules.masterfulRareFind ? "checked" : ""}> Masterful extraction always earns a rare find</label></div>
-      <div class="form-group"><label>Excellent extraction rare-find bonus %</label>${number(rules.excellentRareBonus, "excellentRareBonus", 0, 100)}</div>
-      <div class="form-group"><label>Default tool durability</label>${number(rules.toolDurability, "toolDurability", 0, 1000)}</div>
-      <div class="form-group"><label>Free gathering attempts per long rest</label>${number(rules.gatherAttemptsPerRest, "gatherAttemptsPerRest", 0, 100)}</div>
-      <p class="hint">Counts gathers from any profession or Gatherer page, including failed searches. After the limit, each confirmed attempt adds 1 exhaustion. 0 = unlimited. A long rest resets attempts; dnd5e handles exhaustion recovery.</p>
-      <p class="hint">A natural 1 on a gathering check made with a node's tool costs that tool 1 durability. At 0 the tool is broken until the GM repairs it (Tool Durability on the Item sheet). Tools without their own maximum use this number; 0 means tools never wear.</p>
-      <p class="hint">Rare finds: a natural 20 on the gathering check is always a Masterful extraction and always earns a rare find, one tier above the material. Each higher table then rolls a fresh d20: a 20 climbs again. Past tier 5 the GM reveals a story discovery. Trained gatherers also roll d100 against their rare chance (skills + node + this bonus on an Excellent extraction). Untrained gatherers find rares only on a Masterful extraction or a natural 20.</p>
-      <p class="hint">In milestone mode, XP keeps accumulating. The GM changes the selected profession's rank in the Professions menu. Current selected ranks are preserved when milestone mode is first enabled. Switching back to automatic recalculates selected ranks from XP.</p>
-      <p class="hint">Tier rows set the material DC and XP. Rank rows set the XP needed and the DC reduction.</p>
-      <p class="hint">Extra untrained DC adds to the material's full Base DC, plus any extra DC on that material. Trained checks ignore both extras. Untrained successes bank XP but grant no ranks or profession bonuses.</p>
-      <div class="gp-scroll"><table><thead><tr><th>Tier / Rank</th><th>Base DC</th><th>Extra untrained DC</th><th>XP reward</th><th>Rank starts at</th><th>DC reduction</th><th>Die</th></tr></thead><tbody>${rows}</tbody></table></div>`),
-    position: { width: 940 }, ok: { label: "Save rules" }
-  });
-  if (!values) return false;
-  try { return await saveRulesValues(values); }
-  catch (error) { report(error); return false; }
-}
-
 /**
- * Validate and save rule form values (rules dialog and GM hub). Throws a
+ * Validate and save rule form values (GM hub Rules tab). Throws a
  * readable Error. Field names: advancementMode, masterfulRareFind,
  * excellentRareBonus, toolDurability, gatherAttemptsPerRest, dc0–4, untrainedDc0–4, tierXp0–4,
  * rankXp1–4, reduction0–4.
@@ -230,7 +193,7 @@ export async function openProgressEditor(actor) {
     window: { title: `${actor.name} — Professions` }, content: html,
     position: { width: 680 }, ok: { label: canEdit ? "Save profession & progress" : "Choose profession" },
     render: (_event, dialog) => dialog.element.querySelector("[data-open-rules]")
-      ?.addEventListener("click", () => openRulesEditor())
+      ?.addEventListener("click", () => openRulesHub())
   });
   if (!values) return false;
   try {
@@ -347,6 +310,10 @@ export function registerSceneControls() {
 }
 
 /** Profession materials now live in the GM hub (Materials section). */
+function openRulesHub() {
+  void import("./hub.js").then(module => module.openHub("rules")).catch(report);
+}
+
 export function openMaterialManager(profession = null) {
   if (!game.user.isGM) return;
   void import("./hub.js").then(module => module.openHub("materials", typeof profession === "string" ? { profession } : {})).catch(report);
@@ -478,73 +445,6 @@ export function registerUIHooks() {
     directory.addEventListener("activate", attach);
   }
 }
-
-export async function openProfessionsEditor() {
-  if (!game.user.isGM) return false;
-  const current = Object.values(PROFESSIONS);
-  const abilityOptions = selected => Object.entries(ABILITY_LABELS).map(([key, label]) => option(key, label, selected)).join("");
-  const rows = [...current, { key: "", label: "", ability: "str", rareTable: "" }, { key: "", label: "", ability: "str", rareTable: "" }]
-    .map((profession, index) => `<tr>
-      <td><input name="label${index}" type="text" value="${escape(profession.label)}" placeholder="${profession.key ? "" : "New profession"}" aria-label="Profession name"></td>
-      <td>${profession.key ? `<code>${escape(profession.key)}</code><input name="key${index}" type="hidden" value="${escape(profession.key)}">` : `<input name="key${index}" type="text" value="" placeholder="auto" aria-label="Profession key">`}</td>
-      <td><select name="ability${index}" aria-label="Ability">${abilityOptions(profession.ability)}</select></td>
-      <td>${tableInput(`rareTable${index}`, profession.rareTable)}</td>
-      <td>${profession.key ? `<input name="remove${index}" type="checkbox" aria-label="Remove ${escape(profession.label)}">` : ""}</td>
-    </tr>`).join("");
-  const config = skillTreeConfig();
-  const trees = availableSkillTrees();
-  const treeActive = Boolean(game.modules.get(SKILL_TREE_ID)?.active);
-  const treeOptions = [option("", "No Skill Tree link", config.uuid),
-    ...trees.map(tree => option(tree.uuid, tree.name, config.uuid))].join("");
-  const firstKey = current[0]?.key ?? "mining";
-  const values = await Dialog().input({
-    window: { title: "Professions & Skill Tree" },
-    content: content(`<input type="hidden" name="rowCount" value="${current.length + 2}">
-      <p class="hint">Fill a blank row to add a profession. A blank key is made from the name. Keys cannot change after saving, because characters store XP under them.</p>
-      <p class="hint">Removing a profession keeps every character's XP. Its materials fall back to Gatherer's normal awards, and characters who chose it show no profession until the GM picks one.</p>
-      <div class="gp-scroll"><table><thead><tr><th>Name</th><th>Key</th><th>Ability</th><th>Any-tier rare table</th><th>Remove</th></tr></thead><tbody>${rows}</tbody></table></div>
-      <p class="hint">Per-tier rare tables are set in <strong>Rare-Find Tables</strong>. The any-tier table is used for tiers without their own table.</p>
-      <h3>Skill Tree</h3>
-      ${treeActive ? "" : '<p class="hint"><strong>The Skill Tree module is not active.</strong> Settings save, but no points are granted until it is enabled.</p>'}
-      <div class="form-group"><label>Shared tree</label><select name="treeUuid">${treeOptions}</select></div>
-      <div class="form-group"><label>Points per rank-up</label>${number(config.pointsPerRank, "pointsPerRank", 0, 100)}</div>
-      <div class="form-group"><label>Points at Rank 1</label>${number(config.startingPoints, "startingPoints", 0, 100)}</div>
-      <p class="hint">Characters gain points when their selected profession reaches a new rank. Saving with a tree linked grants any points characters are owed right away. Lowering a rank never removes points.</p>
-      <div class="form-group"><label><input type="checkbox" name="buildUniversal"> Build the universal gathering tree and link it</label></div>
-      <p class="hint">Creates 30 skill Items (folder "Gathering Skill Tree") and a Skill Tree journal of the same name: one web for every profession, six themes, five tiers, capstones that exclude each other. Suggested points: 2 at Rank 1 and 2 per rank-up (10 in total). Skills need points and linked prior skills, with no profession rank requirement.</p>
-      <p class="hint">Skill Tree requirement keys: <code>flags.${MODULE_ID}.professionRank</code> (rank in the selected profession, 0–5), <code>flags.${MODULE_ID}.effectiveRank.${escape(firstKey)}</code> (rank 0–5), and <code>flags.${MODULE_ID}.selectedProfession</code> (profession key).</p>`),
-    position: { width: 900 }, ok: { label: "Save professions" },
-    render: (_event, dialog) => attachTableDrops(dialog.element)
-  });
-  if (!values) return false;
-  try {
-    const api = game.modules.get(MODULE_ID).api;
-    const list = [];
-    const count = Number(values.rowCount) || 0;
-    for (let index = 0; index < count; index++) {
-      const label = String(values[`label${index}`] ?? "").trim();
-      const key = String(values[`key${index}`] ?? "").trim();
-      if (values[`remove${index}`] === true) continue;
-      if (!label && !key) continue;
-      list.push({ key, label, ability: values[`ability${index}`], rareTable: String(values[`rareTable${index}`] ?? ""),
-        rareTables: [...(PROFESSIONS[key]?.rareTables ?? [])] });
-    }
-    await api.setProfessions(list);
-    let treeUuid = values.treeUuid;
-    if (values.buildUniversal === true) {
-      const [itemFolder, journalFolder] = await Folder.implementation.create(["Item", "JournalEntry"].map(type => ({ name: "Gathering Skill Tree", type })));
-      const built = await api.skillTree.build({ link: false, itemFolder: itemFolder.id, journalFolder: journalFolder.id });
-      treeUuid = built.tree.uuid;
-      ui.notifications.info(`Built ${built.tree.name} (${built.items.length} skills).`);
-    }
-    const tree = await api.setSkillTreeConfig({ uuid: treeUuid, pointsPerRank: Number(values.pointsPerRank), startingPoints: Number(values.startingPoints) });
-    const granted = tree.uuid && skillTreeApi() ? await api.syncAllActors() : 0;
-    ui.notifications.info(`Professions saved.${granted ? ` Granted ${granted} owed Skill Tree point${granted === 1 ? "" : "s"}.` : ""}`);
-    return true;
-  } catch (error) { report(error); return false; }
-}
-
-
 
 /** GM: a tool's durability and maximum; also repairs a broken tool. */
 export async function openDurabilityEditor(item) {

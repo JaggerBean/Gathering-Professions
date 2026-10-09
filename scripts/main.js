@@ -1,5 +1,5 @@
 import { MODULE_ID, PROFESSIONS, ABILITY_LABELS, DEFAULT_PROFESSIONS, RANK_XP, RANK_DC_REDUCTION, TIER_DC, TIER_XP, TIER_UNTRAINED_DC, GATHER_ATTEMPTS_PER_REST, MINING_MATERIALS, activeRules, rankForXp, rankForActor, selectedProfession, materialRule, checkFormula, getProfessions, normalizeProfessions, professionFlag } from "./rules.js";
-import { openMaterialManager, openMaterialEditor, openRulesEditor, openProgressEditor, openProfessionMenu, openProfessionsEditor, openPerkEditor, registerSceneControls, registerUIHooks, registerSettingsMenu } from "./ui.js";
+import { openMaterialManager, openMaterialEditor, openProgressEditor, openProfessionMenu, openPerkEditor, registerSceneControls, registerUIHooks, registerSettingsMenu } from "./ui.js";
 import { ensureWorldContent } from "./worldcontent.js";
 import { availablePresets, applyMaterialPreset } from "./presets.js";
 import { DEFAULT_TOOLS, buildDefaultTools } from "./gatheringtools.js";
@@ -756,7 +756,7 @@ Hooks.once("ready", async () => {
       /** Pending climbs on a character: {id: state}. */
       pending: actor => Object.fromEntries(Object.entries(actor?.getFlag?.(MODULE_ID, CLIMB_FLAG) ?? {}).filter(([, state]) => state?.pending))
     },
-    openProfessionsEditor,
+    openProfessionsEditor: () => import("./hub.js").then(module => module.openHub("professions")),
     openPerkEditor,
     gather: {
       /** Choose options for this client's next gather by the actor: { masterful: true }. */
@@ -855,7 +855,7 @@ Hooks.once("ready", async () => {
     gatheringXp,
     openMaterialManager,
     openMaterialEditor,
-    openRulesEditor,
+    openRulesEditor: () => import("./hub.js").then(module => module.openHub("rules")),
     openProgressEditor,
     openProfessionMenu,
     async selectProfession(actor, profession) {
