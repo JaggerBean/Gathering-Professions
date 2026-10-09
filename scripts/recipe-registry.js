@@ -25,7 +25,10 @@ const providers = new Map();
 
 export function registerRecipeProvider(provider) {
   if (!provider?.key || typeof provider.recipes !== "function") throw new Error("A recipe provider needs a key and recipes().");
-  providers.set(provider.key, { order: 100, learnOptions: [["learned", "Learned"], ["unlearned", "Unlearned"]], ...provider });
+  // Keep the provider object itself so its getters (e.g. a mode that the GM can switch) stay live.
+  provider.order ??= 100;
+  provider.learnOptions ??= [["learned", "Learned"], ["unlearned", "Unlearned"]];
+  providers.set(provider.key, provider);
   Hooks.callAll("gatheringProfessions.recipeProviders", recipeProviders());
   return providers.get(provider.key);
 }
