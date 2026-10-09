@@ -1137,8 +1137,21 @@ assert.equal(await nodeSheet(undefined)._onGather(true, null, makeActor()), "gat
   assert.deepEqual(Object.keys(api.rareFinds.pending(lucky)), [climbId]);
   assert.equal(lucky.inventory.find(entry => entry.name === "Stone").system.quantity, 5, "Maximized 4 + Masterful 1");
   // A Fortune die of 6 stays at tier 2 and draws.
+  const savedHTMLElement = globalThis.HTMLElement;
+  const savedResolver = globalThis.fromUuidSync;
+  globalThis.HTMLElement = class {};
+  globalThis.fromUuidSync = uuid => uuid === lucky.uuid ? lucky : savedResolver?.(uuid);
+  let clickFortune;
+  const fortuneButton = { dataset: { gpActor: lucky.uuid, gpClimb: climbId }, addEventListener(_event, callback) { clickFortune = callback; } };
+  hooks.get("renderChatMessageHTML")({}, [{ querySelectorAll: () => [fortuneButton] }]);
+  assert.equal(fortuneButton.disabled, false, "The actual chat handler resolves the current gp datasets");
   rolls.push({ formula: "1d20", total: 6 });
-  const settled = await api.rareFinds.climb(lucky, climbId);
+  clickFortune({ preventDefault() {} });
+  while (api.rareFinds.pending(lucky)[climbId]) await delay();
+  await delay(); await delay();
+  const settled = { tier: 2, pending: false };
+  globalThis.HTMLElement = savedHTMLElement;
+  globalThis.fromUuidSync = savedResolver;
   assert.deepEqual([settled.tier, settled.pending], [2, false]);
   assert.equal(lucky.inventory.find(entry => entry.name === "Tier Two Gem").system.quantity, 1);
   assert.match(posted.at(-1).flavor, /Rare Find!<\/strong> · Tier 2 \(Mining Rare Finds — Tier 2\)/);
