@@ -162,11 +162,39 @@ function recipeFlags(book, profession, entry, inputs, output) {
   };
 }
 
+const folderParent = folder => folder?.folder?.id ?? folder?.folder ?? null;
+
+/**
+ * Mastercrafted's recipe browser shows one root folder: its "main folder" setting,
+ * else the single top folder all recipe books share. Use that root (or create
+ * a flagged "Mastercrafted" folder) so module books never split the browser.
+ */
+export async function mastercraftedRoot() {
+  const journalFolders = Array.from(game.folders ?? []).filter(folder => folder.type === "JournalEntry");
+  let named = "";
+  try { named = game.settings.get(MASTERCRAFTED_ID, "mainFolderName") || ""; } catch { named = ""; }
+  const byName = named && journalFolders.find(folder => folder.name === named);
+  if (byName) return byName;
+  const flagged = journalFolders.find(folder => folder.flags?.mastercrafted?.mainMastercraftedFolder);
+  if (flagged) return flagged;
+  const top = folder => { let current = folder; while (folderParent(current)) current = journalFolders.find(f => f.id === folderParent(current)) ?? null; return current; };
+  const roots = new Set(Array.from(game.journal ?? []).filter(journal => Array.from(journal.pages ?? []).some(page => page.type === RECIPE_TYPE))
+    .map(journal => top(journalFolders.find(folder => folder.id === (journal.folder?.id ?? journal.folder)))));
+  if (roots.size === 1 && [...roots][0]) return [...roots][0];
+  return Folder.implementation.create({ name: "Mastercrafted", type: "JournalEntry", sorting: "a", flags: { mastercrafted: { mainMastercraftedFolder: true } } });
+}
+
+/** The "Refining" folder inside Mastercrafted's root folder. */
+async function refiningFolder() {
+  const root = await mastercraftedRoot();
+  const found = Array.from(game.folders ?? []).find(folder => folder.type === "JournalEntry" && folder.name === "Refining" && folderParent(folder) === root.id);
+  return found ?? Folder.implementation.create({ name: "Refining", type: "JournalEntry", folder: root.id });
+}
+
 async function refiningJournal(profession, entry) {
   const existing = Array.from(game.journal ?? []).find(journal => journal.getFlag?.(MODULE_ID, "refiningBook") === profession);
   if (existing) return existing;
-  let folder = Array.from(game.folders ?? []).find(f => f.type === "JournalEntry" && f.name === "Refining" && !(f.folder?.id ?? f.folder));
-  folder ??= await Folder.implementation.create({ name: "Refining", type: "JournalEntry" });
+  const folder = await refiningFolder();
   return JournalEntry.implementation.create({
     name: entry.book, folder: folder.id,
     // Observers: players can see and use the book; Mastercrafted treats an unset user as allowed.
