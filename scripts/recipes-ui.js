@@ -1,11 +1,11 @@
 // Player-facing Recipes window: refining recipes the party has discovered,
 // grouped by product under one tab per profession, with have/need counts,
 // success chance, batch crafting, and the character's timed jobs.
-import { MODULE_ID, PROFESSIONS } from "./rules.js";
+import { MODULE_ID, PROFESSIONS, materialRule } from "./rules.js";
 import { successChance, formatDuration } from "./gather-ui.js";
 import { gpDialog } from "./dialogs.js";
 import {
-  REFINE_MINUTES, refiningProfessions, refiningRecipes, discoveredNames, isKnown, learnedStates, findRecipe, inventoryCount, maxBatch,
+  REFINE_MINUTES, refiningProfessions, refiningRecipes, allRecipes, discoveredNames, isKnown, learnedStates, findRecipe, inventoryCount, maxBatch,
   refineCheckFor, actorJobs, deliverDueJobs, formatMinutes, productItem
 } from "./refining.js";
 
@@ -91,7 +91,7 @@ function recipeRow(row, model, state) {
         <select data-learn="${escape(row.id)}" title="Auto: learned once the party has had every ingredient">${learnOption("auto", "Auto")}${learnOption("learned", "Learned")}${learnOption("unlearned", "Unlearned")}</select>
         <button type="button" data-act="edit-recipe" data-recipe="${escape(row.id)}" title="Edit recipe"><i class="fas fa-pen"></i></button>
         ${row.custom ? `<button type="button" data-act="delete-recipe" data-recipe="${escape(row.id)}" title="Delete your recipe"><i class="fas fa-trash"></i></button>`
-          : `<button type="button" data-act="toggle-recipe" data-recipe="${escape(row.id)}" title="${row.disabled ? "Enable" : "Disable for everyone"}"><i class="fas ${row.disabled ? "fa-toggle-off" : "fa-toggle-on"}"></i></button>
+          : `<button type="button" class="${row.disabled ? "gp-rw-enable" : ""}" data-act="toggle-recipe" data-recipe="${escape(row.id)}" title="${row.disabled ? "Enable this recipe again" : "Disable for everyone"}"><i class="fas ${row.disabled ? "fa-toggle-off" : "fa-toggle-on"}"></i>${row.disabled ? " Enable" : ""}</button>
              ${row.edited ? `<button type="button" data-act="reset-recipe" data-recipe="${escape(row.id)}" title="Reset to the module's default"><i class="fas fa-rotate-left"></i></button>` : ""}`}
         ${row.custom ? '<span class="gp-rw-tag">Yours</span>' : row.disabled ? '<span class="gp-rw-tag off">Disabled</span>' : row.edited ? '<span class="gp-rw-tag">Edited</span>' : ""}
       </div>` : "";
@@ -123,7 +123,7 @@ export function renderRecipesWindow(model, state = {}) {
       <header><img src="${escape(group.img)}" alt=""><strong>${escape(group.name)}</strong>
         ${group.recipes.length > 1 ? `<small>${group.recipes.length} recipes</small>` : ""}
         ${group.hidden ? `<em class="gp-rw-more" title="Gather new materials to discover more ways to make this"><i class="fas fa-question"></i> ${group.hidden} more undiscovered</em>` : ""}</header>
-      ${group.recipes.map(row => recipeRow(row, model, state)).join("")}
+      ${group.recipes.map(row => recipeRow(row, model, state) + (state.editing?.id === row.id ? renderEditor(state.editing, state.editorItems) : "")).join("")}
     </section>`).join("");
   const empty = state.onlyCraftable ? "Nothing you can make right now." : "No recipes discovered yet. Gather materials to discover what they refine into.";
   const jobs = model.jobs.length ? `<section class="gp-rw-jobs"><h4><i class="fas fa-hourglass-half"></i> In progress</h4>
@@ -141,7 +141,7 @@ export function renderRecipesWindow(model, state = {}) {
     <nav class="gp-rw-tabs">${tabs || '<span class="gp-rw-noactor">No refining available (needs the professions and their source modules).</span>'}</nav>
     ${jobs}
     ${model.isGM && model.active ? `<div class="gp-rw-gmbar"><button type="button" data-act="new-recipe"><i class="fas fa-plus"></i> New ${escape(model.verb.toLowerCase())} recipe</button><span>Eye: whether players see it. Auto = learned once the party has had every ingredient.</span></div>` : ""}
-    <div class="gp-rw-list">${cards || `<p class="gp-rw-empty">${empty}</p>`}</div>
+    <div class="gp-rw-list">${state.editing && !state.editing.id ? `<section class="gp-rw-card">${renderEditor(state.editing, state.editorItems)}</section>` : ""}${cards || `<p class="gp-rw-empty">${empty}</p>`}</div>
   </div>`;
 }
 
@@ -165,51 +165,80 @@ function defaultActor() {
 const api = () => game.modules.get(MODULE_ID).api.refining;
 const MAX_INPUTS = 6;
 
-/** Editor form for a new (id null) or existing recipe. Pure; unit tested. */
-export function recipeEditorHtml(row, professions) {
-  const inputs = Array.from({ length: MAX_INPUTS }, (_, index) => row?.inputs?.[index] ?? ["", 1]);
-  const field = (name, value, placeholder) => `<input type="text" name="${name}" value="${escape(value)}" placeholder="${placeholder}" class="gp-rw-drop" title="Type an Item name or drag one from the Items sidebar">`;
-  return `<div class="gp-rw-editor">
-    <div class="form-group"><label>Tab</label><select name="profession" ${row?.id ? "disabled" : ""}>${professions.map(entry =>
-      `<option value="${escape(entry.key)}" ${entry.key === row?.profession ? "selected" : ""}>${escape(entry.verb)} (${escape(entry.label)})</option>`).join("")}</select></div>
-    <div class="form-group"><label>Tier</label><select name="tier">${[1, 2, 3, 4, 5].map(tier => `<option value="${tier}" ${tier === (row?.tier ?? 1) ? "selected" : ""}>Tier ${tier}</option>`).join("")}</select></div>
-    <div class="form-group"><label>Product</label>${field("output", row?.output ?? "", "Drag the product Item here")}<input type="number" name="quantity" min="1" max="99" value="${row?.quantity ?? 1}" aria-label="Quantity made"></div>
-    <fieldset><legend>Ingredients</legend>
-      ${inputs.map(([name, quantity], index) => `<div class="form-group"><label>${index + 1}.</label>${field(`input${index}`, name, index ? "Optional" : "Drag an ingredient here")}<input type="number" name="qty${index}" min="1" max="99" value="${quantity}" aria-label="Quantity needed"></div>`).join("")}
-    </fieldset>
-    <p class="hint">Products and ingredients are world Items, matched by name. The product is shared with players (Observer) so they can make it. The check rolls the tab's gathering profession at this tier.</p>
+/** Editor state for a recipe (row) or a new one on a profession's tab. */
+export function editorDraft(row, profession) {
+  return { id: row?.id ?? null, profession: row?.profession ?? profession, tier: row?.tier ?? 1, output: row?.output ?? "", quantity: row?.quantity ?? 1,
+    inputs: (row?.inputs?.length ? row.inputs : [["", 1]]).map(([name, quantity]) => [name, quantity]), picker: null, search: "" };
+}
+
+const OTHER_LIMIT = 60;
+
+/**
+ * Items to pick from, grouped: the profession's materials, refined goods,
+ * then every other world Item (first matches only until the GM searches).
+ */
+export function itemOptions(profession, search = "") {
+  const query = search.trim().toLowerCase();
+  const items = Array.from(game.items ?? []).filter(item => item?.name).sort((a, b) => a.name.localeCompare(b.name));
+  const match = item => !query || item.name.toLowerCase().includes(query);
+  const refined = new Set(allRecipes({ includeDisabled: true }).map(row => row.output));
+  const seen = new Set();
+  const take = list => list.filter(item => match(item) && !seen.has(item.name) && seen.add(item.name)).map(item => ({ name: item.name, img: item.img || FALLBACK_ICON }));
+  const label = PROFESSIONS[profession]?.label ?? "Profession";
+  const groups = [
+    { label: `${label} materials`, items: take(items.filter(item => materialRule(item)?.profession === profession)) },
+    { label: "Refined goods", items: take(items.filter(item => refined.has(item.name))) },
+    { label: "Other items", items: take(items) }
+  ];
+  const other = groups[2];
+  other.more = Math.max(0, other.items.length - OTHER_LIMIT);
+  other.items = other.items.slice(0, OTHER_LIMIT);
+  return groups.filter(group => group.items.length || group.more);
+}
+
+function slotButton(slot, name, picking) {
+  return `<button type="button" class="gp-rw-slot ${name ? "" : "empty"} ${picking ? "open" : ""}" data-act="pick" data-slot="${slot}" data-drop-slot="${slot}"
+      title="Click to choose, or drag an Item from the Items sidebar here">${name ? `<img src="${escape(imgFor(name))}" alt=""><span>${escape(name)}</span>` : '<i class="fas fa-plus"></i><span>Choose an item</span>'}<i class="fas fa-caret-down gp-rw-caret"></i></button>`;
+}
+
+function pickerPanel(draft, groups) {
+  return `<div class="gp-rw-picker">
+      <input type="search" class="gp-rw-picksearch" data-draft="search" value="${escape(draft.search)}" placeholder="Search items" data-focus-key="picker">
+      ${groups.map(group => `<div class="gp-rw-pickgroup"><h5>${escape(group.label)}</h5><div class="gp-rw-picktiles">
+        ${group.items.map(item => `<button type="button" class="gp-rw-picktile" data-act="choose" data-name="${escape(item.name)}" title="${escape(item.name)}"><img src="${escape(item.img)}" alt=""><span>${escape(item.name)}</span></button>`).join("")}
+        ${group.more ? `<em class="gp-rw-pickmore">+${group.more} more: type to search</em>` : ""}</div></div>`).join("") || '<p class="gp-rw-empty">No items match.</p>'}
+    </div>`;
+}
+
+/** Inline editor shown under a recipe (or at the top for a new one). Pure; unit tested. */
+export function renderEditor(draft, groups = []) {
+  const picker = slot => (draft.picker === slot ? pickerPanel(draft, groups) : "");
+  const rows = draft.inputs.map(([name, quantity], index) => `<div class="gp-rw-editrow">
+      ${slotButton(String(index), name, draft.picker === String(index))}
+      <input type="number" min="1" max="99" value="${quantity}" data-draft="qty" data-index="${index}" aria-label="Quantity needed">
+      <button type="button" class="gp-rw-iconbtn" data-act="remove-input" data-index="${index}" title="Remove ingredient" ${draft.inputs.length > 1 ? "" : "disabled"}><i class="fas fa-xmark"></i></button>
+    </div>${picker(String(index))}`).join("");
+  return `<div class="gp-rw-edit">
+    <div class="gp-rw-edithead"><strong>${draft.id ? "Edit recipe" : "New recipe"}</strong>
+      <label>Tier <select data-draft="tier">${[1, 2, 3, 4, 5].map(tier => `<option value="${tier}" ${tier === Number(draft.tier) ? "selected" : ""}>${tier}</option>`).join("")}</select></label></div>
+    <div class="gp-rw-editlabel">Makes</div>
+    <div class="gp-rw-editrow">${slotButton("output", draft.output, draft.picker === "output")}
+      <input type="number" min="1" max="99" value="${draft.quantity}" data-draft="quantity" aria-label="Quantity made"></div>
+    ${picker("output")}
+    <div class="gp-rw-editlabel">From</div>
+    ${rows}
+    ${draft.inputs.length < MAX_INPUTS ? '<button type="button" class="gp-rw-addinput" data-act="add-input"><i class="fas fa-plus"></i> Add ingredient</button>' : ""}
+    <div class="gp-rw-editactions">
+      <button type="button" class="gp-rw-craft" data-act="save-edit"><i class="fas fa-check"></i> ${draft.id ? "Save" : "Create"}</button>
+      <button type="button" data-act="cancel-edit">Cancel</button>
+    </div>
   </div>`;
 }
 
-function bindItemDrops(root) {
-  for (const input of root.querySelectorAll(".gp-rw-drop")) {
-    input.addEventListener("dragover", event => event.preventDefault());
-    input.addEventListener("drop", event => {
-      event.preventDefault();
-      let data = null;
-      try { data = JSON.parse(event.dataTransfer.getData("text/plain")); } catch { data = null; }
-      const item = data?.type === "Item" && data.uuid ? fromUuidSync(data.uuid) : null;
-      if (item?.name) input.value = item.name;
-      else ui.notifications.warn("Drop an Item from the Items sidebar.");
-    });
-  }
-}
-
-/** GM: open the editor; saves through the API. */
-export async function editRecipe(id = null, tab = "") {
-  if (!game.user.isGM) return null;
-  const row = id ? findRecipe(id, { includeDisabled: true }) : { profession: tab || refiningProfessions()[0]?.key, tier: 1, quantity: 1, inputs: [] };
-  if (id && !row) throw new Error("That recipe no longer exists.");
-  const values = await gpDialog().input({
-    window: { title: id ? `Edit recipe: ${row.output}` : "New recipe" },
-    content: recipeEditorHtml({ ...row, id }, refiningProfessions()),
-    position: { width: 520 }, ok: { label: id ? "Save recipe" : "Create recipe" },
-    render: (_event, dialog) => bindItemDrops(dialog.element)
-  });
-  if (!values) return null;
-  const fields = { profession: id ? row.profession : values.profession, tier: Number(values.tier), output: values.output, quantity: Number(values.quantity),
-    inputs: Array.from({ length: MAX_INPUTS }, (_, index) => [values[`input${index}`], Number(values[`qty${index}`])]).filter(([name]) => String(name ?? "").trim()) };
-  return id ? api().update(id, fields) : api().create(fields);
+/** The draft as recipe fields for the API. */
+export function draftFields(draft) {
+  return { profession: draft.profession, tier: Number(draft.tier), output: draft.output, quantity: Number(draft.quantity),
+    inputs: draft.inputs.filter(([name]) => String(name ?? "").trim()).map(([name, quantity]) => [name, Number(quantity)]) };
 }
 
 let RecipesClass = null;
@@ -226,7 +255,7 @@ function defineClass() {
       position: { width: 640, height: 720 }
     };
 
-    view = { actorId: defaultActor()?.id ?? null, tab: "", onlyCraftable: false, search: "", batch: {}, busy: false };
+    view = { actorId: defaultActor()?.id ?? null, tab: "", onlyCraftable: false, search: "", batch: {}, busy: false, editing: null };
     #hooks = [];
     #timer = null;
 
@@ -240,17 +269,21 @@ function defineClass() {
     async _renderHTML() {
       const model = buildRecipesModel(this.actor, { isGM: game.user.isGM, tab: this.view.tab, onlyCraftable: this.view.onlyCraftable, search: this.view.search });
       this.view.tab = model.active;
-      return renderRecipesWindow(model, { ...this.view, characters: ownedCharacters(), canCollect: Boolean(this.actor) && !game.users?.activeGM });
+      const editing = game.user.isGM ? this.view.editing : null;
+      const editorItems = editing?.picker ? itemOptions(editing.profession, editing.search) : [];
+      return renderRecipesWindow(model, { ...this.view, editing, editorItems, characters: ownedCharacters(), canCollect: Boolean(this.actor) && !game.users?.activeGM });
     }
 
     _replaceHTML(result, content) {
-      const focused = document.activeElement?.matches?.(".gp-rw-search") ? document.activeElement.selectionStart : null;
+      const active = document.activeElement;
+      const key = active?.matches?.(".gp-rw-search") ? "search" : active?.dataset?.focusKey ?? null;
+      const caret = key ? active.selectionStart : null;
+      const scroll = content.querySelector(".gp-rw-list")?.scrollTop ?? 0;
       content.innerHTML = result;
-      if (focused !== null) {
-        const search = content.querySelector(".gp-rw-search");
-        search?.focus();
-        search?.setSelectionRange(focused, focused);
-      }
+      const list = content.querySelector(".gp-rw-list");
+      if (list) list.scrollTop = scroll;
+      const target = key === "search" ? content.querySelector(".gp-rw-search") : key ? content.querySelector(`[data-focus-key="${key}"]`) : null;
+      if (target) { target.focus(); target.setSelectionRange?.(caret, caret); }
     }
 
     #refresh() {
@@ -265,7 +298,19 @@ function defineClass() {
         if (button && !button.disabled) void this.#onAction(button).catch(error => { this.view.busy = false; report(error); this.#refresh(); });
       });
       this.element.addEventListener("change", event => this.#onChange(event.target));
-      this.element.addEventListener("input", event => { if (event.target.matches?.(".gp-rw-search")) this.#onChange(event.target); });
+      this.element.addEventListener("input", event => { if (event.target.matches?.(".gp-rw-search, .gp-rw-picksearch")) this.#onChange(event.target); });
+      // Drag an Item from the sidebar onto a product or ingredient slot.
+      this.element.addEventListener("dragover", event => { if (event.target.closest?.("[data-drop-slot]")) event.preventDefault(); });
+      this.element.addEventListener("drop", event => {
+        const slot = event.target.closest?.("[data-drop-slot]");
+        if (!slot || !this.view.editing) return;
+        event.preventDefault();
+        let data = null;
+        try { data = JSON.parse(event.dataTransfer.getData("text/plain")); } catch { data = null; }
+        const item = data?.type === "Item" && data.uuid ? fromUuidSync(data.uuid) : null;
+        if (!item?.name) return ui.notifications.warn("Drop an Item from the Items sidebar.");
+        this.#choose(slot.dataset.dropSlot, item.name);
+      });
       const mine = document => [document?.parent?.id, document?.id].includes(this.view.actorId);
       for (const hook of ["createItem", "updateItem", "deleteItem"]) this.#hooks.push([hook, Hooks.on(hook, item => { if (mine(item)) this.#refresh(); })]);
       this.#hooks.push(["updateActor", Hooks.on("updateActor", actor => { if (actor.id === this.view.actorId) this.#refresh(); })]);
@@ -281,7 +326,25 @@ function defineClass() {
       instance = null;
     }
 
+    #choose(slot, name) {
+      const draft = this.view.editing;
+      if (slot === "output") draft.output = name;
+      else if (draft.inputs[Number(slot)]) draft.inputs[Number(slot)][0] = name;
+      draft.picker = null;
+      draft.search = "";
+      return this.render();
+    }
+
     #onChange(target) {
+      const draft = this.view.editing;
+      const field = target.dataset?.draft;
+      if (draft && field) {
+        if (field === "tier") draft.tier = Number(target.value);
+        if (field === "quantity") draft.quantity = Number(target.value);
+        if (field === "qty") draft.inputs[Number(target.dataset.index)][1] = Number(target.value);
+        if (field === "search") { draft.search = target.value; return this.#refresh(); }
+        return;
+      }
       const act = target.dataset?.actChange;
       if (target.dataset?.batch) { this.view.batch[target.dataset.batch] = Number(target.value) || 1; return; }
       if (target.dataset?.learn) { void api().setLearned(target.dataset.learn, target.value).catch(report); return; }
@@ -292,10 +355,29 @@ function defineClass() {
 
     async #onAction(button) {
       const act = button.dataset.act;
-      if (act === "tab") { this.view.tab = button.dataset.tab; return this.render(); }
+      if (act === "tab") { this.view.tab = button.dataset.tab; this.view.editing = null; return this.render(); }
       if (act === "collect") { await deliverDueJobs(this.actor); return this.render(); }
-      if (act === "new-recipe") return editRecipe(null, this.view.tab);
-      if (act === "edit-recipe") return editRecipe(button.dataset.recipe, this.view.tab);
+      if (act === "new-recipe") { this.view.editing = editorDraft(null, this.view.tab); return this.render(); }
+      if (act === "edit-recipe") {
+        const id = button.dataset.recipe;
+        this.view.editing = this.view.editing?.id === id ? null : editorDraft(findRecipe(id, { includeDisabled: true }), this.view.tab);
+        return this.render();
+      }
+      const draft = this.view.editing;
+      if (draft) {
+        if (act === "pick") { draft.picker = draft.picker === button.dataset.slot ? null : button.dataset.slot; draft.search = ""; return this.render(); }
+        if (act === "choose") return this.#choose(draft.picker, button.dataset.name);
+        if (act === "add-input" && draft.inputs.length < MAX_INPUTS) { draft.inputs.push(["", 1]); return this.render(); }
+        if (act === "remove-input" && draft.inputs.length > 1) { draft.inputs.splice(Number(button.dataset.index), 1); draft.picker = null; return this.render(); }
+        if (act === "cancel-edit") { this.view.editing = null; return this.render(); }
+        if (act === "save-edit") {
+          const fields = draftFields(draft);
+          if (draft.id) await api().update(draft.id, fields); else await api().create(fields);
+          this.view.editing = null;
+          ui.notifications.info(`Recipe for ${fields.output} saved.`);
+          return this.render();
+        }
+      }
       if (act === "toggle-recipe") {
         const row = findRecipe(button.dataset.recipe, { includeDisabled: true });
         return api().disable(row.id, !row.disabled);
