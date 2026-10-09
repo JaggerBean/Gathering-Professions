@@ -6,6 +6,7 @@
 // names; nothing is shipped from the source modules.
 import { MODULE_ID, PROFESSIONS, materialRule } from "./rules.js";
 import { ensureTierTable, normalizeTable } from "./materials.js";
+import { customItemData } from "./customitems.js";
 
 const KCTG = "kctg-5e.kctg-dnd5e";
 const HELIANA = "helianas-harvest-compendium";
@@ -63,27 +64,28 @@ export const MATERIAL_PRESETS = Object.freeze({
   }),
   logging: Object.freeze({
     profession: "logging",
-    label: "Logging: Kris's Trade Goods",
+    label: "Logging: Kris's Trade Goods + forest finds",
     requires: ["kctg-5e"],
     packs: [KCTG],
     folder: ["Professions", "Timber", "Logs"],
     rareFolder: ["Rare Finds", "Logging"],
-    // Common logs, then rough planks and lumber; prized woods and tree
-    // products as rare finds.
+    // Raw wood only (4 per tier): planks, lumber, Charcoal, Pine Tar, and
+    // Sandalwood Oil come from refining (milling). Rare finds are tree
+    // products, topped up with this module's own forest finds.
     materials: Object.freeze({
-      1: list("Brushwood Bundle, Bamboo, Cedar Log, Pine Log, Hickory Log"),
-      2: list("Birch Log, Maple Log, Fir Log, Oak Log, Retama"),
-      3: list("Cedar Plank, Fir Plank, Hickory Plank, Birch Plank, Oak Plank"),
-      4: list("Teak Plank, Redwood Plank, Pine Plank, Poplar Lumber, Maple Lumber"),
-      5: list("Palo Verde, Aspen Lumber, Walnut Lumber, Sandalwood Lumber, Mahogany Lumber")
+      1: list("Brushwood Bundle, Bamboo, Cedar Log, Pine Log"),
+      2: list("Hickory Log, Birch Log, Maple Log, Fir Log"),
+      3: list("Oak Log, Teak Log, Redwood Log, Retama"),
+      4: list("Poplar Log, Aspen Log, Palo Verde, Ironwood Log"),
+      5: list("Walnut Log, Sandalwood Log, Mahogany Log, Darkwood")
     }),
     baseYield: Object.freeze({ 1: "1d3", 2: "1d2", 3: "1d2", 4: "1", 5: "1" }),
     rare: Object.freeze({
-      1: list("Acorns, Pine Tar, Charcoal"),
-      2: list("Teak Log, Redwood Log, Sandalwood Oil"),
-      3: list("Aspen Log, Poplar Log, Vertugal"),
-      4: list("Ironwood Log, Walnut Log, Maple Sap"),
-      5: list("Darkwood, Mahogany Log, Sandalwood Log")
+      1: list("Acorns, Cobnut, Maple Seeds"),
+      2: list("Hazelnut, Mistletoe, Birch Bark Roll"),
+      3: list("Vertugal, Honey, Knotwood Burl"),
+      4: list("Maple Sap, Petrified Heartwood, Golden Resin Tear"),
+      5: list("Elderwood Heartcore, Lightning-Struck Ironbark, Seed of the Old Grove")
     })
   }),
   skinning: Object.freeze({
@@ -124,7 +126,7 @@ export function availablePresets() {
 }
 
 /** Find or create a nested Item folder path like ["Professions", "Herbalism", "Wild"]. */
-async function folderPath(names) {
+export async function folderPath(names) {
   let parent = null;
   for (const name of names) {
     let folder = Array.from(game.folders ?? []).find(entry => entry.type === "Item" && entry.name === name && (entry.folder?.id ?? entry.folder ?? null) === (parent?.id ?? null));
@@ -134,12 +136,20 @@ async function folderPath(names) {
   return parent;
 }
 
-/** A world Item with this name (preferring one in the target folder), else a fresh import from the first pack that has it. */
-async function worldItem(packIds, entryNames, folder, cache) {
+/**
+ * A world Item with this name (preferring one in the target folder), else one
+ * of this module's own items, else a fresh import from the first pack that has it.
+ */
+export async function worldItem(packIds, entryNames, folder, cache = new Map()) {
   const candidates = names(entryNames);
   const existing = Array.from(game.items ?? []).filter(item => candidates.includes(item.name));
   const found = existing.find(item => (item.folder?.id ?? item.folder) === folder.id) ?? existing[0];
   if (found) return { item: found, imported: false };
+  const custom = candidates.map(name => customItemData(name, folder.id)).find(Boolean);
+  if (custom) {
+    const [item] = await Item.implementation.create([custom]);
+    return { item, imported: true };
+  }
   for (const packId of packIds) {
     const pack = game.packs.get(packId);
     if (!pack) throw new Error(`Compendium ${packId} is not available.`);
