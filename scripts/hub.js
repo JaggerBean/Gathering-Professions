@@ -7,6 +7,7 @@ import { SKILL_TREE_ID, skillTreeConfig, availableSkillTrees, configuredSkillTre
 import { toolDurability } from "./durability.js";
 import { renderConditionsWindow, handleConditionsAction, bindConditionInputs } from "./conditions-ui.js";
 import { saveRulesValues, openMaterialEditor } from "./ui.js";
+import { availablePresets, applyMaterialPreset } from "./presets.js";
 import { materialsModel, addRareItem, removeRareResult, setRareWeights, assignMaterial, unassignMaterial } from "./materials.js";
 
 export const HUB_SECTIONS = Object.freeze([
@@ -131,7 +132,9 @@ function materialsSection(view) {
     <section class="gp-hub-card"><div class="gp-hub-card-head"><i class="fas fa-gem"></i> Rare finds <small>${rareCount} item${rareCount === 1 ? "" : "s"}</small></div>
       <p class="gp-hub-note">Rare finds come only from these tables (see Rare Finds for how tiers climb). Weight sets how often an item is drawn within its tier.</p>
       ${rare}</section>
-    <footer class="gp-hub-footer"><button type="button" class="gp-hub-primary" data-act="save-weights"><i class="fas fa-floppy-disk"></i> Save rare weights</button></footer>`;
+    <footer class="gp-hub-footer">${availablePresets().filter(preset => preset.profession === key).map(preset =>
+      `<button type="button" class="gp-hub-ghost" data-act="apply-preset" data-preset="${escape(preset.key)}" title="Import and assign this material set, and fill the tier rare tables"><i class="fas fa-wand-magic-sparkles"></i> Apply preset: ${escape(preset.label)}</button>`).join("")}
+      <button type="button" class="gp-hub-primary" data-act="save-weights"><i class="fas fa-floppy-disk"></i> Save rare weights</button></footer>`;
 }
 
 function treeSection() {
@@ -377,6 +380,19 @@ function defineClass() {
       const values = () => Object.fromEntries(Array.from(form.querySelectorAll("[name]")).map(input =>
         [input.name, input.type === "checkbox" ? input.checked : input.value]));
       switch (act) {
+        case "apply-preset": {
+          const preset = availablePresets().find(entry => entry.key === button.dataset.preset);
+          if (!preset) return;
+          const ok = await foundry.applications.api.DialogV2.confirm({
+            window: { title: "Apply material preset" },
+            content: `<p>Apply <strong>${escape(preset.label)}</strong>?</p><p>Missing Items are imported from the compendiums, listed Items are assigned to ${escape(PROFESSIONS[preset.profession]?.label ?? preset.profession)} at their tier, and each tier's rare table is replaced with the preset's rare finds. Other materials are not changed.</p>`,
+            rejectClose: false
+          });
+          if (!ok) return;
+          const result = await applyMaterialPreset(preset.key);
+          ui.notifications.info(`Preset applied: ${result.materials} materials, ${result.rare} rare finds (${result.imported} imported).`);
+          return this.render();
+        }
         case "materials-prof":
           view.materialsProf = button.dataset.prof;
           return this.render();

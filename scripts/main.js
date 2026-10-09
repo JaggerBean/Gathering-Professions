@@ -1,6 +1,7 @@
 import { MODULE_ID, PROFESSIONS, ABILITY_LABELS, DEFAULT_PROFESSIONS, RANK_XP, RANK_DC_REDUCTION, TIER_DC, TIER_XP, TIER_UNTRAINED_DC, GATHER_ATTEMPTS_PER_REST, MINING_MATERIALS, activeRules, rankForXp, rankForActor, selectedProfession, materialRule, checkFormula, getProfessions, normalizeProfessions, professionFlag } from "./rules.js";
 import { openMaterialManager, openMaterialEditor, openRulesEditor, openProgressEditor, openProfessionMenu, openProfessionsEditor, openPerkEditor, registerSceneControls, registerUIHooks, registerSettingsMenu } from "./ui.js";
 import { ensureWorldContent } from "./worldcontent.js";
+import { availablePresets, applyMaterialPreset } from "./presets.js";
 import { DEFAULT_TOOLS, buildDefaultTools } from "./gatheringtools.js";
 import { DEFAULT_SKILL_TREE, skillTreeConfig, normalizeSkillTreeConfig, syncProfessionState, resetUniversalTreeSkills, drawRareFind, availableSkillTrees, configuredSkillTree } from "./integrations.js";
 import { PERK_EFFECTS, actorPerks, normalizePerk, readPerk, rareChanceTotal, applyPerksToCheck, rerollsLeft, spendReroll, resetRestUses, masterfulLeft, spendMasterful } from "./perks.js";
@@ -740,6 +741,7 @@ Hooks.once("ready", async () => {
       }
     },
     assist: { power: assistPower, offer: offerAssist, withdraw: withdrawAssist, find: findAssist },
+    presets: { list: () => availablePresets(), apply: key => applyMaterialPreset(key) },
     rareFinds: {
       catalogue: RARE_FINDS,
       /** GM: create the default rare Items and tier tables, and link them. */
