@@ -799,6 +799,11 @@ Hooks.once("ready", async () => {
       naturalMasterful: degree => naturalMasterful(degree),
       openRecipes
     },
+    /** GM hub: open a section; companion modules add their own sections. */
+    hub: {
+      open: (section, options) => import("./hub.js").then(module => module.openHub(section, options)),
+      registerSection: section => import("./hub.js").then(module => module.registerHubSection(section))
+    },
     /** Extra sections in the profession menu (see ui.js openProgressEditor). */
     professionMenu: { hooks: { sections: "gatheringProfessions.menuSections", render: "gatheringProfessions.menuRender" } },
     rareFinds: {

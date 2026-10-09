@@ -24,6 +24,16 @@ export const HUB_SECTIONS = Object.freeze([
   { id: "conditions", label: "Conditions", icon: "fa-cloud-sun-rain", blurb: "Pinned season, weather, and time; biomes; and how conditions change DCs." }
 ]);
 
+// Sections added by other modules (e.g. Crafting Professions):
+// { id, label, icon, blurb, order?, render() -> html, onClick(event, { hub, root }) -> Promise }
+const EXTERNAL_SECTIONS = new Map();
+export function registerHubSection(section) {
+  if (!section?.id || typeof section.render !== "function") throw new Error("A hub section needs an id and render().");
+  section.order ??= 100;
+  EXTERNAL_SECTIONS.set(section.id, section);
+}
+export const hubSections = () => [...HUB_SECTIONS, ...[...EXTERNAL_SECTIONS.values()].sort((a, b) => a.order - b.order)];
+
 const escape = value => String(value ?? "").replace(/[&<>"']/g, character => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
 })[character]);
@@ -263,18 +273,22 @@ function rulesSection() {
 
 /** Full hub markup for a view state (pure; used by tests and previews). */
 export function renderHub(view) {
-  const section = HUB_SECTIONS.find(entry => entry.id === view.section) ?? HUB_SECTIONS[0];
-  const nav = HUB_SECTIONS.map(entry => `<a class="gp-hub-nav-item ${entry.id === section.id ? "active" : ""}" data-act="section" data-section="${entry.id}">
+  const sections = hubSections();
+  const section = sections.find(entry => entry.id === view.section) ?? sections[0];
+  const nav = sections.map(entry => `<a class="gp-hub-nav-item ${entry.id === section.id ? "active" : ""}" data-act="section" data-section="${entry.id}">
       <i class="fas ${entry.icon}"></i><span>${escape(entry.label)}</span></a>`).join("");
-  const body = {
+  const external = EXTERNAL_SECTIONS.get(section.id);
+  const body = external ? "" : {
     professions: () => professionsSection(view), materials: () => materialsSection(view), tree: () => treeSection(), tools: () => toolsSection(view),
     rare: () => rareSection(view), rules: () => rulesSection(), conditions: () => renderConditionsWindow(view.conditions),
     nodes: () => ""
   }[section.id]();
   // Nodes: the Node Manager mounts itself into this container (node-ui.js).
+  // Other modules' sections render their own markup (they may contain forms).
   const content = section.id === "nodes"
     ? '<div class="gp-hub-nodes gp-node-manager" data-section="nodes"></div>'
-    : `<form class="gp-hub-form" autocomplete="off" data-section="${section.id}">${body}</form>`;
+    : external ? `<div class="gp-hub-external" data-section="${escape(section.id)}">${external.render()}</div>`
+      : `<form class="gp-hub-form" autocomplete="off" data-section="${section.id}">${body}</form>`;
   return `<div class="gp-hub">
     <nav class="gp-hub-nav"><div class="gp-hub-brand"><i class="fas fa-hammer"></i><span>Gathering<br>Professions</span></div>${nav}</nav>
     <section class="gp-hub-main">
@@ -367,6 +381,13 @@ function defineClass() {
       const inNodes = event => Boolean(event.target.closest?.(".gp-hub-nodes"));
       this.element.addEventListener("click", event => {
         if (inNodes(event)) return;
+        // Other modules' sections handle their own clicks (except the nav).
+        const externalRoot = event.target.closest?.(".gp-hub-external");
+        if (externalRoot) {
+          const section = EXTERNAL_SECTIONS.get(externalRoot.dataset.section);
+          void Promise.resolve(section?.onClick?.(event, { hub: this, root: externalRoot })).catch(report);
+          return;
+        }
         const button = event.target.closest?.("[data-act]");
         if (!button || button.disabled) return;
         event.preventDefault();
