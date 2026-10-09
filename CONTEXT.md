@@ -1,5 +1,7 @@
 # Gathering Professions — CONTEXT
 
+2026-10-09 (v0.29.0): Recipe engine additions for Crafting Professions' Bounty Hunter: optional row fields group/groupLabel/groupImg (cards group by contact), title, brief, rewardText, actionLabel, noBatch, inputMeta [{mode used|kept|risk, reason}] (chips with mode icons + a reasons list); provider isDone(row, actor) (hidden from players, "Completed" tag for the GM) and panel(actor, isGM)/onPanel(act, button, actor) (action `panel`); recipe grid areas title/inputs/reasons/meta/gm; timed jobs may carry `gold` (delivered with addGold into dnd5e currency; job.data optional); `addGold` exported and on api.recipes. All suites pass.
+
 2026-10-09 (v0.28.2): Renamed the shared GM window and settings-menu entry to Profession GM Hub. The left navigation now groups built-in Gathering Professions sections and extension sections by their optional `group` label; ungrouped extensions go under Additional Settings. Crafting Professions supplies its own group. Styling, README, and hub test updated. Live Foundry layout remains to be checked.
 
 2026-10-09 (v0.28.2): Recipe providers may list items the character carries that teach recipes (`carried(actor)` → [{id, name, img, note, disabled}], `useCarried(actor, itemId)`, `carriedLabel`, `carriedAction`); rendered by `renderCarried` above the experiment panel with Learn buttons (action `use-carried`). Used by Crafting Professions for recipe scrolls. Test in world.mjs. All suites pass.
