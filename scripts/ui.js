@@ -190,18 +190,25 @@ export async function openProgressEditor(actor) {
   const gmHints = `<p class="hint">Choose one profession. Only it grants a rank, profession die, and DC reduction. Changing the selection keeps all XP and saved ranks. Save, then reopen this menu to edit the new profession’s milestone rank.</p>
     <p class="hint">Other attempts use d20 + ability modifier against full Base DC plus tier and material extras. Successful untrained attempts bank XP without granting a rank or bonuses.</p>
     ${manual ? '<p class="hint">Ranks are awarded by the GM. XP continues to accumulate; the next-rank XP value is a guide.</p>' : ''}`;
+  // Companion modules add their own sections (e.g. crafting professions).
+  const sections = [];
+  Hooks.callAll("gatheringProfessions.menuSections", { actor, canEdit, sections });
+  const extra = sections.map(section => `<section class="gp-menu-section">${section.html ?? ""}</section>`).join("");
   const html = content(`<p class="gp-selected-profession"><strong>Gathering profession: ${selected ? escape(PROFESSIONS[selected].label) : "None selected"}</strong></p>
     ${selection}<p class="hint">${canEdit ? gmHints : playerHint}</p>
-    <div class="gp-scroll"><table><thead><tr><th>Profession</th><th>Rank</th><th>Die</th><th>Total XP</th>${canEdit ? `<th>${manual ? "Next-rank XP guide" : "Next rank at"}</th>` : ""}</tr></thead><tbody>${rows}</tbody></table></div>${canEdit ? '<button type="button" data-open-rules>Open Tier &amp; Rank Rules</button>' : ""}`);
+    <div class="gp-scroll"><table><thead><tr><th>Profession</th><th>Rank</th><th>Die</th><th>Total XP</th>${canEdit ? `<th>${manual ? "Next-rank XP guide" : "Next rank at"}</th>` : ""}</tr></thead><tbody>${rows}</tbody></table></div>${canEdit ? '<button type="button" data-open-rules>Open Tier &amp; Rank Rules</button>' : ""}${extra}`);
+  const bindExtras = dialog => Hooks.callAll("gatheringProfessions.menuRender", { actor, canEdit, element: dialog.element, dialog });
   if (!canChoose) {
-    await Dialog().prompt({ window: { title: `${actor.name} — Professions` }, content: html, ok: { label: "Close" }, position: { width: 580 } });
+    await Dialog().prompt({ window: { title: `${actor.name} — Professions` }, content: html, ok: { label: "Close" }, position: { width: 580 }, render: (_event, dialog) => bindExtras(dialog) });
     return false;
   }
   const values = await Dialog().input({
     window: { title: `${actor.name} — Professions` }, content: html,
     position: { width: 680 }, ok: { label: canEdit ? "Save profession & progress" : "Choose profession" },
-    render: (_event, dialog) => dialog.element.querySelector("[data-open-rules]")
-      ?.addEventListener("click", () => openRulesHub())
+    render: (_event, dialog) => {
+      dialog.element.querySelector("[data-open-rules]")?.addEventListener("click", () => openRulesHub());
+      bindExtras(dialog);
+    }
   });
   if (!values) return false;
   try {

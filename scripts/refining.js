@@ -652,7 +652,7 @@ export function refiningProvider(profession, { addXp }) {
     learnOptions: [["auto", "Auto"], ["learned", "Learned"], ["unlearned", "Unlearned"]],
     learnHint: "Auto: learned once the party has had every ingredient",
     perCharacter: false,
-    hiddenHint: "Gather new materials to discover more ways to make this",
+    hiddenHint: "Gather new materials to discover more ways to make this", hiddenWord: "undiscovered",
     emptyText: "No recipes discovered yet. Gather materials to discover what they refine into.",
     gmHint: "Eye: whether players see it. Auto = learned once the party has had every ingredient.",
     visible: () => Boolean(PROFESSIONS[profession]) && entry.requires.every(id => game.modules.get(id)?.active),

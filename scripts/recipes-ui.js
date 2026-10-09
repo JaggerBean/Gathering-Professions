@@ -70,7 +70,7 @@ export function buildRecipesModel(actor, { isGM = false, tab = "", onlyCraftable
   return {
     tabs, active: provider?.key ?? "", verb: provider?.verb ?? "", action: provider?.action ?? "Make", rollLabel: provider?.rollLabel ?? "",
     learnOptions: provider?.learnOptions ?? [], learnHint: provider?.learnHint ?? "", perCharacter: Boolean(provider?.perCharacter),
-    hiddenHint: provider?.hiddenHint ?? "Not yet discovered", emptyText: provider?.emptyText ?? "No recipes known yet.",
+    hiddenHint: provider?.hiddenHint ?? "Not yet discovered", hiddenWord: provider?.hiddenWord ?? "unknown", emptyText: provider?.emptyText ?? "No recipes known yet.",
     gmHint: provider?.gmHint ?? "", canEdit: Boolean(provider?.gm?.create), canScroll: Boolean(provider?.gm?.scroll),
     experiment: Boolean(provider?.experiment), products, jobs, isGM,
     actor: actor ? { id: actor.id, name: actor.name, img: actor.img } : null
@@ -159,7 +159,7 @@ export function renderRecipesWindow(model, state = {}) {
   const cards = model.products.map(group => `<section class="gp-rw-card">
       <header><img src="${escape(group.img)}" alt=""><strong>${escape(group.name)}</strong>
         ${group.recipes.length > 1 ? `<small>${group.recipes.length} recipes</small>` : ""}
-        ${group.hidden ? `<em class="gp-rw-more" title="${escape(model.hiddenHint)}"><i class="fas fa-question"></i> ${group.hidden} more unknown</em>` : ""}</header>
+        ${group.hidden ? `<em class="gp-rw-more" title="${escape(model.hiddenHint)}"><i class="fas fa-question"></i> ${group.hidden} more ${escape(model.hiddenWord)}</em>` : ""}</header>
       ${group.recipes.map(row => recipeRow(row, model, state) + (state.editing?.id === row.id ? renderEditor(state.editing, state.editorItems) : "")).join("")}
     </section>`).join("");
   const empty = state.onlyCraftable ? "Nothing you can make right now." : model.emptyText;
