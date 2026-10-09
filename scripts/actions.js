@@ -20,15 +20,22 @@ function enqueue(map, key, task) {
 export async function handleActionRequest(actor, request, sender) {
   if (!isAuthority() || typeof request?.id !== "string" || !/^[A-Za-z0-9]{1,64}$/.test(request.id) || !sender
     || !(sender.isGM || actor.testUserPermission?.(sender, "OWNER"))) return;
-  return enqueue(authority, actor.uuid, async () => {
+  // Lease mutations are brief. One GM queue prevents competing acquisitions
+  // from racing across actor locks and shared party-completion resources.
+  return enqueue(authority, "leases", async () => {
     const lease = actor.getFlag(MODULE_ID, "actionLease");
     const owns = lease?.id === request.id && lease.user === sender.id;
+    const resource = request.resource === "party-bounty" ? request.resource : null;
+    const resourceBusy = resource && Array.from(game.actors ?? []).some(other => {
+      const held = other.getFlag?.(MODULE_ID, "actionLease");
+      return held?.resource === resource && held.expires > Date.now() && !(other.uuid === actor.uuid && owns);
+    });
     if (request.operation === "release") {
       if (owns) await actor.unsetFlag(MODULE_ID, "actionLease");
     } else if (request.operation === "renew") {
       if (owns) await actor.setFlag(MODULE_ID, "actionLease", { ...lease, expires: Date.now() + LEASE_MS });
-    } else if (request.operation === "acquire" && (!lease || lease.expires <= Date.now() || owns)) {
-      await actor.setFlag(MODULE_ID, "actionLease", { id: request.id, user: sender.id, expires: Date.now() + LEASE_MS });
+    } else if (request.operation === "acquire" && !resourceBusy && (!lease || lease.expires <= Date.now() || owns)) {
+      await actor.setFlag(MODULE_ID, "actionLease", { id: request.id, user: sender.id, resource, expires: Date.now() + LEASE_MS });
     }
   });
 }
@@ -45,7 +52,7 @@ export function registerActionHooks() {
 }
 
 /** Serialize an entire action, including its prerequisites, costs and rewards. */
-export function runActorAction(actor, task) {
+export function runActorAction(actor, task, { resource = null } = {}) {
   if (!actor || !(game.user.isGM || actor.isOwner)) return Promise.reject(new Error("Choose a character you own."));
   return enqueue(local, actor.uuid ?? actor, async () => {
     // Isolated/offline GM operations need no remote lease. Players fail closed.
@@ -55,7 +62,7 @@ export function runActorAction(actor, task) {
     }
     const id = foundry.utils.randomID();
     const send = async operation => {
-      const request = { id, operation, nonce: foundry.utils.randomID() };
+      const request = { id, operation, resource, nonce: foundry.utils.randomID() };
       if (isAuthority()) await handleActionRequest(actor, request, game.user);
       else await actor.setFlag(MODULE_ID, "actionRequest", request);
     };
