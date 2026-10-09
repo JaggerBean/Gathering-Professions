@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { getDegreeOfSuccess, calculateGatheringYield, gatheringXp } from "../scripts/gathering.js";
 import { materialRule, checkFormula, rankForXp, rankForActor, selectedProfession, professionFlag, activeRules } from "../scripts/rules.js";
-import { openMaterialEditor, openMaterialManager, openRulesEditor, saveRulesValues, openProgressEditor, openProfessionMenu, openSkillTree, registerSceneControls } from "../scripts/ui.js";
+import { openMaterialEditor, openMaterialManager, saveRulesValues, openProgressEditor, openProfessionMenu, openSkillTree, registerSceneControls } from "../scripts/ui.js";
 
 // Isolated integration doubles; no world data is touched. evaluateSync deliberately
 // throws, and every asynchronous roll must match an explicit expectation.
@@ -313,8 +313,7 @@ assert.equal(api.getProgress(thresholdActor).mining.rank, 2,
 assert.equal(checkFormula(thresholdActor, "mining", 100, 10).formula, "1d20 + 0 + 1d6");
 game.actors = [veteran, thresholdActor];
 dialogValues = ruleForm("milestone");
-assert.equal(await openRulesEditor(), true);
-assert.match(dialogHtml, /GM awards ranks at milestones/);
+assert.equal(await saveRulesValues(dialogValues), true);
 assert.equal(savedRules.milestoneAdvancement, true);
 assert.equal(veteran.ranks.mining, 3, "Switching modes must preserve the current XP-derived rank");
 assert.equal(thresholdActor.ranks.mining, 2);
@@ -364,7 +363,7 @@ assert.doesNotMatch(dialogHtml, /name="rank_mining"/);
 game.user.isGM = true;
 
 dialogValues = ruleForm("automatic");
-assert.equal(await openRulesEditor(), true);
+assert.equal(await saveRulesValues(dialogValues), true);
 assert.equal(savedRules.milestoneAdvancement, false);
 assert.equal(rankForActor(newcomer, "mining", 1500), 5);
 assert.equal(rankForActor(veteran, "mining", 705), 4);
@@ -373,7 +372,7 @@ await api.setRank(veteran, "mining", 5).then(
   error => assert.match(error.message, /Enable GM-controlled ranks/)
 );
 dialogValues = ruleForm("milestone");
-assert.equal(await openRulesEditor(), true);
+assert.equal(await saveRulesValues(dialogValues), true);
 assert.equal(veteran.ranks.mining, 4, "Re-enabling milestones snapshots the current automatic rank");
 
 // Only the chosen profession grants bonuses, even with banked XP and an old rank.
@@ -412,7 +411,7 @@ assert.equal(await openMaterialEditor(editable), true);
 assert.equal(materialRule(editable).untrainedDc, 0);
 dialogValues = ruleForm("milestone");
 dialogValues.untrainedDc2 = "7";
-assert.equal(await openRulesEditor(), true);
+assert.equal(await saveRulesValues(dialogValues), true);
 assert.equal(savedRules.tierUntrainedDc[2], 7);
 
 // Choice is once per owned character. Existing progress is retained, not erased.
@@ -522,20 +521,15 @@ assert.match(posted.at(-1).flavor, /Fishing — Trout/);
 assert.match(posted.at(-1).flavor, /Dexterity Modifier: \+2/);
 assert.equal(fisher.xp.fishing, 5);
 
-// Profession editor dialog: rename, add, and remove rows through the form.
-dialogValues = {
-  rowCount: "7",
-  key0: "mining", label0: "Mining", ability0: "str", rareTable0: "RollTable.rareOre",
-  key1: "herbalism", label1: "Herbalism", ability1: "wis", rareTable1: "",
-  key2: "logging", label2: "Woodcutting", ability2: "str", rareTable2: "",
-  key3: "skinning", label3: "Skinning", ability3: "wis", rareTable3: "", remove3: true,
-  key4: "fishing", label4: "Fishing", ability4: "dex", rareTable4: "",
-  key5: "", label5: "Foraging", ability5: "dex", rareTable5: "",
-  key6: "", label6: "", ability6: "str", rareTable6: "",
-  treeUuid: "", pointsPerRank: "1", startingPoints: "0"
-};
-assert.equal(await api.openProfessionsEditor(), true);
-assert.match(dialogHtml, /Professions &amp; Skill Tree|Shared tree/);
+// Professions (GM hub): rename, add, and remove.
+await api.setProfessions([
+  { key: "mining", label: "Mining", ability: "str", rareTable: "RollTable.rareOre" },
+  { key: "herbalism", label: "Herbalism", ability: "wis", rareTable: "" },
+  { key: "logging", label: "Woodcutting", ability: "str", rareTable: "" },
+  { key: "fishing", label: "Fishing", ability: "dex", rareTable: "" },
+  { key: "", label: "Foraging", ability: "dex", rareTable: "" }
+]);
+assert.equal(typeof api.openProfessionsEditor, "function");
 assert.deepEqual(Object.keys(api.professions), ["mining", "herbalism", "logging", "fishing", "foraging"]);
 assert.equal(api.professions.logging.label, "Woodcutting");
 assert.equal(materialRule(new Item("Hide", { profession: "skinning", tier: 1 }, null)), null,

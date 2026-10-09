@@ -38,7 +38,7 @@ The Items currently in Professions > Mining > Stones, Ores, and Gemstones get de
 
 ## In-game editor
 
-As GM, open the **Items** sidebar and click **Profession Materials**. You can also find **Open Materials Editor** in **Game Settings → Configure Settings → Module Settings → Gathering Professions**. The manager lists assigned materials with their Base Yield and lets you search, edit a material, assign another world Item, and open **Tier & Rank Rules**. You can also open any world Item and choose **Material** in its sheet header. Both entry points use the same editor. Choose a profession and tier, enter Base Yield, and optionally override DC and XP. **Use mining default** keeps the automatic Mining assignment while allowing Base Yield to be saved. **No profession check** excludes an Item.
+As GM, open the **Items** sidebar and click **Profession Materials**. You can also find **Open Materials Editor** in **Game Settings → Configure Settings → Module Settings → Gathering Professions**. The manager lists assigned materials with their Base Yield and lets you search, edit a material, assign another world Item, and open the hub's **Rules** section. You can also open any world Item and choose **Material** in its sheet header. Both entry points use the same editor. Choose a profession and tier, enter Base Yield, and optionally override DC and XP. **Use mining default** keeps the automatic Mining assignment while allowing Base Yield to be saved. **No profession check** excludes an Item.
 
 Click the **hammer (Gathering Profession — Choose / View)** under the left-side **Token Controls** to open the profession menu. It opens a selected owned character token, otherwise your assigned character. If neither is available, it offers an owned-character chooser. The character sheet's **Professions** header entry remains available. The selected profession is displayed prominently at the top of the menu, with a star in its progress row.
 
@@ -50,13 +50,13 @@ Characters start with **no selected profession** and rank 0 in all professions. 
 
 Untrained attempts roll **d20 + the relevant ability modifier**, with no profession die and no rank reduction. Their target is **material Base DC + tier extra untrained DC + material extra untrained DC**. This uses that material's full DC, not the highest tier's DC. Trained checks ignore both extra penalties.
 
-Edit the tier extras in **Profession Materials → Tier & Rank Rules → Extra untrained DC**. Edit an individual material's extra in **Profession Materials → Edit → Extra untrained DC**. Both default to 0 until you set them. The manager shows the combined untrained DC, and chat shows each addition separately. For example, Base DC 18 + tier extra 4 + material extra 2 gives an untrained DC of 24.
+Edit the tier extras in **Gathering Professions → Rules → Extra untrained DC**. Edit an individual material's extra in **Profession Materials → Edit → Extra untrained DC**. Both default to 0 until you set them. The manager shows the combined untrained DC, and chat shows each addition separately. For example, Base DC 18 + tier extra 4 + material extra 2 gives an untrained DC of 24.
 
 Untrained successes award the same material quantities and XP as trained successes. That XP is marked **banked** in the menu and chat: it does not grant untrained ranks, dice, or DC reduction. Failed/partial extractions still grant no XP. Changing profession later keeps all banked XP and saved ranks; automatic or milestone advancement then controls the selected profession as described above.
 
 ## Rank advancement modes
 
-As GM, open **Profession Materials → Tier & Rank Rules → Rank advancement**. Choose **Automatic when XP threshold is reached** (the existing behavior) or **GM awards ranks at milestones**. The choice applies to the world, while ranks are saved separately for each character and profession.
+As GM, open **Gathering Professions → Rules → Rank advancement**. Choose **Automatic when XP threshold is reached** (the existing behavior) or **GM awards ranks at milestones**. The choice applies to the world, while ranks are saved separately for each character and profession.
 
 When milestone mode is first enabled, the module saves each existing character's current XP-derived rank in their selected profession. New selections without saved ranks start at Rank 1. Gathering still awards XP, but crossing a threshold does not change a rank, profession die, or rank-based DC reduction. To promote a character, select their token, click the left-side hammer, choose the new rank for their selected profession, and save. Promotion can happen at any XP total. The XP value under “Next-rank XP guide” is informational.
 
@@ -72,19 +72,19 @@ Gatherer roll table results should point to actual Item documents. Plain text re
 
 ## Custom professions (0.5.0)
 
-As GM, open **Profession Materials → Professions & Skill Tree**, or **Configure Settings → Module Settings → Gathering Professions → Edit Professions**. Each row sets a profession's name, check ability (any of the six), and rare-find table. Fill a blank row to add one. A blank key is built from the name, such as `fishing` for Fishing. Keys cannot change after saving, because character XP is stored under them.
+As GM, open **Gathering Professions → Professions** (from Module Settings or the Profession Materials toolbar). Each row sets a profession's name, check ability (any of the six), and rare-find table. Click **Add profession** to add one. A blank key is built from the name, such as `fishing` for Fishing. Keys cannot change after saving, because character XP is stored under them.
 
 Removing a profession keeps all character XP. Materials assigned to it fall back to Gatherer's normal awards. A character who chose it shows no profession until the GM picks one. Mining, Herbalism, Logging, and Skinning stay the defaults until the list is first saved. Existing Harvesting selections, XP, ranks, materials, nodes, perks, and condition modifiers are read as Skinning. New changes save the Skinning key.
 
 ## Skill Tree link (0.5.0)
 
-This uses the Skill Tree module by theripper93. Use the universal tree (below) or build your own shared tree. Give players Observer permission on it. In **Professions & Skill Tree**, choose the tree, then set **Points per rank-up** and **Points at Rank 1**.
+This uses the Skill Tree module by theripper93. Use the universal tree (below) or build your own shared tree. Give players Observer permission on it. In **Gathering Professions → Skill Tree**, choose the tree, then set **Points per rank-up** and **Points at Rank 1**.
 
 Players can open the linked tree from the **Gathering Skill Tree** button directly beneath **Gathering Profession** in the left token controls. It uses the selected owned character token, then the assigned character; if needed, it lets the player choose among owned characters. The button opens the same character tree view as the character-sheet Skill Tree button.
 
 - A character has earned **Points at Rank 1 + Points per rank-up × (rank − 1)** for the rank of their profession (any profession). They are topped up to that amount in the linked tree, in automatic or milestone mode (0.9.1).
 - Points are recorded per tree. Linking a new tree, or raising the points settings, grants the difference. The first sync with a tree counts points the character already holds or has spent there.
-- The active GM syncs every character when the world loads and whenever the tree link or points settings change. Saving **Professions & Skill Tree** also syncs everyone.
+- The active GM syncs every character when the world loads and whenever the tree link or points settings change. Saving the hub's **Skill Tree** section also syncs everyone.
 - Lowering a rank after the rebalance does not automatically remove points. Re-reaching an earlier rank grants nothing. A GM profession change does not grant a second set of points. The GM can reset one character's universal tree from its skill tree window.
 
 Skill requirements can read these actor attributes:
@@ -100,7 +100,7 @@ Example: a "Deep Vein Sense" skill with requirement `flags.gathering-professions
 
 ## Universal gathering skill tree (0.9.0)
 
-One tree serves every gathering profession. In **Professions & Skill Tree**, tick **Build the universal gathering tree and link it**, then save. It creates 30 skill Items in the folder **Gathering Skill Tree** and a Skill Tree journal with the same name. Points: **2 at Rank 1** and **2 per rank-up**, which is 10 over five ranks. Existing 3/3 settings use this 2/2 rate after the module loads. On the active GM's next world load, characters with more than the new point budget have their universal-tree choices and linked perk Items reset, then receive the new point total. Other trees and their Items stay intact. The module also sets it up by itself (see Gathering content). From a macro: `game.modules.get("gathering-professions").api.skillTree.build()`.
+One tree serves every gathering profession. In **Gathering Professions → Skill Tree**, click **Check gathering content**; it links the tree, or builds it if missing. It creates 30 skill Items in the folder **Gathering Skill Tree** and a Skill Tree journal with the same name. Points: **2 at Rank 1** and **2 per rank-up**, which is 10 over five ranks. Existing 3/3 settings use this 2/2 rate after the module loads. On the active GM's next world load, characters with more than the new point budget have their universal-tree choices and linked perk Items reset, then receive the new point total. Other trees and their Items stay intact. The module also sets it up by itself (see Gathering content). From a macro: `game.modules.get("gathering-professions").api.skillTree.build()`.
 
 The tree is a hexagon (0.9.1). The six themes are six spokes. The tier 1 skills form the inner ring: they have no prerequisite, so they are the starting choices. Each spoke grows outward to its capstone at the tip. Each skill opens the next skill on its spoke. Cross-theme links between tier 2 and tier 3 work in both directions, including Conservationist and Reader of Seasons. Nodes need enough skill points and one linked skill; none requires a profession rank. Capstones (tier 5) cost 2 points, and taking one locks the other five. The tree has its own point pool and no group label. An existing universal tree updates its links and label automatically when the GM loads the world; a test tree also loses its `(Test)` title suffix. Existing choices stay unless the point rebalance resets that character. Call `api.skillTree.relayout()` to run the tree update again.
 
@@ -129,15 +129,15 @@ Each profession has one rare-find table per material tier. Set them in **Module 
 **Getting a rare find** (only on Successful, Excellent, or Masterful extractions):
 
 1. A **natural 20** on the gathering check is always a **Masterful extraction**, whatever the total and DC. With a rare table configured, it earns a rare find for trained and untrained gatherers alike.
-2. A **Masterful extraction** always earns a rare find while **Tier & Rank Rules → Masterful extraction always earns a rare find** is on.
-3. Otherwise, **trained** gatherers roll d100 at or under their rare chance: Fortune skills, plus the node's rare bonus, plus the **Excellent extraction rare-find bonus** (Tier & Rank Rules, default +10%) on an Excellent roll. **Untrained** gatherers get rare finds only from 1 or 2.
+2. A **Masterful extraction** always earns a rare find while **Rules → Masterful extraction always earns a rare find** is on.
+3. Otherwise, **trained** gatherers roll d100 at or under their rare chance: Fortune skills, plus the node's rare bonus, plus the **Excellent extraction rare-find bonus** (Rules, default +10%) on an Excellent roll. **Untrained** gatherers get rare finds only from 1 or 2.
 
 **Which table:**
 
 - The find starts on the table for the **material's tier**. A node's or material's own rare table replaces this starting table only.
 - **Climbing:** a natural 20 on the gathering check moves the find up one tier. At each new table, the character's owner uses the **Roll the Fortune die** button on the chat card (or in the gathering window). The active GM resolves that request and awards the result once. A 20 climbs again and asks for another roll; anything else settles the find and draws it. Nothing is drawn until the button is used. Only the character's owners and the GM can start it. **Discerning Eye** makes these rolls climb on 19–20. **Fortune's Favour** rolls them twice and keeps the better. The check's own natural 20 is always exactly one step, and a tier 5 material's natural 20 needs no roll. Waiting rolls are kept on the character (`flags.gathering-professions.rareClimbs`) and survive a reload. If an item award fails partway through, the find locks for GM review; retrying it cannot award earlier items again.
 - **Beyond tier 5:** if a find would climb past tier 5 (a tier 5 material with a natural 20, or a 20 at the tier 5 table), the character still draws from tier 5. The chat card says something more lies hidden, and the GM gets a private whisper to describe a story discovery on the spot.
-- A tier with no table uses the profession's **any-tier rare table** (Professions & Skill Tree). A climbed find whose tier is empty uses the nearest lower tier that has a table.
+- A tier with no table uses the profession's **any-tier rare table** (Gathering Professions → Professions). A climbed find whose tier is empty uses the nearest lower tier that has a table.
 - **Rich Find** draws one more time from the final table reached.
 
 The chat card shows the trigger, each climb roll, the final tier and table, and the Items found. The gathering window shows the tier, a climb marker, and the story note.
@@ -210,7 +210,7 @@ Each character starts with **5 free gathering attempts per long rest**, shared a
 
 After the free attempts run out, each further Gather click asks for confirmation before raising that character's dnd5e exhaustion by 1. Canceling leaves both the attempt count and exhaustion unchanged. Gathering stops at the system's maximum exhaustion level (normally 6). A long rest restores free attempts; dnd5e handles any exhaustion reduction normally.
 
-The gathering window shows the selected character's remaining free attempts. The same limit also applies when gathering through Gatherer's original journal sheet or other Gatherer entry points. The GM can change the world limit in **Gathering Professions → Rules → Free gathering attempts per long rest** (also in **Tier & Rank Rules**); **0** disables the limit and exhaustion penalty.
+The gathering window shows the selected character's remaining free attempts. The same limit also applies when gathering through Gatherer's original journal sheet or other Gatherer entry points. The GM can change the world limit in **Gathering Professions → Rules → Free gathering attempts per long rest**; **0** disables the limit and exhaustion penalty.
 
 The module now uses a socket for party discovery. After updating from 0.6.x, restart the Foundry server once.
 
@@ -218,7 +218,7 @@ The module now uses a socket for party discovery. After updating from 0.6.x, res
 
 As GM, open the **Node Manager** in any of these places:
 - The mountain button in the left **Token** or **Notes** controls.
-- **Profession Materials → Node Manager**.
+- The **Nodes** tab of the GM hub (**Gathering Professions**).
 - **Module Settings → Gathering Professions → Open Node Manager**.
 
 ### Node Manager layout (0.6.1)
@@ -293,6 +293,12 @@ You can filter by scene, profession, or name. Select nodes to reset, reveal, or 
 
 From macros, use `game.modules.get("gathering-professions").api.nodes`. It includes `build`, `update`, `duplicate`, `delete`, `reset`, `setHidden`, `placePin`, `placeLinked`, `openManager`, and `openBuilder`.
 
+## Nodes tab and styled pop-ups (0.21.0)
+
+- The **Node Manager** now lives in the GM hub as the **Nodes** tab. Every way of opening it (mountain button, Module Settings, gathering window Edit, `api.openNodeManager`) opens the hub on that tab. Placing a pin minimizes the hub until you click the map.
+- The remaining pop-ups (Material, Gathering Perk, Tool Durability, Create Rare-Find Table, a character's Professions, and confirmations) use the hub's dark-and-gold style.
+- The old **Profession Rules** and **Professions & Skill Tree** dialogs are gone. `api.openRulesEditor()` and `api.openProfessionsEditor()` open the hub's Rules and Professions sections. The "Open Tier & Rank Rules" buttons open the hub's Rules section.
+
 ## Material presets (0.20.1)
 
 **GM hub → Materials → Apply preset** (shown on a profession's tab when Kris's Compendium of Trade Goods, `kctg-5e`, is active) sets up a ready-made material set: missing Items are imported from the compendium (Items already in the world with the same name are reused), assigned at their tier, each tier's rare-find table is replaced with the preset's rare finds, and the profession's other materials are unassigned (Items are kept). From a macro: `api.presets.apply("herbalism")`.
@@ -333,7 +339,7 @@ Every GM setting is in one window, **Gathering Professions**, styled like the ga
 
 Tools wear out on bad luck. When a character gathers at a node that needs a tool, every **natural 1** on the gathering check (a Second Look reroll included) costs the tool they use **1 durability**. The chat card and the gathering window show the tool's durability.
 
-- **Maximum:** the world default is **10** (**Tier & Rank Rules → Default tool durability**). Set a tool's own maximum with **Tool Durability** in its Item sheet header (GM; shown on tool Items, tools in the Node Tool Library, and Items that already have durability). Maximum **0** means the tool never wears.
+- **Maximum:** the world default is **10** (**Gathering Professions → Rules → Default tool durability**). Set a tool's own maximum with **Tool Durability** in its Item sheet header (GM; shown on tool Items, tools in the Node Tool Library, and Items that already have durability). Maximum **0** means the tool never wears.
 - **Broken:** at 0 the tool is broken. It no longer meets the node's tool requirement or adds its bonus, and gathering is refused with "… is broken" unless the character carries another accepted tool. It is not deleted.
 - **Repair:** GM, **Tool Durability → Repair fully** on the character's copy, or `api.durability.repair(item)`. Each character's copy keeps its own current value (`flags.gathering-professions.durability`).
 

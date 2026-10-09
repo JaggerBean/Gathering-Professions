@@ -1,10 +1,10 @@
 import {
-  MODULE_ID, PROFESSIONS, RANK_DIE, ABILITY_LABELS,
+  MODULE_ID, PROFESSIONS, RANK_DIE,
   activeRules, materialRule, rankForXp, rankForActor, selectedProfession, professionFlag, professionKey
 } from "./rules.js";
 import { openNodeManager } from "./node-ui.js";
 import { rulesEditorHtml, bindRulesEditors, parseRules, openConditionsWindow } from "./conditions-ui.js";
-import { SKILL_TREE_ID, skillTreeConfig, skillTreeApi, availableSkillTrees, configuredSkillTree } from "./integrations.js";
+import { SKILL_TREE_ID, skillTreeApi, configuredSkillTree } from "./integrations.js";
 import { PERK_EFFECTS, readPerk } from "./perks.js";
 import { toolDurability } from "./durability.js";
 import { getToolLibrary } from "./nodes.js";
