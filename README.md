@@ -3,6 +3,7 @@
 Foundry 14 + dnd5e + Gatherer 5.0.3. Enable this module alongside Gatherer. After updating module files while Foundry is running, restart the Foundry server and reopen the world so the new manifest, script, and stylesheet load.
 
 ## Renamed package upgrade (0.18.0)
+ 
 
 Version 0.18.0 changes the package ID and installation directory from `eryndor-professions` to `gathering-professions`. Existing worlds must enable **Gathering Professions** once after replacing the old module. On the active GM's first load, the module copies legacy world settings and document flags into the new namespace. Existing values already saved under `gathering-professions` win, retries are safe, and legacy data is retained for rollback.
 

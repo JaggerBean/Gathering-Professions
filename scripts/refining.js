@@ -540,14 +540,15 @@ export async function addGold(actor, amount) {
   await actor.update({ "system.currency.gp": current + gold });
 }
 
-/** Add an item (by data) to an inventory, stacking onto an item with the same name. */
+/** Stack only equivalent goods; equipment and independently earned perks stay separate. */
 export async function addToInventory(actor, data, quantity) {
   const signature = source => {
     const system = structuredClone(source.system ?? {});
     delete system.quantity;
-    return JSON.stringify({ type: source.type, system, flags: source.flags ?? {} });
+    return JSON.stringify({ type: source.type, system, flags: source.flags ?? {}, effects: source.effects ?? [], img: source.img });
   };
-  const existing = Array.from(actor.items).find(item => item.name === data.name && signature(item.toObject()) === signature(data));
+  const separate = ["weapon", "tool", "equipment"].includes(data.type) || data.flags?.["crafting-professions"]?.pendingPerk;
+  const existing = !separate && Array.from(actor.items).find(item => item.name === data.name && signature(item.toObject()) === signature(data));
   if (existing) return actor.updateEmbeddedDocuments("Item", [{ _id: existing.id, "system.quantity": itemQuantity(existing) + quantity }]);
   const copy = structuredClone(data);
   delete copy._id;

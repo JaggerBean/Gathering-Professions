@@ -29,6 +29,7 @@ import { rollProfessionCheck } from "./checks.js";
 
 const RESULT = Symbol("gatheringProfessionResult");
 const actorQueues = new WeakMap();
+const refundQueues = new WeakMap();
 
 function queueActorTask(actor, task) {
   const previous = actorQueues.get(actor) ?? Promise.resolve();
@@ -547,7 +548,8 @@ async function handleRefundPull(data, user) {
   const page = await fromUuid(data.pageUuid);
   const actor = data.actorUuid ? await fromUuid(data.actorUuid) : null;
   if (!isGathererPage(page) || !actor || !user || (!user.isGM && !actor.testUserPermission?.(user, "OWNER"))) return;
-  return runActorAction(actor, async () => {
+  const prior = refundQueues.get(page) ?? Promise.resolve();
+  const refund = prior.catch(() => {}).then(() => runActorAction(actor, async () => {
     const record = typeof data.ticket === "string" ? actor.getFlag(MODULE_ID, `gatherTickets.${data.ticket}`) : null;
     if (!record || record.pageUuid !== page.uuid || record.expires < Date.now()) return;
     const perks = actorPerks(actor, readNode(page)?.profession || selectedProfession(actor));
@@ -567,7 +569,11 @@ async function handleRefundPull(data, user) {
       }
       await new Promise(resolve => setTimeout(resolve, 200));
     }
-  });
+  }));
+  refundQueues.set(page, refund);
+  const clear = () => { if (refundQueues.get(page) === refund) refundQueues.delete(page); };
+  refund.then(clear, clear);
+  return refund;
 }
 
 /** Mirror Gatherer's early refusals so they do not spend a gathering attempt. */
