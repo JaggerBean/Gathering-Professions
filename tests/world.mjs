@@ -1021,7 +1021,7 @@ game.modules.get("skill-tree").active = true;
   assert.deepEqual(rulesLib.activeRules().refineXp, [0, 0, 0, 0, 0], "An old 0% setting seeds zero refining XP");
   settings.rules = { ...settings.rules, refineDc: [6, 14, 18, 23, 28], refineXp: [7, 5, 10, 18, 30] };
   assert.equal(refiningLib.refineCheckFor(smith, refiningLib.findRecipe(copperId)).target, 6, "Refining uses its own DC");
-  await smith.createEmbeddedDocuments("Item", [{ name: "Coal", type: "loot", system: { quantity: 3 } }]);
+  await smith.createEmbeddedDocuments("Item", [{ name: "Coal", type: "loot", system: { quantity: 3 } }, { name: "Copper Ore", type: "loot", system: { quantity: 4 } }]);
   rolls.push([10, 12]);
   result = await api.refining.craft(smith, copperId, 1);
   assert.equal(result.xp, 7, "Refining uses its own XP");
