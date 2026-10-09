@@ -8,6 +8,8 @@ Update both modules together: Crafting Professions 0.4.1 requires Gathering Prof
 
 Profession actions now use an active-GM-granted character lock. Keep a GM connected for player crafting, bounty hunts, abilities, scroll learning, collection and gathering reservations. A disconnected client's lock expires after two minutes; normal actions renew it while a prompt is open. Inventory, limits and eligibility are rechecked inside the lock.
 
+Party-wide one-time bounties also share a party-completion lock, so different characters cannot claim the same contract simultaneously.
+
 Timed jobs remain queued until their rewards are delivered. Gold has an atomic delivery receipt; delivered items carry a job receipt, so retries after partial failures do not duplicate rewards. Equipment and pending-perk items remain separate; other items stack only when their relevant data matches.
 
 Checks use dnd5e's ability, skill or tool rolling APIs, including conditions, bonuses and advantage/disadvantage. Displayed success odds are base estimates, not promises about system-modified rolls. Conservation refunds reverse at most one pull per reservation ticket. Existing settings, progress and world documents are preserved.
