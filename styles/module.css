@@ -462,3 +462,31 @@
 .gp-dc-tile.easier { border-color: rgba(111,191,127,.55); background: rgba(111,191,127,.1); }
 .gp-hub .gp-cond { height: auto; display: flex; flex-direction: column; flex: 1 1 auto; }
 .gp-hub .gp-cond-body { overflow: visible; padding: 0; flex: 1 1 auto; }
+
+/* ---- Hub: Materials (gathering materials and rare finds per profession) ---- */
+.gp-mat-row { display: grid; grid-template-columns: 70px 1fr; gap: .5rem; padding: .45rem 0; border-top: 1px solid rgba(255,255,255,.06); }
+.gp-mat-row:first-of-type { border-top: none; }
+.gp-mat-tier { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .1rem; border-radius: 6px; background: rgba(0,0,0,.3); font-weight: 700; color: var(--gp-gold); font-size: .85em; letter-spacing: .05em; text-transform: uppercase; }
+.gp-mat-tier small { font-weight: 400; color: var(--gp-ink); opacity: .6; text-transform: none; letter-spacing: 0; }
+.gp-mat-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .4rem; }
+.gp-mat-tile { position: relative; display: flex; flex-direction: column; align-items: center; gap: .15rem; padding: .45rem .4rem .4rem; border-radius: 6px; background: rgba(0,0,0,.35); box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); text-align: center; font-size: .82em; cursor: pointer; }
+.gp-mat-tile:hover { box-shadow: inset 0 0 0 1px var(--gp-gold); }
+.gp-mat-tile img { width: 40px; height: 40px; object-fit: contain; border: none; filter: drop-shadow(0 1px 3px #000); }
+.gp-mat-tile strong { line-height: 1.15; }
+.gp-mat-tile small { opacity: .7; }
+.gp-mat-tile.unplaced { box-shadow: inset 0 0 0 1px rgba(224,123,116,.6); }
+.gp-mat-where { font-size: .9em; opacity: .8; }
+.gp-mat-where .fa-location-dot { color: var(--gp-good); }
+.gp-mat-where .fa-circle-exclamation { color: var(--gp-bad); }
+.gp-mat-badge { position: absolute; top: .3rem; left: .4rem; color: var(--gp-gold); opacity: .8; }
+.gp-mat-tile .gp-slot-clear { position: absolute; top: .25rem; right: .35rem; }
+.gp-mat-drop { min-height: 64px; justify-content: center; text-align: center; }
+.gp-mat-rare { display: flex; flex-direction: column; gap: .35rem; min-width: 0; }
+.gp-mat-table { font-size: .85em; }
+.gp-mat-table i { color: var(--gp-gold); }
+.gp-mat-table a { cursor: pointer; text-decoration: underline dotted; }
+.gp-rare-tile { cursor: default; }
+.gp-rare-tile img, .gp-rare-tile strong { cursor: pointer; }
+.gp-rare-weight { display: flex; align-items: center; gap: .3rem; font-size: .9em; }
+.gp-rare-weight span { opacity: .7; }
+.gp-rare-weight input { width: 56px; height: 24px; text-align: center; }

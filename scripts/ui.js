@@ -345,53 +345,10 @@ export function registerSceneControls() {
   });
 }
 
-export function openMaterialManager() {
+/** Profession materials now live in the GM hub (Materials section). */
+export function openMaterialManager(profession = null) {
   if (!game.user.isGM) return;
-  const assigned = Array.from(game.items).filter(item => materialRule(item));
-  assigned.sort((a, b) => a.name.localeCompare(b.name));
-  const rows = assigned.map(item => {
-    const rule = materialRule(item);
-    const untrained = rule.dc + activeRules().tierUntrainedDc[rule.tier - 1] + rule.untrainedDc;
-    return `<tr data-name="${escape(item.name.toLowerCase())}"><td><img src="${escape(item.img)}" alt=""></td><td>${escape(item.name)}</td><td>${escape(PROFESSIONS[rule.profession].label)}</td><td>${rule.tier}</td><td>${rule.dc}</td><td>${untrained}</td><td>${rule.xp}</td><td>${escape(rule.baseYield)}</td><td><button type="button" data-edit="${escape(item.id)}">Edit</button></td></tr>`;
-  }).join("");
-  const unassigned = Array.from(game.items).filter(item => !materialRule(item));
-  unassigned.sort((a, b) => a.name.localeCompare(b.name));
-  const options = unassigned.map(item => option(item.id, item.name, "")).join("");
-  const manager = content(`
-    <div class="gp-toolbar"><button type="button" data-rules>Tier &amp; Rank Rules</button><button type="button" data-professions>Professions &amp; Skill Tree</button><button type="button" data-rare-tables>Rare-Find Tables</button><button type="button" data-tools>Gathering Tools</button><button type="button" data-nodes>Node Manager</button><button type="button" data-conditions>Conditions &amp; Biomes</button><label>Assign another Item <select data-add-item><option value="">Choose an Item</option>${options}</select></label><button type="button" data-add>Assign</button></div>
-    <input type="search" data-filter placeholder="Search assigned materials" aria-label="Search materials">
-    <div class="gp-scroll"><table><thead><tr><th></th><th>Material</th><th>Profession</th><th>Tier</th><th>Base DC</th><th>Untrained DC</th><th>XP</th><th>Base Yield</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
-  `);
-  void Dialog().prompt({
-    window: { title: "Profession Materials" }, content: manager,
-    position: { width: 1000, height: 650 }, ok: { label: "Close" },
-    render: (_event, dialog) => {
-      const root = dialog.element;
-      root.querySelector("[data-filter]")?.addEventListener("input", event => {
-        const query = event.target.value.trim().toLowerCase();
-        root.querySelectorAll("tr[data-name]").forEach(row => { row.hidden = !row.dataset.name.includes(query); });
-      });
-      // GM settings live in the Gathering Professions hub.
-      const hub = section => () => void import("./hub.js").then(module => module.openHub(section)).catch(report);
-      root.querySelector("[data-rules]")?.addEventListener("click", hub("rules"));
-      root.querySelector("[data-conditions]")?.addEventListener("click", hub("conditions"));
-      root.querySelector("[data-nodes]")?.addEventListener("click", async () => {
-        await dialog.close();
-        void openNodeManager().catch(report);
-      });
-      root.querySelector("[data-rare-tables]")?.addEventListener("click", hub("rare"));
-      root.querySelector("[data-tools]")?.addEventListener("click", hub("tools"));
-      root.querySelector("[data-professions]")?.addEventListener("click", hub("professions"));
-      root.querySelector("[data-add]")?.addEventListener("click", async () => {
-        const item = game.items.get(root.querySelector("[data-add-item]")?.value);
-        if (item && await openMaterialEditor(item)) { await dialog.close(); openMaterialManager(); }
-      });
-      root.querySelectorAll("[data-edit]").forEach(button => button.addEventListener("click", async () => {
-        const item = game.items.get(button.dataset.edit);
-        if (item && await openMaterialEditor(item)) { await dialog.close(); openMaterialManager(); }
-      }));
-    }
-  });
+  void import("./hub.js").then(module => module.openHub("materials", typeof profession === "string" ? { profession } : {})).catch(report);
 }
 
 export function registerSettingsMenu() {
@@ -411,7 +368,7 @@ export function registerSettingsMenu() {
   menu("conditions", "Conditions & Biomes", "Conditions", "Pin season, weather, or time; edit biomes; set how conditions change DCs.", "fas fa-cloud-sun-rain", hub("conditions"));
   menu("content", "Gathering Content", "Skill Tree & Content", "The linked gathering tree, skill points, and the module's content check.", "fas fa-diagram-project", hub("tree"));
   menu("nodes", "Gathering Nodes", "Open Node Manager", "Build, edit, place, reveal, and reset gathering nodes.", "fas fa-mountain-sun", launcher(() => openNodeManager()));
-  menu("materials", "Profession Materials", "Open Materials Editor", "Assign materials to professions and tiers.", "fas fa-cubes", launcher(() => openMaterialManager()));
+  menu("materials", "Profession Materials", "Materials", "Each profession's gathering materials and rare finds, by tier.", "fas fa-cubes", hub("materials"));
 }
 
 export function registerUIHooks() {

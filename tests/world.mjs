@@ -791,7 +791,48 @@ assert.equal(folders.find(folder => folder.id === builtTree.folder).name, "Gathe
   await api.setProfessions(Object.values(api.getProfessions()).map(entry => entry.key === "mining" ? savedMining : entry));
   await game.settings.set("gathering-professions", "conditionDc", (await import("../scripts/conditions.js")).defaultConditionDcRows());
   const sections = Object.fromEntries(hubLib.HUB_SECTIONS.map(section => [section.id, hubLib.renderHub({ ...hubLib.initialHubView(section.id), section: section.id })]));
-  assert.deepEqual(Object.keys(sections), ["professions", "tree", "tools", "rare", "rules", "conditions"]);
+  assert.deepEqual(Object.keys(sections), ["professions", "materials", "tree", "tools", "rare", "rules", "conditions"]);
+  // Materials: each profession's gathering materials by tier (with nodes) and its rare finds.
+  assert.match(sections.materials, /data-act="materials-prof" data-prof="mining"/);
+  assert.match(sections.materials, /Test Copper Ore/);
+  assert.match(sections.materials, /Mining Rare Finds — Tier 1/);
+  assert.match(sections.materials, /Sparkvein Quartz/, "Rare finds listed with the profession");
+  assert.match(sections.materials, /33% of draws/);
+  const materialsLib = await import("../scripts/materials.js");
+  // Node lookup: a Gatherer page whose table drops the material (journals were reset above).
+  const index = materialsLib.nodeIndex([{ name: "Copper Vein", flags: { gatherer: { table: result.miningTable } } }, { name: "Deep Silver Seam", flags: { gatherer: { table: tables.find(table => table.name === "Test Silver Seam").uuid } } }]);
+  const miningModel = materialsLib.materialsModel("mining", undefined, index);
+  const copperEntry = miningModel.gathering[0].materials.find(entry => entry.name === "Test Copper Ore");
+  assert.deepEqual(copperEntry.nodes, ["Copper Vein"]);
+  assert.deepEqual(miningModel.gathering[2].materials.find(entry => entry.name === "Test Silver Ore").nodes.sort(), ["Copper Vein", "Deep Silver Seam"]);
+  assert.deepEqual(materialsLib.materialsModel("mining", undefined, new Map()).gathering[0].materials.find(entry => entry.name === "Test Copper Ore").nodes, [], "No node: flagged");
+  assert.equal(miningModel.rare[0].entries.length, 3);
+  assert.equal(miningModel.rare[0].fallback, false);
+  const herbHtml = hubLib.renderHub({ ...hubLib.initialHubView("materials", { profession: "herbalism" }), section: "materials" });
+  assert.match(herbHtml, /Test Moonpetal/);
+  assert.doesNotMatch(herbHtml, /Test Copper Ore/, "Only the chosen profession");
+  // Rare table edits: add an Item to a tier, reweight, remove; ranges and formula stay valid.
+  const tierOne = tables.find(table => table.uuid === miningModel.rare[0].tableUuid);
+  const gem = items.find(item => item.name === "Test Star Sapphire");
+  assert.equal(await materialsLib.addRareItem("mining", 1, gem), true);
+  assert.equal(await materialsLib.addRareItem("mining", 1, gem), false, "No duplicates");
+  assert.equal(tierOne.results.length, 4);
+  assert.equal(tierOne.formula, "1d4");
+  assert.deepEqual(gem.flags["gathering-professions"].rareFind, { profession: "mining", tier: 1 });
+  const gemResult = tierOne.results.find(result => result.documentUuid === gem.uuid);
+  await materialsLib.setRareWeights(tierOne, { [gemResult.id]: 3 });
+  assert.equal(tierOne.formula, "1d6");
+  assert.deepEqual(tierOne.results.map(result => result.range), [[1, 1], [2, 2], [3, 3], [4, 6]]);
+  await assert.rejects(materialsLib.setRareWeights(tierOne, { [gemResult.id]: 0 }), /Weights/);
+  await materialsLib.removeRareResult(tierOne, gemResult.id);
+  assert.deepEqual([tierOne.results.length, tierOne.formula], [3, "1d3"]);
+  // Assign and unassign a world Item as a material from the browser.
+  globalThis.Roll ??= class { static validate(formula) { return /^[\d\sd+]+$/.test(formula); } };
+  const pickItem = items.find(item => item.name === "Test Miner's Pick");
+  await materialsLib.assignMaterial("mining", 2, pickItem);
+  assert.equal(materialsLib.materialsModel("mining").gathering[1].materials.some(entry => entry.name === "Test Miner's Pick"), true);
+  await materialsLib.unassignMaterial(pickItem);
+  assert.equal(materialsLib.materialsModel("mining").gathering[1].materials.some(entry => entry.name === "Test Miner's Pick"), false);
   for (const html of Object.values(sections)) assert.match(html, /gp-hub-nav-item active/);
   assert.match(sections.professions, /name="p_label_0" value="Mining"/);
   assert.match(sections.professions, /data-act="prof-add"/);

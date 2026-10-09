@@ -293,6 +293,13 @@ You can filter by scene, profession, or name. Select nodes to reset, reveal, or 
 
 From macros, use `game.modules.get("gathering-professions").api.nodes`. It includes `build`, `update`, `duplicate`, `delete`, `reset`, `setHidden`, `placePin`, `placeLinked`, `openManager`, and `openBuilder`.
 
+## Materials browser (0.19.0)
+
+**GM hub → Materials** (also the **Profession Materials** settings button) shows one profession at a time (tabs across the top):
+
+- **Gathering materials** by tier 1–5, as tiles with DC, XP, base yield, a condition-rules badge, and the nodes that drop them. A red outline means no node drops it yet. Click a tile to edit the material; × stops treating the Item as a material (its settings are kept). Drop a world Item on a tier to make it a material of this profession at that tier.
+- **Rare finds** by tier, read from that tier's rare-find table (or the any-tier table, marked). Each item shows its weight and chance within the tier. Drop an Item on a tier to add it to that table (the table is created if missing); × removes it; change weights and **Save rare weights**. Click an item or table name to open it.
+
 ## GM hub (0.15.0)
 
 Every GM setting is in one window, **Gathering Professions**, styled like the gathering window. Open it from **Module Settings → Gathering Professions** (each button opens its section) or from the Profession Materials toolbar. Sections:

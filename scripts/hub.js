@@ -6,10 +6,12 @@ import { MODULE_ID, PROFESSIONS, ABILITY_LABELS, RANK_DIE, activeRules } from ".
 import { SKILL_TREE_ID, skillTreeConfig, availableSkillTrees, configuredSkillTree } from "./integrations.js";
 import { toolDurability } from "./durability.js";
 import { renderConditionsWindow, handleConditionsAction, bindConditionInputs } from "./conditions-ui.js";
-import { saveRulesValues } from "./ui.js";
+import { saveRulesValues, openMaterialEditor } from "./ui.js";
+import { materialsModel, addRareItem, removeRareResult, setRareWeights, assignMaterial, unassignMaterial } from "./materials.js";
 
 export const HUB_SECTIONS = Object.freeze([
   { id: "professions", label: "Professions", icon: "fa-hammer", blurb: "Gathering professions, their check ability, and a fallback rare table." },
+  { id: "materials", label: "Materials", icon: "fa-cubes", blurb: "Each profession's gathering materials by tier, where they drop, and its rare finds." },
   { id: "tree", label: "Skill Tree", icon: "fa-diagram-project", blurb: "The shared gathering skill tree and how many points each rank grants." },
   { id: "tools", label: "Tools", icon: "fa-screwdriver-wrench", blurb: "Every gather needs one of its profession's accepted tools. Nodes can require their own." },
   { id: "rare", label: "Rare Finds", icon: "fa-gem", blurb: "One rare-find table per profession and material tier." },
@@ -72,6 +74,55 @@ function professionsSection(view) {
       <button type="button" class="gp-hub-card gp-hub-add" data-act="prof-add"><i class="fas fa-plus"></i> Add a profession</button></div>
     <p class="gp-hub-note">Keys cannot change after saving, because characters store XP under them. Removing a profession keeps every character's XP; its materials fall back to Gatherer's normal awards.</p>
     <footer class="gp-hub-footer"><button type="button" class="gp-hub-primary" data-act="save-professions"><i class="fas fa-floppy-disk"></i> Save professions</button></footer>`;
+}
+
+function materialTile(material) {
+  const where = material.nodes.length ? `Found at: ${material.nodes.join(", ")}` : "Not on any node";
+  return `<div class="gp-mat-tile ${material.nodes.length ? "" : "unplaced"}" data-act="material-edit" data-id="${escape(material.id)}" title="${escape(`${material.name} — click to edit. ${where}`)}">
+      ${material.img ? `<img src="${escape(material.img)}" alt="">` : '<i class="fas fa-cube"></i>'}
+      <strong>${escape(material.name)}</strong>
+      <small>DC ${escape(material.dc)} · ${escape(material.xp)} XP · ${escape(material.baseYield)}</small>
+      <span class="gp-mat-where"><i class="fas ${material.nodes.length ? "fa-location-dot" : "fa-circle-exclamation"}"></i> ${escape(material.nodes.length ? material.nodes.length === 1 ? material.nodes[0] : `${material.nodes.length} nodes` : "No node")}</span>
+      ${material.conditions ? `<span class="gp-mat-badge" title="Has condition rules"><i class="fas fa-cloud-sun-rain"></i></span>` : ""}
+      <a class="gp-slot-clear" data-act="material-unassign" data-id="${escape(material.id)}" title="Remove from this profession"><i class="fas fa-xmark"></i></a>
+    </div>`;
+}
+
+function rareTile(entry, group) {
+  return `<div class="gp-mat-tile gp-rare-tile ${entry.missing ? "unplaced" : ""}" title="${escape(entry.name)}${entry.missing ? " (Item missing)" : ""}">
+      ${entry.img ? `<img src="${escape(entry.img)}" alt="" data-act="rare-open" data-uuid="${escape(entry.uuid)}">` : '<i class="fas fa-gem"></i>'}
+      <strong data-act="rare-open" data-uuid="${escape(entry.uuid)}">${escape(entry.name)}</strong>
+      <label class="gp-rare-weight"><span>Weight</span><input type="number" min="1" max="1000" step="1" name="rw__${escape(group.tableUuid)}__${escape(entry.resultId)}" value="${escape(entry.weight)}"></label>
+      <small>${entry.percent}% of draws</small>
+      <a class="gp-slot-clear" data-act="rare-remove" data-table="${escape(group.tableUuid)}" data-result="${escape(entry.resultId)}" title="Remove from this table"><i class="fas fa-xmark"></i></a>
+    </div>`;
+}
+
+function materialsSection(view) {
+  const professions = Object.values(PROFESSIONS);
+  const key = PROFESSIONS[view.materialsProf] ? view.materialsProf : professions[0]?.key;
+  const tabs = professions.map(profession => `<a class="gp-hub-subtab ${profession.key === key ? "active" : ""}" data-act="materials-prof" data-prof="${escape(profession.key)}"><i class="fas fa-hammer"></i> ${escape(profession.label)}</a>`).join("");
+  if (!key) return '<p class="gp-hub-note">No professions yet.</p>';
+  const model = materialsModel(key);
+  const count = model.gathering.reduce((sum, group) => sum + group.materials.length, 0);
+  const rareCount = model.rare.reduce((sum, group) => sum + group.entries.length, 0);
+  const gathering = model.gathering.map(group => `<div class="gp-mat-row"><div class="gp-mat-tier">Tier ${group.tier}<small>${group.materials.length}</small></div>
+      <div class="gp-mat-tiles">${group.materials.map(materialTile).join("")}
+        <div class="gp-slot gp-mat-drop" data-drop="material" data-prof="${escape(key)}" data-tier="${group.tier}"><span class="gp-slot-empty"><i class="fas fa-hand-holding"></i> Drop an Item to add it at tier ${group.tier}</span></div></div></div>`).join("");
+  const rare = model.rare.map(group => `<div class="gp-mat-row"><div class="gp-mat-tier">Tier ${group.tier}<small>${group.entries.length}</small></div>
+      <div class="gp-mat-rare">
+        <div class="gp-mat-table">${group.tableUuid ? `<i class="fas fa-table-list"></i> <a data-act="rare-open" data-uuid="${escape(group.tableUuid)}">${escape(group.tableName)}</a>${group.fallback ? ' <span class="gp-pill gp-pill-gold" title="No table for this tier; the any-tier table is used">any-tier</span>' : ""}` : '<span class="gp-hub-muted">No table yet: dropping an Item creates one.</span>'}</div>
+        <div class="gp-mat-tiles">${group.entries.map(entry => rareTile(entry, group)).join("")}
+          <div class="gp-slot gp-mat-drop" data-drop="rare-item" data-prof="${escape(key)}" data-tier="${group.tier}"><span class="gp-slot-empty"><i class="fas fa-hand-holding"></i> Drop an Item to add it to tier ${group.tier}'s rare table</span></div></div>
+      </div></div>`).join("");
+  return `<nav class="gp-hub-subtabs">${tabs}</nav>
+    <section class="gp-hub-card"><div class="gp-hub-card-head"><i class="fas fa-cubes"></i> Gathering materials <small>${count} material${count === 1 ? "" : "s"}</small></div>
+      <p class="gp-hub-note">Click a material to edit its tier, DC, XP, yield, and condition rules. A red outline means no gathering node drops it yet.</p>
+      ${gathering}</section>
+    <section class="gp-hub-card"><div class="gp-hub-card-head"><i class="fas fa-gem"></i> Rare finds <small>${rareCount} item${rareCount === 1 ? "" : "s"}</small></div>
+      <p class="gp-hub-note">Rare finds come only from these tables (see Rare Finds for how tiers climb). Weight sets how often an item is drawn within its tier.</p>
+      ${rare}</section>
+    <footer class="gp-hub-footer"><button type="button" class="gp-hub-primary" data-act="save-weights"><i class="fas fa-floppy-disk"></i> Save rare weights</button></footer>`;
 }
 
 function treeSection() {
@@ -181,7 +232,7 @@ export function renderHub(view) {
   const nav = HUB_SECTIONS.map(entry => `<a class="gp-hub-nav-item ${entry.id === section.id ? "active" : ""}" data-act="section" data-section="${entry.id}">
       <i class="fas ${entry.icon}"></i><span>${escape(entry.label)}</span></a>`).join("");
   const body = {
-    professions: () => professionsSection(view), tree: () => treeSection(), tools: () => toolsSection(view),
+    professions: () => professionsSection(view), materials: () => materialsSection(view), tree: () => treeSection(), tools: () => toolsSection(view),
     rare: () => rareSection(view), rules: () => rulesSection(), conditions: () => renderConditionsWindow(view.conditions)
   }[section.id]();
   return `<div class="gp-hub">
@@ -201,7 +252,8 @@ export function initialHubView(section = "professions", options = {}) {
     professions: professions.map(profession => ({ ...profession, isNew: false, removed: false })),
     tools: Object.fromEntries(professions.map(profession => [profession.key, [...(profession.tools ?? [])]])),
     rare: Object.fromEntries(professions.map(profession => [profession.key, Array.from({ length: 5 }, (_, tier) => profession.rareTables?.[tier] ?? "")])),
-    conditions: { tab: options.conditionsTab ?? "now", dcDraft: null, dcSpecific: null }
+    conditions: { tab: options.conditionsTab ?? "now", dcDraft: null, dcSpecific: null },
+    materialsProf: options.profession ?? professions[0]?.key ?? ""
   };
 }
 
@@ -284,10 +336,20 @@ function defineClass() {
     async #drop(target, event) {
       const data = await dropped(event);
       const kind = target.dataset.drop;
-      const wants = kind === "tool" ? "Item" : "RollTable";
-      if (data?.type !== wants) return ui.notifications.warn(kind === "tool" ? "Drop an Item here." : "Drop a Rollable Table here.");
+      const wants = ["tool", "material", "rare-item"].includes(kind) ? "Item" : "RollTable";
+      if (data?.type !== wants) return ui.notifications.warn(wants === "Item" ? "Drop an Item here." : "Drop a Rollable Table here.");
       const document = await fromUuid(data.uuid);
       if (!document) return ui.notifications.warn("That document could not be found.");
+      if (kind === "material") {
+        await assignMaterial(target.dataset.prof, Number(target.dataset.tier), document);
+        ui.notifications.info(`${document.name} is now a tier ${target.dataset.tier} ${PROFESSIONS[target.dataset.prof]?.label ?? ""} material.`);
+        return this.render();
+      }
+      if (kind === "rare-item") {
+        const added = await addRareItem(target.dataset.prof, Number(target.dataset.tier), document);
+        ui.notifications.info(added ? `Added ${document.name} to the tier ${target.dataset.tier} rare table.` : `${document.name} is already on that table.`);
+        return this.render();
+      }
       capture(this.view, this.form);
       if (kind === "tool") {
         const list = this.view.tools[target.dataset.prof] ??= [];
@@ -306,6 +368,45 @@ function defineClass() {
       const values = () => Object.fromEntries(Array.from(form.querySelectorAll("[name]")).map(input =>
         [input.name, input.type === "checkbox" ? input.checked : input.value]));
       switch (act) {
+        case "materials-prof":
+          view.materialsProf = button.dataset.prof;
+          return this.render();
+        case "material-edit": {
+          const item = game.items.get(button.dataset.id);
+          if (item && await openMaterialEditor(item)) return this.render();
+          return;
+        }
+        case "material-unassign": {
+          const item = game.items.get(button.dataset.id);
+          if (!item) return;
+          await unassignMaterial(item);
+          ui.notifications.info(`${item.name} is no longer a gathering material.`);
+          return this.render();
+        }
+        case "rare-open": {
+          const document = button.dataset.uuid ? await fromUuid(button.dataset.uuid) : null;
+          return document?.sheet?.render(true);
+        }
+        case "rare-remove": {
+          const table = await fromUuid(button.dataset.table);
+          if (!table) return;
+          await removeRareResult(table, button.dataset.result);
+          return this.render();
+        }
+        case "save-weights": {
+          const byTable = new Map();
+          for (const input of form.querySelectorAll("input[name^='rw__']")) {
+            const [, tableUuid, resultId] = input.name.split("__");
+            if (!byTable.has(tableUuid)) byTable.set(tableUuid, {});
+            byTable.get(tableUuid)[resultId] = input.value;
+          }
+          for (const [tableUuid, weights] of byTable) {
+            const table = await fromUuid(tableUuid);
+            if (table) await setRareWeights(table, weights);
+          }
+          ui.notifications.info("Rare weights saved.");
+          return this.render();
+        }
         case "section":
           capture(view, form);
           view.section = button.dataset.section;
@@ -391,6 +492,7 @@ export async function openHub(section = "professions", options = {}) {
   } else {
     hub.view.section = section;
     if (options.conditionsTab) hub.view.conditions.tab = options.conditionsTab;
+    if (options.profession) hub.view.materialsProf = options.profession;
   }
   await hub.render({ force: true });
   hub.bringToFront?.();

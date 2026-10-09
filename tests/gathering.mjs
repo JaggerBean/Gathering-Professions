@@ -279,9 +279,14 @@ assert.equal(await openMaterialEditor(editable), true);
 assert.equal(materialRule(editable).baseYield, "1d2");
 assert.equal(editable.material.profession, null);
 game.items = [editable];
-openMaterialManager();
-assert.ok(dialogHtml.includes("<th>Base Yield</th>"));
-assert.ok(dialogHtml.includes("<td>1d2</td>"));
+{
+  // The materials browser (GM hub) lists it under Mining, tier 1, with no node yet.
+  const { materialsModel } = await import("../scripts/materials.js");
+  const model = materialsModel("mining", game.items, new Map());
+  assert.deepEqual(model.gathering[0].materials.map(entry => [entry.name, entry.baseYield, entry.nodes.length]), [["Stone", "1d2", 0]]);
+  assert.equal(model.gathering.length, 5);
+  assert.equal(model.rare.length, 5);
+}
 await assert.rejects(api.setMaterial(editable, { profession: "mining", tier: 1, baseYield: "bad formula" }), /valid dice/);
 await assert.rejects(api.setMaterial(editable, { profession: "mining", tier: 1, baseYield: 4 }), /stored as text/);
 assert.equal(materialRule(editable).baseYield, "1d2", "Invalid saves must preserve the previous formula");
