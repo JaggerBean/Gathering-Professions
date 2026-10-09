@@ -513,7 +513,7 @@ export function refineCheckFor(actor, entry) {
   return { tier, ...checkFormula(actor, entry.profession, xp, rules.refineDc[tier - 1], { tier }) };
 }
 
-async function removeFromInventory(actor, name, quantity) {
+export async function removeFromInventory(actor, name, quantity) {
   let left = quantity;
   const updates = [];
   const deletes = [];
@@ -603,7 +603,8 @@ export async function craftRecipe(actor, id, batch = 1, { addXp }) {
 /* Timed jobs (actor flag refiningJobs)                                    */
 /* ---------------------------------------------------------------------- */
 
-async function queueJob(actor, job) {
+/** Queue finished goods for later delivery (shared with crafting modules). */
+export async function queueJob(actor, job) {
   const id = foundry.utils.randomID();
   const record = { ...job, id };
   await actor.setFlag(MODULE_ID, `refiningJobs.${id}`, record);
@@ -634,4 +635,71 @@ export async function deliverAllDueJobs(now = game.time?.worldTime ?? 0) {
     if (actorJobs(actor).some(job => job.ready <= now)) delivered.push(...await deliverDueJobs(actor, now));
   }
   return delivered;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Recipes-window providers (one tab per refining profession)              */
+/* ---------------------------------------------------------------------- */
+
+/** The Recipes-window provider for one refining profession. */
+export function refiningProvider(profession, { addXp }) {
+  const entry = REFINING[profession];
+  return {
+    key: profession, order: 10 + Object.keys(REFINING).indexOf(profession),
+    get label() { return PROFESSIONS[profession]?.label ?? profession; },
+    verb: entry.verb, action: entry.action, icon: entry.icon,
+    get rollLabel() { return `Rolls ${PROFESSIONS[profession]?.label ?? profession} at the recipe's tier`; },
+    learnOptions: [["auto", "Auto"], ["learned", "Learned"], ["unlearned", "Unlearned"]],
+    learnHint: "Auto: learned once the party has had every ingredient",
+    perCharacter: false,
+    hiddenHint: "Gather new materials to discover more ways to make this",
+    emptyText: "No recipes discovered yet. Gather materials to discover what they refine into.",
+    gmHint: "Eye: whether players see it. Auto = learned once the party has had every ingredient.",
+    visible: () => Boolean(PROFESSIONS[profession]) && entry.requires.every(id => game.modules.get(id)?.active),
+    recipes: options => refiningRecipes(profession, options),
+    isKnown: row => isKnown(row),
+    learnState: row => learnedStates()[row.id] ?? "auto",
+    setLearned: (id, state) => setLearnedState(id, state),
+    check: (actor, row) => refineCheckFor(actor, row),
+    blocked: () => null,
+    minutes: row => recipeMinutes(row),
+    defaultMinutes: tier => recipeMinutes({ tier }),
+    craft: (actor, id, batch) => craftRecipe(actor, id, batch, { addXp }),
+    gm: {
+      create: fields => createRecipe({ ...fields, profession }),
+      update: (id, fields) => updateRecipe(id, fields),
+      disable: (id, on) => setRecipeDisabled(id, on),
+      reset: id => resetRecipe(id),
+      delete: id => deleteRecipe(id)
+    },
+    itemGroups: search => refiningItemGroups(profession, search)
+  };
+}
+
+/** Editor picker groups: this profession's materials, refined goods, other items. */
+export function refiningItemGroups(profession, search = "") {
+  const label = PROFESSIONS[profession]?.label ?? "Profession";
+  const refined = new Set(allRecipes({ includeDisabled: true }).map(row => row.output));
+  return itemPickerGroups(search, [
+    { label: `${label} materials`, filter: item => materialRule(item)?.profession === profession },
+    { label: "Refined goods", filter: item => refined.has(item.name) }
+  ]);
+}
+
+const OTHER_LIMIT = 60;
+/**
+ * World Items grouped for a picker: each group's filter in order (an item
+ * appears once), then "Other items" (first 60 until searched).
+ */
+export function itemPickerGroups(search = "", groups = []) {
+  const query = search.trim().toLowerCase();
+  const items = Array.from(game.items ?? []).filter(item => item?.name).sort((a, b) => a.name.localeCompare(b.name));
+  const match = item => !query || item.name.toLowerCase().includes(query);
+  const seen = new Set();
+  const take = list => list.filter(item => match(item) && !seen.has(item.name) && seen.add(item.name)).map(item => ({ name: item.name, img: item.img || "icons/svg/item-bag.svg" }));
+  const result = groups.map(group => ({ label: group.label, items: take(items.filter(group.filter)) }));
+  const other = { label: "Other items", items: take(items) };
+  other.more = Math.max(0, other.items.length - OTHER_LIMIT);
+  other.items = other.items.slice(0, OTHER_LIMIT);
+  return [...result, other].filter(group => group.items.length || group.more);
 }
