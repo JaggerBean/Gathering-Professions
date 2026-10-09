@@ -868,4 +868,37 @@ const noTreeSetup = await api.content.ensure({ force: true });
 assert.equal(noTreeSetup.tree, "Skill Tree inactive", "Other world setup runs without Skill Tree");
 assert.equal(settings.worldContentVersion, 0, "Tree setup remains due when Skill Tree becomes active");
 game.modules.get("skill-tree").active = true;
+// Material presets: herbalism from Kris's Trade Goods + Heliana's Harvest (fake packs).
+{
+  const presetLib = await import("../scripts/presets.js");
+  assert.deepEqual(presetLib.availablePresets(), [], "Needs both source modules");
+  game.modules.set("kctg-5e", { active: true });
+  game.modules.set("helianas-harvest-compendium", { active: true });
+  const preset = presetLib.MATERIAL_PRESETS.herbalism;
+  const fakePack = (id, names) => ({ title: id, async getIndex() { return names.map(name => ({ _id: `${id}-${name}`, name })); },
+    async getDocument(entryId) { const name = entryId.slice(id.length + 1); return { uuid: `Compendium.${id}.Item.${entryId}`, toObject: () => ({ _id: entryId, name, type: "loot", img: "herb.webp", system: {}, flags: {} }) }; } });
+  const kctgNames = [...Object.values(preset.materials).flat(), ...Object.values(preset.rare).flat().filter(([pack]) => pack === "kctg-5e.kctg-dnd5e").map(([, name]) => name)];
+  const plantNames = Object.values(preset.rare).flat().filter(([pack]) => pack !== "kctg-5e.kctg-dnd5e").map(([, name]) => name);
+  game.packs = new Map([["kctg-5e.kctg-dnd5e", fakePack("kctg-5e.kctg-dnd5e", kctgNames)], ["helianas-harvest-compendium.plant", fakePack("helianas-harvest-compendium.plant", plantNames)]]);
+  assert.deepEqual(presetLib.availablePresets().map(entry => entry.key), ["herbalism"]);
+  // One herb already in the world is reused, not duplicated.
+  const [existingClover] = await globalThis.Item.implementation.create([{ name: "Clover", type: "loot", img: "clover.webp", system: {}, flags: {} }]);
+  const report = await presetLib.applyMaterialPreset("herbalism");
+  assert.deepEqual([report.materials, report.rare, report.imported], [40, 15, 54]);
+  assert.equal(items.filter(item => item.name === "Clover").length, 1, "Existing Clover reused");
+  const herbModel = (await import("../scripts/materials.js")).materialsModel("herbalism");
+  assert.deepEqual(herbModel.gathering.map(group => group.materials.filter(entry => preset.materials[group.tier].includes(entry.name)).length), [8, 8, 8, 8, 8]);
+  assert.equal(herbModel.gathering[0].materials.find(entry => entry.name === "Clover").baseYield, "1d3");
+  assert.deepEqual(herbModel.rare.map(group => group.entries.map(entry => entry.name).sort()), Object.values(preset.rare).map(entries => entries.map(([, name]) => name).sort()), "Tier tables hold exactly the preset's rare finds");
+  assert.equal(existingClover.flags["gathering-professions"].material.tier, 1);
+  const silphium = items.find(item => item.name === "Silphium");
+  assert.equal(silphium._stats.compendiumSource, "Compendium.kctg-5e.kctg-dnd5e.Item.kctg-5e.kctg-dnd5e-Silphium");
+  const wildFolder = folders.find(folder => folder.id === silphium.folder);
+  assert.equal(wildFolder.name, "Wild");
+  // Applying again changes nothing structurally.
+  const again = await presetLib.applyMaterialPreset("herbalism");
+  assert.equal(again.imported, 0, "Second run reuses everything");
+  game.modules.delete("kctg-5e");
+  game.modules.delete("helianas-harvest-compendium");
+}
 console.log("PASS: sample world, gathering content setup, gathering window, Node Manager view, Node Builder, visibility and sense, pins, tint, timers, edit, duplicate, delete.");
