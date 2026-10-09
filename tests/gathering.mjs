@@ -34,10 +34,18 @@ class GathererSheet {
 globalThis.gatherer = GathererSheet;
 const completions = [];
 globalThis.Hooks = {
-  // First registration wins, so transient watchers (gather wrapper) never replace module hooks.
-  on(name, callback) { if (!hooks.has(name)) hooks.set(name, callback); return name; },
-  off() {},
-  callAll(name, payload) { if (name === "gatheringProfessionsGatherComplete") completions.push(payload); },
+  on(name, callback) {
+    if (!hooks.has(name)) {
+      const callbacks = [];
+      const dispatch = (...args) => { for (const fn of [...callbacks]) fn(...args); };
+      dispatch.callbacks = callbacks;
+      hooks.set(name, dispatch);
+    }
+    hooks.get(name).callbacks.push(callback);
+    return callback;
+  },
+  off(name, callback) { const list = hooks.get(name)?.callbacks; if (list?.includes(callback)) list.splice(list.indexOf(callback), 1); },
+  callAll(name, payload) { if (name === "gatheringProfessionsGatherComplete") completions.push(payload); hooks.get(name)?.(payload); },
   once(name, callback) { hooks.set(name, callback); }
 };
 globalThis.CONFIG = { Item: { documentClass: { implementation: Item } } };
