@@ -24,7 +24,7 @@ export const HUB_SECTIONS = Object.freeze([
 ]);
 
 // Sections added by other modules (e.g. Crafting Professions):
-// { id, label, icon, blurb, group?, order?, render() -> html, onClick(event, { hub, root }) -> Promise }
+// { id, label, icon, blurb, group?, order?, render() -> html, onClick(event, { hub, root }) -> Promise, onChange?(event, { hub, root }) }
 const EXTERNAL_SECTIONS = new Map();
 export function registerHubSection(section) {
   if (!section?.id || typeof section.render !== "function") throw new Error("A hub section needs an id and render().");
@@ -399,6 +399,12 @@ function defineClass() {
         if (!button || button.disabled) return;
         event.preventDefault();
         void this.#act(button).catch(report);
+      });
+      // Other modules' sections may also handle change events (onChange).
+      this.element.addEventListener("change", event => {
+        const externalRoot = event.target.closest?.(".gp-hub-external");
+        const section = externalRoot ? EXTERNAL_SECTIONS.get(externalRoot.dataset.section) : null;
+        if (section?.onChange) void Promise.resolve(section.onChange(event, { hub: this, root: externalRoot })).catch(report);
       });
       this.element.addEventListener("dragover", event => { if (!inNodes(event) && event.target.closest?.("[data-drop]")) event.preventDefault(); });
       this.element.addEventListener("drop", event => {
