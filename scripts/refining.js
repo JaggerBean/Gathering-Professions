@@ -1,49 +1,71 @@
 // Refining: gatherers turn their own materials into workable goods (smelting,
-// milling, tanning, preparation) without a crafting profession. Recipes live in
-// Mastercrafted recipe books built by this module; each recipe runs
-// `api.refining.check` before Mastercrafted consumes and produces, so the
-// gathering profession's check, rank die, tier DC, and XP apply.
+// milling, tanning, preparation) with their gathering profession. Recipes are
+// module data; the Recipes window (recipes-ui.js) shows the ones the party has
+// discovered, and this file runs the craft: check, consume, produce or queue.
 import { MODULE_ID, PROFESSIONS, activeRules, checkFormula, materialRule, professionFlag } from "./rules.js";
 import { getDegreeOfSuccess, naturalMasterful } from "./gathering.js";
 import { MATERIAL_PRESETS, folderPath, worldItem } from "./presets.js";
 
-export const MASTERCRAFTED_ID = "mastercrafted";
-const RECIPE_TYPE = "mastercrafted.mastercrafted";
 const KCTG = "kctg-5e.kctg-dnd5e";
-// Refining takes half of the crafting time for the tier (minutes).
+const HELIANA = "helianas-harvest-compendium";
+// Minutes per unit, by tier (crafting time halved).
 export const REFINE_MINUTES = Object.freeze([30, 60, 120, 240, 720]);
-// Mastercrafted bonus output by check result: Excellent +1, Masterful +2.
-const MODIFIERS = Object.freeze([{ DC: 2, modifier: "+2" }, { DC: 1, modifier: "+1" }]);
+export const DRIED_PREFIX = "Dried ";
 
 const escape = value => String(value ?? "").replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
-const recipe = (tier, output, quantity, inputs, name = output) => Object.freeze({ tier, name, output, quantity, inputs: Object.freeze(inputs) });
+const slug = text => String(text).toLowerCase().replace(/['’]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+const recipe = (tier, output, quantity, inputs) => Object.freeze({ tier, output, quantity, inputs: Object.freeze(inputs.map(row => Object.freeze(row))) });
 
-// inputs: [name, quantity]. Tier = the tier of the material being refined.
+/* ---------------------------------------------------------------------- */
+/* Recipe data: every preset material refines into something.            */
+/* inputs: [name, quantity]; tier = the tier of the material refined.      */
+/* ---------------------------------------------------------------------- */
+
 export const REFINING = Object.freeze({
   mining: Object.freeze({
-    book: "Mining — Smelting", verb: "Smelting", requires: ["kctg-5e"], packs: [KCTG],
+    verb: "Smelting", icon: "fa-fire-burner", requires: ["kctg-5e"], packs: [KCTG],
     folder: ["Professions", "Mining", "Refined"],
     recipes: Object.freeze([
-      recipe(1, "Copper Ingot", 1, [["Copper Ore", 2], ["Coal", 1]]),
+      recipe(1, "Stone Brick", 1, [["Stone", 3]]),
       recipe(1, "Stone Brick", 1, [["Cobblestones", 2]]),
       recipe(1, "Glass", 1, [["Sandstone", 2], ["Coal", 1]]),
-      recipe(2, "Iron Ingot", 1, [["Iron Ore", 2], ["Coal", 1]]),
+      recipe(1, "Coke", 1, [["Coal", 3]]),
+      recipe(1, "Copper Ingot", 1, [["Copper Ore", 2], ["Coal", 1]]),
+      recipe(2, "Stone Brick", 2, [["Granite", 1]]),
+      recipe(2, "Glass", 2, [["Quartzite", 1], ["Coal", 1]]),
+      recipe(2, "Tin Ingot", 1, [["Tin", 2], ["Coal", 1]]),
       recipe(2, "Lead Ingot", 1, [["Lead", 2], ["Coal", 1]]),
-      recipe(2, "Pure-Metal Bronze Ingot", 1, [["Copper Ingot", 1], ["Tin", 1], ["Coal", 1]]),
+      recipe(2, "Iron Ingot", 1, [["Iron Ore", 2], ["Coal", 1]]),
+      recipe(2, "Pure-Metal Bronze Ingot", 4, [["Copper Ingot", 3], ["Tin Ingot", 1]]),
+      recipe(3, "Steel", 1, [["Iron Ingot", 1], ["Coke", 1]]),
+      recipe(3, "Steel", 1, [["Iron Ingot", 1], ["Coal", 3]]),
+      recipe(3, "Marble Slab", 1, [["Marble", 1]]),
+      recipe(3, "Polished Alabaster", 1, [["Alabaster", 1]]),
       recipe(3, "Silver Ingot", 1, [["Silver Ore", 1], ["Coal", 1]]),
       recipe(3, "Gold Ingot", 1, [["Gold Ore", 1], ["Coal", 1]]),
-      recipe(3, "Steel", 1, [["Iron Ingot", 1], ["Coal", 2]]),
-      recipe(4, "Platinum Ingot", 1, [["Platinum Ore", 1], ["Coal", 1]])
+      recipe(3, "Cut Kyanite", 1, [["Kyanite", 1]]),
+      recipe(4, "Platinum Ingot", 1, [["Platinum Ore", 1], ["Coke", 1]]),
+      recipe(4, "Cut Kornerupine", 1, [["Kornerupine", 1]]),
+      recipe(4, "Cut Harunite", 1, [["Harunite", 1]]),
+      recipe(4, "Cut Ravenar", 1, [["Ravenar", 1]]),
+      recipe(4, "Cut Benitoite", 1, [["Benitoite", 1]]),
+      recipe(5, "Mithral Ingot", 1, [["Mithral", 2], ["Coke", 1]]),
+      recipe(5, "Adamantine Ingot", 1, [["Adamantine", 2], ["Coke", 2]]),
+      recipe(5, "Cold Iron Ingot", 1, [["Cold Iron", 2], ["Coke", 1]]),
+      recipe(5, "Palladium Ingot", 1, [["Palladium", 2], ["Coke", 1]]),
+      recipe(5, "Cut Hambergite", 1, [["Hambergite", 1]])
     ])
   }),
   logging: Object.freeze({
-    book: "Logging — Milling", verb: "Milling", requires: ["kctg-5e"], packs: [KCTG],
+    verb: "Milling", icon: "fa-tree", requires: ["kctg-5e"], packs: [KCTG],
     folder: ["Professions", "Timber", "Timber"],
     recipes: Object.freeze([
+      recipe(1, "Charcoal", 1, [["Brushwood Bundle", 2]]),
+      recipe(1, "Split Bamboo", 3, [["Bamboo", 1]]),
       recipe(1, "Cedar Plank", 2, [["Cedar Log", 1]]),
       recipe(1, "Pine Plank", 2, [["Pine Log", 1]]),
-      recipe(1, "Charcoal", 1, [["Brushwood Bundle", 2]]),
       recipe(1, "Pine Tar", 1, [["Pine Log", 2]]),
+      recipe(1, "Charcoal", 2, [["Pine Log", 1]]),
       recipe(2, "Hickory Plank", 2, [["Hickory Log", 1]]),
       recipe(2, "Birch Plank", 2, [["Birch Log", 1]]),
       recipe(2, "Maple Lumber", 2, [["Maple Log", 1]]),
@@ -51,267 +73,423 @@ export const REFINING = Object.freeze({
       recipe(3, "Oak Plank", 2, [["Oak Log", 1]]),
       recipe(3, "Teak Plank", 2, [["Teak Log", 1]]),
       recipe(3, "Redwood Plank", 2, [["Redwood Log", 1]]),
+      recipe(3, "Retama Switches", 4, [["Retama", 1]]),
       recipe(4, "Poplar Lumber", 2, [["Poplar Log", 1]]),
       recipe(4, "Aspen Lumber", 2, [["Aspen Log", 1]]),
+      recipe(4, "Palo Verde Bark Fibre", 3, [["Palo Verde", 1]]),
+      recipe(4, "Ironwood Plank", 2, [["Ironwood Log", 1]]),
       recipe(5, "Walnut Lumber", 2, [["Walnut Log", 1]]),
       recipe(5, "Sandalwood Lumber", 2, [["Sandalwood Log", 1]]),
+      recipe(5, "Sandalwood Oil", 3, [["Sandalwood Log", 1]]),
       recipe(5, "Mahogany Lumber", 2, [["Mahogany Log", 1]]),
-      recipe(5, "Sandalwood Oil", 1, [["Sandalwood Log", 1]])
+      recipe(5, "Darkwood Plank", 2, [["Darkwood", 1]])
     ])
   }),
   skinning: Object.freeze({
-    book: "Skinning — Tanning", verb: "Tanning", requires: ["kctg-5e", "helianas-harvest-compendium"],
-    packs: [KCTG, "helianas-harvest-compendium.beast", "helianas-harvest-compendium.monstrosity"],
+    verb: "Tanning", icon: "fa-scroll", requires: ["kctg-5e", HELIANA],
+    packs: [KCTG, `${HELIANA}.beast`, `${HELIANA}.monstrosity`, `${HELIANA}.dragon`],
     folder: ["Professions", "Skinning", "Refined"],
     recipes: Object.freeze([
-      recipe(1, "Cured Hide", 1, [["Fox Hide", 1]], "Cured Hide (Fox)"),
-      recipe(1, "Cured Hide", 1, [["Mole Rat Hide", 2]], "Cured Hide (Mole Rat)"),
       recipe(1, "Bone Meal", 1, [["Chicken Bones", 2]]),
+      recipe(1, "Cured Hide", 1, [["Mole Rat Hide", 2]]),
+      recipe(1, "Cured Hide", 1, [["Fox Hide", 1]]),
+      recipe(1, "Fletching Feathers", 3, [["Crow Feathers", 1]]),
+      recipe(1, "Waxed Thread", 2, [["Beast Hair", 1]]),
       recipe(2, "Drayweight Leather", 1, [["Cowhide", 1]]),
+      recipe(2, "Horn Plate", 2, [["Ram's Horn", 1]]),
+      recipe(2, "Horn Plate", 2, [["Antlers", 1]]),
       recipe(2, "Grain Leather", 1, [["Beast Pelt", 1]]),
-      recipe(2, "Bone Meal", 2, [["Beast Bone", 1]], "Bone Meal (Beast Bone)"),
+      recipe(2, "Bone Meal", 2, [["Beast Bone", 1]]),
       recipe(3, "Tannin Leather", 1, [["Bear Hide", 1]]),
+      recipe(3, "Bone Meal", 3, [["Boar Cranium", 1]]),
+      recipe(3, "Polished Teeth", 2, [["Shark Teeth", 1]]),
+      recipe(3, "Ivory Plate", 2, [["Beast Tusk", 1]]),
+      recipe(3, "Polished Claws", 2, [["Beast Pouch Of Claws", 1]]),
       recipe(4, "Winter Kept Pelt", 1, [["Tiger Hide", 1]]),
-      recipe(4, "Leather Scales", 1, [["Monstrosity Pelt", 1]])
+      recipe(4, "Chitin Plate", 1, [["Chitin", 1]]),
+      recipe(4, "Chitin Plate", 3, [["Exoskeleton", 1]]),
+      recipe(4, "Leather Scales", 1, [["Monstrosity Pelt", 1]]),
+      recipe(4, "Bone Plate", 2, [["Monstrosity Bone", 1]]),
+      recipe(5, "Dragon Leather", 1, [["Dragonhide", 1]]),
+      recipe(5, "Dragonbone Plate", 2, [["Dragon Bones", 1]]),
+      recipe(5, "Dragonscale Plate", 1, [["Dragon Scales", 3]]),
+      recipe(5, "Polished Dragon Talon", 1, [["Dragon Talons", 1]]),
+      recipe(5, "Dragon Horn Plate", 2, [["Dragon Horn", 1]])
     ])
   }),
   // Herbalism recipes are generated from the world's herbalism materials:
-  // 2 of a herb make 1 "Dried <herb>" (an Item this module creates).
+  // 2 of a herb make 1 "Dried <herb>".
   herbalism: Object.freeze({
-    book: "Herbalism — Preparation", verb: "Preparation", requires: [], packs: [],
+    verb: "Preparation", icon: "fa-mortar-pestle", requires: [], packs: [],
     folder: ["Professions", "Herbalism", "Prepared"], dried: true, recipes: Object.freeze([])
   })
 });
 
-export const DRIED_PREFIX = "Dried ";
+const gen = (from, factor, text) => Object.freeze({ from, factor, text });
+// Refined goods no compendium has: created from their source Item (icon,
+// type) with a new name, price = source price × factor, and this text.
+export const GENERATED = Object.freeze({
+  "Coke": gen("Coal", 4, "Coal baked in a closed kiln until only hard, grey, porous lumps remain. It burns hotter and cleaner than coal; smiths need it for steel and rare metals."),
+  "Tin Ingot": gen("Tin", 3, "A soft, silvery bar of smelted tin, ready to alloy with copper into bronze."),
+  "Marble Slab": gen("Marble", 2, "Marble cut square and rubbed smooth, ready for a mason's chisel."),
+  "Polished Alabaster": gen("Alabaster", 2, "Alabaster ground and polished until it glows when held to the light."),
+  "Cut Kyanite": gen("Kyanite", 2, "Kyanite cut along its blade-like crystals and polished to a deep blue."),
+  "Cut Kornerupine": gen("Kornerupine", 2, "Kornerupine faceted to show its green-to-brown shift."),
+  "Cut Harunite": gen("Harunite", 2, "Harunite cut and polished, its colour drawn out by the facets."),
+  "Cut Ravenar": gen("Ravenar", 2, "Ravenar cut and polished to a dark, mirror-like gleam."),
+  "Cut Benitoite": gen("Benitoite", 2, "Benitoite faceted until it flashes blue fire like a sapphire."),
+  "Cut Hambergite": gen("Hambergite", 2, "Hambergite cut into a clear, brilliant stone."),
+  "Mithral Ingot": gen("Mithral", 2.5, "Mithral purified and cast into a bar, light as a feather and stronger than steel."),
+  "Adamantine Ingot": gen("Adamantine", 2.5, "A bar of adamantine purified at a white-hot forge. It barely notices a hammer blow."),
+  "Cold Iron Ingot": gen("Cold Iron", 2.5, "Cold iron worked without magic and cast into a bar. Fey creatures flinch from it."),
+  "Palladium Ingot": gen("Palladium", 2.5, "Palladium refined into a bright, untarnishing bar."),
+  "Split Bamboo": gen("Bamboo", 0.5, "Bamboo split into long, springy strips for weaving, fletching, and light frames."),
+  "Retama Switches": gen("Retama", 0.4, "Supple green retama switches stripped of leaves, bundled for basketry and broom-making."),
+  "Palo Verde Bark Fibre": gen("Palo Verde", 0.5, "Inner bark of the palo verde, stripped and beaten into fibre for rope and coarse cloth."),
+  "Ironwood Plank": gen("Ironwood Log", 1, "A plank of ironwood, so dense it sinks in water and dulls saw blades."),
+  "Darkwood Plank": gen("Darkwood", 0.6, "A plank of darkwood, light and supple; items made from it weigh half as much."),
+  "Fletching Feathers": gen("Crow Feathers", 0.5, "Feathers trimmed and split for arrow fletching."),
+  "Horn Plate": gen("Ram's Horn", 0.6, "Horn boiled soft and pressed flat into translucent plates for lanterns, bows, and handles."),
+  "Ivory Plate": gen("Beast Tusk", 0.6, "Tusk sawn and polished into creamy plates for inlay and carving."),
+  "Polished Teeth": gen("Shark Teeth", 0.6, "Teeth cleaned, drilled, and polished for charms, arrowheads, or trade."),
+  "Polished Claws": gen("Beast Pouch Of Claws", 0.6, "Claws cleaned, hardened, and polished for hooks, charms, and blade inlays."),
+  "Chitin Plate": gen("Chitin", 1, "Chitin trimmed, boiled, and pressed into light, hard plates for armourers."),
+  "Bone Plate": gen("Monstrosity Bone", 0.6, "Monstrous bone sawn into flat plates harder than any beast's."),
+  "Dragon Leather": gen("Dragonhide", 1.5, "Dragonhide tanned into leather that shrugs off flame and blade alike."),
+  "Dragonbone Plate": gen("Dragon Bones", 0.6, "Dragon bone sawn into plates, light and harder than steel."),
+  "Dragonscale Plate": gen("Dragon Scales", 4, "Dragon scales trimmed, matched, and riveted into a plate ready for an armourer."),
+  "Polished Dragon Talon": gen("Dragon Talons", 1.5, "A dragon talon cleaned and polished to a wicked edge."),
+  "Dragon Horn Plate": gen("Dragon Horn", 0.6, "Dragon horn boiled and pressed into dark, glossy plates.")
+});
 
-/** Refining definitions available in this world (Mastercrafted and source modules active). */
-export function availableRefining() {
-  if (!game.modules.get(MASTERCRAFTED_ID)?.active) return [];
-  return Object.entries(REFINING).filter(([key, entry]) =>
-    PROFESSIONS[key] && entry.requires.every(id => game.modules.get(id)?.active))
-    .map(([key, entry]) => ({ key, book: entry.book, verb: entry.verb }));
+/* ---------------------------------------------------------------------- */
+/* Recipes                                                                 */
+/* ---------------------------------------------------------------------- */
+
+// Preset alias groups (e.g. ["Mithral", "Mithril"]): recipes use the spelling the world has.
+const ALIASES = Object.values(MATERIAL_PRESETS).flatMap(preset => Object.values(preset.materials).flat()).filter(Array.isArray);
+
+/** The name this world uses for an item that presets know under several spellings. */
+export function canonicalName(name) {
+  const group = ALIASES.find(names => names.includes(name));
+  if (!group) return name;
+  return group.find(alias => Array.from(game.items ?? []).some(item => item.name === alias)) ?? name;
 }
+
+const withId = (profession, base) => {
+  const entry = { ...base, inputs: base.inputs.map(([name, quantity]) => [canonicalName(name), quantity]) };
+  return { ...entry, profession,
+    id: `${profession}:${slug(entry.output)}:${entry.inputs.map(([name, quantity]) => `${quantity}-${slug(name)}`).join("+")}` };
+};
 
 /** The herbalism materials currently assigned in the world, as dried recipes. */
 function driedRecipes() {
   return Array.from(game.items ?? []).map(item => ({ item, rule: materialRule(item) }))
     .filter(({ rule }) => rule?.profession === "herbalism")
     .sort((a, b) => a.rule.tier - b.rule.tier || a.item.name.localeCompare(b.item.name))
-    .map(({ item, rule }) => ({ ...recipe(rule.tier, `${DRIED_PREFIX}${item.name}`, 1, [[item.name, 2]]), source: item }));
+    .map(({ item, rule }) => recipe(rule.tier, `${DRIED_PREFIX}${item.name}`, 1, [[item.name, 2]]));
 }
 
-/** Recipes for a profession (herbalism: generated from the world's herbs). */
+/** Refining professions usable in this world (profession exists, source modules active). */
+export function refiningProfessions() {
+  return Object.entries(REFINING).filter(([key, entry]) =>
+    PROFESSIONS[key] && entry.requires.every(id => game.modules.get(id)?.active))
+    .map(([key, entry]) => ({ key, label: PROFESSIONS[key].label, verb: entry.verb, icon: entry.icon }));
+}
+
+/** Recipes for one profession, each with a stable id. */
 export function refiningRecipes(profession) {
   const entry = REFINING[profession];
   if (!entry) return [];
-  return entry.dried ? driedRecipes() : [...entry.recipes];
+  return (entry.dried ? driedRecipes() : entry.recipes).map(row => withId(profession, row));
+}
+
+export function allRecipes() {
+  return refiningProfessions().flatMap(({ key }) => refiningRecipes(key));
+}
+
+export function findRecipe(id) {
+  const profession = String(id).split(":")[0];
+  return refiningRecipes(profession).find(row => row.id === id) ?? null;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Party discovery: an input is known once any player character had it.   */
+/* ---------------------------------------------------------------------- */
+
+export function discoveredNames() {
+  let saved = [];
+  try { saved = game.settings.get(MODULE_ID, "discoveredItems") ?? []; } catch { saved = []; }
+  return new Set(Array.isArray(saved) ? saved : []);
+}
+
+/** A recipe is known when the party has had every one of its inputs. */
+export function isKnown(entry, names = discoveredNames()) {
+  return entry.inputs.every(([name]) => names.has(name));
+}
+
+const isPartyActor = actor => actor?.type === "character" && Boolean(actor.hasPlayerOwner);
+
+/** GM: add item names to the party's discoveries. Returns the new names. */
+export async function recordDiscoveries(names) {
+  if (!game.user.isGM) return [];
+  const known = discoveredNames();
+  const fresh = [...new Set(names)].filter(name => name && !known.has(name));
+  if (fresh.length) await game.settings.set(MODULE_ID, "discoveredItems", [...known, ...fresh].sort());
+  return fresh;
+}
+
+/** GM: record everything player characters carry now. */
+export async function backfillDiscoveries() {
+  const names = Array.from(game.actors ?? []).filter(isPartyActor).flatMap(actor => Array.from(actor.items ?? []).map(item => item.name));
+  return recordDiscoveries(names);
+}
+
+let discoveryQueue = Promise.resolve();
+/** Active GM: watch player characters' inventories for new item names. */
+export function registerDiscoveryHooks(isActiveGM) {
+  Hooks.on("createItem", item => {
+    if (!isActiveGM() || !isPartyActor(item.parent)) return;
+    discoveryQueue = discoveryQueue.then(() => recordDiscoveries([item.name])).catch(error => console.error(`${MODULE_ID}: discovery`, error));
+  });
+}
+
+/* ---------------------------------------------------------------------- */
+/* Refined Items in the world (players craft from these)                  */
+/* ---------------------------------------------------------------------- */
+
+/** Item data made from a source Item: renamed, repriced, gathering flags removed. */
+export function derivedData(source, name, factor, text, folder = null, weightFactor = 1) {
+  const data = typeof source.toObject === "function" ? source.toObject() : structuredClone(source);
+  delete data._id;
+  delete data._stats;
+  data.name = name;
+  data.folder = folder;
+  data.ownership = { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER };
+  const price = Number(data.system?.price?.value) || 0;
+  const denomination = data.system?.price?.denomination || "gp";
+  foundry.utils.setProperty(data, "system.price", { value: Math.max(1, Math.round(price * factor * 100) / 100), denomination });
+  const weight = Number(data.system?.weight?.value);
+  if (Number.isFinite(weight) && weightFactor !== 1) foundry.utils.setProperty(data, "system.weight.value", Math.round(weight * weightFactor * 100) / 100);
+  foundry.utils.setProperty(data, "system.quantity", 1);
+  foundry.utils.setProperty(data, "system.description.value", `<p>${text}</p>`);
+  data.flags = { ...(data.flags ?? {}), [MODULE_ID]: { refinedFrom: source.name, generatedItem: name } };
+  return data;
 }
 
 /** World Item data for the dried form of a herb (no gathering flags). */
 export function driedItemData(herb, folder = null) {
-  const data = herb.toObject();
-  delete data._id;
-  data.name = `${DRIED_PREFIX}${herb.name}`;
-  data.folder = folder;
-  const price = Number(data.system?.price?.value) || 0;
-  const denomination = data.system?.price?.denomination || "cp";
-  foundry.utils.setProperty(data, "system.price", { value: Math.max(1, Math.round(price * 3)), denomination });
-  const weight = Number(data.system?.weight?.value);
-  if (Number.isFinite(weight)) foundry.utils.setProperty(data, "system.weight.value", Math.round(weight * 50) / 100);
-  foundry.utils.setProperty(data, "system.quantity", 1);
-  const text = data.system?.description?.value ?? "";
-  foundry.utils.setProperty(data, "system.description.value",
-    `<p><em>Dried and bundled for storage; keeps for months. Prepared by a herbalist from two fresh ${herb.name}.</em></p>${text}`);
-  data.flags = { ...(data.flags ?? {}), [MODULE_ID]: { preparedFrom: herb.name } };
-  delete data._stats;
+  const data = derivedData(herb, `${DRIED_PREFIX}${herb.name}`, 3,
+    `Dried and bundled for storage; keeps for months. Prepared by a herbalist from two fresh ${herb.name}.`, folder, 0.5);
+  data.flags[MODULE_ID].preparedFrom = herb.name;
   return data;
 }
 
-async function driedItem(herb, folder) {
-  const name = `${DRIED_PREFIX}${herb.name}`;
-  const existing = Array.from(game.items ?? []).find(item => item.name === name);
-  if (existing) return existing;
-  const [item] = await Item.implementation.create([driedItemData(herb, folder.id)]);
-  return item;
-}
+const worldItemNamed = name => Array.from(game.items ?? []).find(item => item.name === name) ?? null;
 
-const recipeKey = entry => `${entry.output}<-${entry.inputs.map(([name, quantity]) => `${quantity}x${name}`).join("+")}`;
-
-/** Inline Mastercrafted macro: hand the craft to this module's refining check. */
-export function refiningMacro(profession, entry) {
-  const args = JSON.stringify({ profession, tier: entry.tier, recipe: entry.name });
-  return `return game.modules.get("${MODULE_ID}")?.api?.refining?.check({ actor, inventoryActor, componentsToConsume, ...${args} }) ?? { success: false, consume: false };`;
-}
-
-function component(item, quantity) {
-  return { id: foundry.utils.randomID(), uuid: item.uuid, quantity, name: item.name, img: item.img, tags: [] };
-}
-
-function recipeFlags(book, profession, entry, inputs, output) {
-  return {
-    mastercrafted: {
-      recipeBook: book.id, img: output.img,
-      ingredients: inputs.map(({ item, quantity }) => ({ id: foundry.utils.randomID(), name: item.name, components: [component(item, quantity)] })),
-      products: [{ id: foundry.utils.randomID(), name: output.name, components: [component(output, entry.quantity)] }],
-      ingredientsInspection: false, productInspection: false, sound: "", require: "",
-      macroName: refiningMacro(profession, entry), time: REFINE_MINUTES[entry.tier - 1],
-      toolCheck: null, toolDc: null, abilityCheck: null, abilityDc: null, expression: "", modifierList: MODIFIERS.map(row => ({ ...row }))
-    },
-    [MODULE_ID]: { refining: { profession, tier: entry.tier, key: recipeKey(entry) } }
-  };
-}
-
-const folderParent = folder => folder?.folder?.id ?? folder?.folder ?? null;
-
-/**
- * Mastercrafted's recipe browser shows one root folder: its "main folder" setting,
- * else the single top folder all recipe books share. Use that root (or create
- * a flagged "Mastercrafted" folder) so module books never split the browser.
- */
-export async function mastercraftedRoot() {
-  const journalFolders = Array.from(game.folders ?? []).filter(folder => folder.type === "JournalEntry");
-  let named = "";
-  try { named = game.settings.get(MASTERCRAFTED_ID, "mainFolderName") || ""; } catch { named = ""; }
-  const byName = named && journalFolders.find(folder => folder.name === named);
-  if (byName) return byName;
-  const flagged = journalFolders.find(folder => folder.flags?.mastercrafted?.mainMastercraftedFolder);
-  if (flagged) return flagged;
-  const top = folder => { let current = folder; while (folderParent(current)) current = journalFolders.find(f => f.id === folderParent(current)) ?? null; return current; };
-  const roots = new Set(Array.from(game.journal ?? []).filter(journal => Array.from(journal.pages ?? []).some(page => page.type === RECIPE_TYPE))
-    .map(journal => top(journalFolders.find(folder => folder.id === (journal.folder?.id ?? journal.folder)))));
-  if (roots.size === 1 && [...roots][0]) return [...roots][0];
-  return Folder.implementation.create({ name: "Mastercrafted", type: "JournalEntry", sorting: "a", flags: { mastercrafted: { mainMastercraftedFolder: true } } });
-}
-
-/** The "Refining" folder inside Mastercrafted's root folder. */
-async function refiningFolder() {
-  const root = await mastercraftedRoot();
-  const found = Array.from(game.folders ?? []).find(folder => folder.type === "JournalEntry" && folder.name === "Refining" && folderParent(folder) === root.id);
-  return found ?? Folder.implementation.create({ name: "Refining", type: "JournalEntry", folder: root.id });
-}
-
-async function refiningJournal(profession, entry) {
-  const existing = Array.from(game.journal ?? []).find(journal => journal.getFlag?.(MODULE_ID, "refiningBook") === profession);
-  if (existing) return existing;
-  const folder = await refiningFolder();
-  return JournalEntry.implementation.create({
-    name: entry.book, folder: folder.id,
-    // Observers: players can see and use the book; Mastercrafted treats an unset user as allowed.
-    ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER },
-    flags: {
-      mastercrafted: { img: "icons/sundries/books/book-worn-brown-grey.webp", sound: "", require: "", ingredientsInspection: false, productInspection: false, macroName: "", time: null },
-      [MODULE_ID]: { refiningBook: profession }
-    }
-  });
+/** The world Item a recipe produces, if prepared. */
+export function productItem(name) {
+  return worldItemNamed(name);
 }
 
 /**
- * GM: create or update the profession's refining recipe book. Missing Items are
- * imported (or, for dried herbs, created). Pages this module made are updated
- * in place; pages the GM added are left alone.
- * @returns {Promise<{book: JournalEntry, created: number, updated: number, imported: number}>}
+ * GM: make sure every recipe's inputs and products exist as world Items.
+ * Products are imported (Kris, Heliana), generated, or dried; they are made
+ * visible to players (Observer) so their clients can craft them.
+ * @returns {Promise<{created: number, imported: number, shared: number, missing: string[]}>}
  */
-export async function buildRefiningBook(profession) {
-  if (!game.user.isGM) throw new Error("Only the GM may build refining recipes.");
-  if (!game.modules.get(MASTERCRAFTED_ID)?.active) throw new Error("Enable Mastercrafted first.");
-  const entry = REFINING[profession];
-  if (!entry || !PROFESSIONS[profession]) throw new Error("This profession has no refining recipes.");
-  const missing = entry.requires.filter(id => !game.modules.get(id)?.active);
-  if (missing.length) throw new Error(`Enable ${missing.join(" and ")} first.`);
-  const recipes = refiningRecipes(profession);
-  if (!recipes.length) throw new Error(`Assign ${PROFESSIONS[profession].label} materials first.`);
-  const preset = MATERIAL_PRESETS[profession];
-  const inputFolder = await folderPath(preset?.folder ?? ["Professions", PROFESSIONS[profession].label]);
-  const outputFolder = await folderPath(entry.folder);
+export async function prepareRefinedItems(professions = refiningProfessions().map(entry => entry.key)) {
+  if (!game.user.isGM) throw new Error("Only the GM may prepare refined items.");
+  const report = { created: 0, imported: 0, shared: 0, missing: [] };
   const cache = new Map();
-  const report = { created: 0, updated: 0, imported: 0 };
-  const book = await refiningJournal(profession, entry);
-  const pages = new Map(Array.from(book.pages ?? []).map(page => [page.getFlag?.(MODULE_ID, "refining")?.key, page]).filter(([key]) => key));
-  const creates = [];
-  const updates = [];
-  for (const recipeEntry of recipes) {
-    const inputs = [];
-    for (const [name, quantity] of recipeEntry.inputs) {
-      const { item, imported } = recipeEntry.source && recipeEntry.source.name === name
-        ? { item: recipeEntry.source, imported: false }
-        : await worldItem(entry.packs, name, inputFolder, cache);
-      if (imported) report.imported++;
-      inputs.push({ item, quantity });
+  const observer = CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER;
+  for (const profession of professions) {
+    const entry = REFINING[profession];
+    if (!entry || !PROFESSIONS[profession]) continue;
+    const folder = await folderPath(entry.folder);
+    const inputFolder = await folderPath(MATERIAL_PRESETS[profession]?.folder ?? ["Professions", PROFESSIONS[profession].label]);
+    const recipes = refiningRecipes(profession);
+    const products = new Map(recipes.map(row => [row.output, row]));
+    // Inputs that are themselves products (Copper Ingot, Coke) are made below.
+    for (const row of recipes) {
+      for (const [name] of row.inputs) {
+        if (worldItemNamed(name) || products.has(name)) continue;
+        try { const found = await worldItem(entry.packs, name, inputFolder, cache); if (found.imported) report.imported++; }
+        catch { report.missing.push(name); }
+      }
     }
-    let output;
-    if (entry.dried) output = await driedItem(recipeEntry.source, outputFolder);
-    else {
-      const found = await worldItem(entry.packs, recipeEntry.output, outputFolder, cache);
-      if (found.imported) report.imported++;
-      output = found.item;
+    const pending = [...products.values()];
+    // Generated items need their source first; repeat while progress is made.
+    for (let pass = 0; pass < 3 && pending.length; pass++) {
+      for (const row of [...pending]) {
+        let item = worldItemNamed(row.output);
+        if (!item && entry.dried) {
+          const herb = worldItemNamed(row.inputs[0][0]);
+          if (herb) { [item] = await Item.implementation.create([driedItemData(herb, folder.id)]); report.created++; }
+        } else if (!item && GENERATED[row.output]) {
+          const spec = GENERATED[row.output];
+          const source = worldItemNamed(canonicalName(spec.from));
+          if (source) { [item] = await Item.implementation.create([derivedData(source, row.output, spec.factor, spec.text, folder.id)]); report.created++; }
+        } else if (!item) {
+          try { const found = await worldItem(entry.packs, row.output, folder, cache); item = found.item; if (found.imported) report.imported++; }
+          catch { item = null; }
+        }
+        if (!item) continue;
+        pending.splice(pending.indexOf(row), 1);
+        if ((item.ownership?.default ?? 0) < observer) {
+          await item.update({ "ownership.default": observer });
+          report.shared++;
+        }
+      }
     }
-    const data = {
-      name: recipeEntry.name, type: RECIPE_TYPE,
-      text: { content: `<p>${entry.verb}, tier ${recipeEntry.tier}. Rolls ${PROFESSIONS[profession].label} at the tier DC.</p>`, format: 1 },
-      flags: recipeFlags(book, profession, recipeEntry, inputs, output)
-    };
-    const page = pages.get(recipeKey(recipeEntry));
-    if (page) updates.push({ _id: page.id, ...data });
-    else creates.push(data);
+    report.missing.push(...pending.map(row => row.output));
   }
-  if (creates.length) await book.createEmbeddedDocuments("JournalEntryPage", creates);
-  if (updates.length) await book.updateEmbeddedDocuments("JournalEntryPage", updates);
-  report.created = creates.length;
-  report.updated = updates.length;
-  return { book, ...report };
+  report.missing = [...new Set(report.missing)];
+  return report;
 }
 
-const OUTCOMES = Object.freeze({
-  failed: "Ruined: half of the materials are lost.",
-  partial: "Not quite: nothing is made, but the materials are kept.",
-  successful: "Refined.",
-  excellent: "Excellent work: +1 extra.",
-  masterful: "Masterful work: +2 extra."
-});
+/* ---------------------------------------------------------------------- */
+/* Crafting                                                                */
+/* ---------------------------------------------------------------------- */
+
+const itemQuantity = item => Math.max(0, Number(item?.system?.quantity) || 0);
+
+export function inventoryCount(actor, name) {
+  return Array.from(actor?.items ?? []).filter(item => item.name === name).reduce((sum, item) => sum + itemQuantity(item), 0);
+}
+
+/** How many batches the actor's inventory allows. */
+export function maxBatch(actor, entry) {
+  return Math.min(...entry.inputs.map(([name, quantity]) => Math.floor(inventoryCount(actor, name) / quantity)));
+}
+
+/** The refining check numbers for an actor and recipe (no roll). */
+export function refineCheckFor(actor, entry) {
+  const rules = activeRules();
+  const tier = Math.min(5, Math.max(1, Math.trunc(Number(entry.tier)) || 1));
+  const xp = Math.max(0, Number(professionFlag(actor, "xp", entry.profession)) || 0);
+  return { tier, ...checkFormula(actor, entry.profession, xp, rules.tierDc[tier - 1], { tier }) };
+}
+
+async function removeFromInventory(actor, name, quantity) {
+  let left = quantity;
+  const updates = [];
+  const deletes = [];
+  for (const item of Array.from(actor.items).filter(entry => entry.name === name)) {
+    if (left <= 0) break;
+    const have = itemQuantity(item);
+    if (have <= left) { deletes.push(item.id); left -= have; }
+    else { updates.push({ _id: item.id, "system.quantity": have - left }); left = 0; }
+  }
+  if (updates.length) await actor.updateEmbeddedDocuments("Item", updates);
+  if (deletes.length) await actor.deleteEmbeddedDocuments("Item", deletes);
+}
+
+/** Add an item (by data) to an inventory, stacking onto an item with the same name. */
+export async function addToInventory(actor, data, quantity) {
+  const existing = Array.from(actor.items).find(item => item.name === data.name);
+  if (existing) return actor.updateEmbeddedDocuments("Item", [{ _id: existing.id, "system.quantity": itemQuantity(existing) + quantity }]);
+  const copy = structuredClone(data);
+  delete copy._id;
+  delete copy.folder;
+  delete copy.ownership;
+  foundry.utils.setProperty(copy, "system.quantity", quantity);
+  return actor.createEmbeddedDocuments("Item", [copy]);
+}
+
 const LABELS = Object.freeze({ failed: "Failed", partial: "Near Miss", successful: "Success", excellent: "Excellent", masterful: "Masterful" });
 
-/** Half (rounded up) of each component, as Mastercrafted component clones. */
-function halveComponents(components) {
-  for (let index = 0; index < components.length; index++) {
-    const component = components[index];
-    const quantity = Math.ceil((Number(component.quantity) || 0) / 2);
-    components[index] = typeof component.clone === "function" ? component.clone({ quantity }) : { ...component, quantity };
-  }
+export function formatMinutes(minutes) {
+  if (minutes >= 1440 && minutes % 1440 === 0) return `${minutes / 1440} day${minutes === 1440 ? "" : "s"}`;
+  if (minutes >= 60) return `${Math.floor(minutes / 60)}h${minutes % 60 ? ` ${minutes % 60}m` : ""}`;
+  return `${minutes}m`;
 }
 
 /**
- * The refining check, called from a Mastercrafted recipe before it crafts.
- * Same check as gathering at the material's tier. Near miss (fail by < 5): keep
- * the materials. Fail by 5+ or a natural 1: lose half. Success: product and half
- * the tier's XP (Rules: refining XP %); Excellent +1 and Masterful +2 output.
- * @returns {Promise<{success: boolean, consume: boolean, checkResult?: number}>}
+ * Refine `batch` times at once with one check (the actor's owner or GM).
+ * Near miss (fail by < 5): nothing made, materials kept. Fail by 5+ or a
+ * natural 1: half the materials (rounded up) lost. Success: the products (+1
+ * on Excellent, +2 on Masterful or a natural 20) and Refining XP per unit;
+ * with timed crafting they arrive after the recipe's time in world time.
  */
-export async function refineCheck({ actor, componentsToConsume = [], profession, tier, recipe: recipeName = "" }, { addXp }) {
-  if (!actor) return { success: false, consume: false };
-  if (!PROFESSIONS[profession]) {
-    ui.notifications.warn("This refining recipe's profession no longer exists.");
-    return { success: false, consume: false };
-  }
-  const level = Math.min(5, Math.max(1, Math.trunc(Number(tier)) || 1));
+export async function craftRecipe(actor, id, batch = 1, { addXp }) {
+  if (!actor || !(game.user.isGM || actor.isOwner)) throw new Error("Choose a character you own.");
+  const entry = findRecipe(id);
+  if (!entry) throw new Error("That recipe no longer exists.");
+  if (!game.user.isGM && !isKnown(entry)) throw new Error("Your party has not discovered this recipe.");
+  const count = Math.trunc(Number(batch));
+  if (!Number.isInteger(count) || count < 1) throw new Error("Choose how many to make.");
+  if (count > maxBatch(actor, entry)) throw new Error(`${actor.name} does not have enough materials for ${count}.`);
+  const product = productItem(entry.output);
+  if (!product) throw new Error(`${entry.output} is not prepared in this world yet. Ask the GM (GM hub → Materials → Prepare refined items).`);
   const rules = activeRules();
-  const xpNow = Math.max(0, Number(professionFlag(actor, "xp", profession)) || 0);
-  const check = checkFormula(actor, profession, xpNow, rules.tierDc[level - 1], { tier: level });
+  const check = refineCheckFor(actor, entry);
   const roll = await new Roll(check.formula).evaluate();
   const natural = roll.dice?.[0]?.total;
   let degree = getDegreeOfSuccess(roll.total, check.target);
   if (natural === 20) degree = naturalMasterful(degree);
   if (natural === 1 && degree.id !== "failed") degree = { ...degree, id: "failed", natural1: true };
   const success = ["successful", "excellent", "masterful"].includes(degree.id);
-  const xp = success ? Math.round(rules.tierXp[level - 1] * rules.refineXpPercent / 100) : 0;
-  if (xp) await addXp(actor, profession, xp);
-  if (degree.id === "failed") halveComponents(componentsToConsume);
-  const label = PROFESSIONS[profession].label;
-  const flavor = `<div class="gathering-professions-chat"><strong>${REFINING[profession]?.verb ?? "Refining"}: ${escape(recipeName)}</strong>
-    <br>${label} check, tier ${level} · DC ${check.target}${check.trained ? ` (rank ${check.rank}, d${check.die})` : " (untrained)"}
-    <br><strong>${LABELS[degree.id]}</strong>${natural === 20 ? " (natural 20)" : degree.natural1 ? " (natural 1)" : ""} — ${OUTCOMES[degree.id]}${xp ? ` +${xp} ${label} XP.` : ""}</div>`;
+  const lost = degree.id === "failed" ? entry.inputs.map(([name, quantity]) => [name, Math.ceil(quantity * count / 2)])
+    : success ? entry.inputs.map(([name, quantity]) => [name, quantity * count]) : [];
+  for (const [name, quantity] of lost) await removeFromInventory(actor, name, quantity);
+  const bonus = degree.id === "masterful" ? 2 : degree.id === "excellent" ? 1 : 0;
+  const made = success ? entry.quantity * count + bonus : 0;
+  const xp = success ? Math.round(rules.tierXp[check.tier - 1] * rules.refineXpPercent / 100) * count : 0;
+  if (xp) await addXp(actor, entry.profession, xp);
+  let job = null;
+  if (made) {
+    const minutes = rules.craftingTimed ? REFINE_MINUTES[check.tier - 1] * count : 0;
+    const data = product.toObject();
+    if (minutes) job = await queueJob(actor, { name: entry.output, img: product.img, quantity: made, data, ready: (game.time?.worldTime ?? 0) + minutes * 60, recipe: id, minutes });
+    else await addToInventory(actor, data, made);
+  }
+  const verb = REFINING[entry.profession]?.verb ?? "Refining";
+  const label = PROFESSIONS[entry.profession]?.label ?? entry.profession;
+  const used = entry.inputs.map(([name, quantity]) => `${quantity * count} ${escape(name)}`).join(", ");
+  const outcome = success ? `${made} ${escape(entry.output)}${bonus ? ` (+${bonus} ${LABELS[degree.id].toLowerCase()})` : ""}${job ? `, ready in ${formatMinutes(job.minutes)}` : ""}.`
+    : degree.id === "failed" ? `Ruined: lost ${lost.map(([name, quantity]) => `${quantity} ${escape(name)}`).join(", ")}.` : "Nothing made; materials kept.";
+  const flavor = `<div class="gathering-professions-chat"><strong>${verb}: ${escape(entry.output)}${count > 1 ? ` ×${count}` : ""}</strong>
+    <br>${escape(label)} check, tier ${check.tier} · DC ${check.target}${check.trained ? ` (rank ${check.rank}, d${check.die})` : " (untrained)"} · from ${used}
+    <br><strong>${LABELS[degree.id]}</strong>${natural === 20 ? " (natural 20)" : degree.natural1 ? " (natural 1)" : ""}: ${outcome}${xp ? ` +${xp} ${escape(label)} XP.` : ""}</div>`;
   try { await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }), flavor }); }
   catch (error) { console.error(`${MODULE_ID}: could not post the refining roll`, error); }
-  if (success) return { success: true, consume: true, checkResult: degree.id === "masterful" ? 2 : degree.id === "excellent" ? 1 : 0 };
-  return { success: false, consume: degree.id === "failed" };
+  return { degree: degree.id, made, lost, xp, job, total: roll.total, target: check.target };
+}
+
+/* ---------------------------------------------------------------------- */
+/* Timed jobs (actor flag refiningJobs)                                    */
+/* ---------------------------------------------------------------------- */
+
+async function queueJob(actor, job) {
+  const id = foundry.utils.randomID();
+  const record = { ...job, id };
+  await actor.setFlag(MODULE_ID, `refiningJobs.${id}`, record);
+  return record;
+}
+
+export function actorJobs(actor) {
+  return Object.values(actor?.getFlag?.(MODULE_ID, "refiningJobs") ?? {}).filter(job => job && job.id)
+    .sort((a, b) => a.ready - b.ready);
+}
+
+/** Deliver the actor's finished jobs. Returns the delivered jobs. */
+export async function deliverDueJobs(actor, now = game.time?.worldTime ?? 0) {
+  const due = actorJobs(actor).filter(job => job.ready <= now);
+  for (const job of due) {
+    // Remove first so a second client cannot deliver the same job twice.
+    await actor.update({ [`flags.${MODULE_ID}.refiningJobs.-=${job.id}`]: null });
+    await addToInventory(actor, job.data, job.quantity);
+  }
+  if (due.length) ui.notifications.info(`${actor.name}: ${due.map(job => `${job.quantity} ${job.name}`).join(", ")} ready.`);
+  return due;
+}
+
+/** Active GM: deliver every actor's finished jobs (on world time changes). */
+export async function deliverAllDueJobs(now = game.time?.worldTime ?? 0) {
+  const delivered = [];
+  for (const actor of Array.from(game.actors ?? [])) {
+    if (actorJobs(actor).some(job => job.ready <= now)) delivered.push(...await deliverDueJobs(actor, now));
+  }
+  return delivered;
 }

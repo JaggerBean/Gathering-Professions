@@ -234,7 +234,8 @@ function rulesSection() {
           <label class="gp-field"><span>Excellent rare-find bonus %</span>${number("excellentRareBonus", rules.excellentRareBonus, 0, 100)}</label>
           <label class="gp-field"><span>Default tool durability</span>${number("toolDurability", rules.toolDurability, 0, 1000)}</label>
           <label class="gp-field"><span>Free gathering attempts per long rest</span>${number("gatherAttemptsPerRest", rules.gatherAttemptsPerRest, 0, 100)}</label>
-          <label class="gp-field" title="Refining (smelting, milling, tanning, preparation in Mastercrafted) gives this share of the tier's gathering XP"><span>Refining XP (% of tier XP)</span>${number("refineXpPercent", rules.refineXpPercent, 0, 100)}</label>
+          <label class="gp-field" title="Refining (smelting, milling, tanning, preparation) gives this share of the tier's gathering XP"><span>Refining XP (% of tier XP)</span>${number("refineXpPercent", rules.refineXpPercent, 0, 100)}</label>
+          <label class="gp-check" title="Off: refined goods appear immediately"><input type="checkbox" name="craftingTimed" ${rules.craftingTimed ? "checked" : ""}> Refining takes world time (30 min per unit at tier 1 … 12 h at tier 5)</label>
         </div>
         <p class="gp-hub-note">A natural 20 is always Masterful. Tools without their own maximum use the default durability; 0 = tools never wear. Gathering attempts count across every profession and Gatherer page. Beyond the free limit, each confirmed attempt adds 1 exhaustion. 0 attempts = unlimited. A long rest resets attempts.</p></section>
     </div>

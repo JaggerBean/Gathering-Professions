@@ -136,7 +136,9 @@ export function activeRules() {
     gatherAttemptsPerRest: Number.isInteger(Number(saved.gatherAttemptsPerRest)) && Number(saved.gatherAttemptsPerRest) >= 0 && Number(saved.gatherAttemptsPerRest) <= 100
       ? Number(saved.gatherAttemptsPerRest) : GATHER_ATTEMPTS_PER_REST,
     refineXpPercent: Number.isInteger(Number(saved.refineXpPercent)) && saved.refineXpPercent !== null && saved.refineXpPercent !== "" && Number(saved.refineXpPercent) >= 0 && Number(saved.refineXpPercent) <= 100
-      ? Number(saved.refineXpPercent) : REFINE_XP_PERCENT
+      ? Number(saved.refineXpPercent) : REFINE_XP_PERCENT,
+    // Refining takes world time (products arrive later) unless the GM turns it off.
+    craftingTimed: saved.craftingTimed !== false
   };
 }
 
