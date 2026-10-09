@@ -13,6 +13,7 @@ function stored(item) {
 }
 
 const whole = (value, fallback) => {
+  if (value === null || value === undefined || value === "") return fallback;
   const number = Number(value);
   return Number.isInteger(number) && number >= 0 ? Math.min(MAX_DURABILITY, number) : fallback;
 };

@@ -2,8 +2,8 @@
 // dnd5e remains responsible for reducing existing exhaustion on rest.
 import { MODULE_ID, activeRules } from "./rules.js";
 import { gpDialog } from "./dialogs.js";
+import { runActorAction } from "./actions.js";
 
-const reservations = new WeakMap();
 const pendingExhaustion = new WeakMap();
 
 export function gatheringAllowance(actor) {
@@ -27,8 +27,7 @@ export function gatheringAllowance(actor) {
 
 /** Reserve one attempt before Gatherer starts. Re-read inside the queue after prompts. */
 export function reserveGatherAttempt(actor) {
-  const previous = reservations.get(actor) ?? Promise.resolve();
-  const current = previous.catch(() => {}).then(async () => {
+  return runActorAction(actor, async () => {
     if (!actor || !(game.user?.isGM || actor.isOwner)) throw new Error("Choose a character you own to gather.");
     while (true) {
       const { limit, used, exhaustion, maxExhaustion } = gatheringAllowance(actor);
@@ -59,13 +58,11 @@ export function reserveGatherAttempt(actor) {
       return true;
     }
   });
-  reservations.set(actor, current);
-  const cleanup = () => { if (reservations.get(actor) === current) reservations.delete(actor); };
-  current.then(cleanup, cleanup);
-  return current;
 }
 
 export async function resetGatherAttempts(actor) {
-  pendingExhaustion.delete(actor);
-  if (actor?.getFlag?.(MODULE_ID, "gatherAttemptsUsed")) await actor.unsetFlag(MODULE_ID, "gatherAttemptsUsed");
+  return runActorAction(actor, async () => {
+    pendingExhaustion.delete(actor);
+    if (actor?.getFlag?.(MODULE_ID, "gatherAttemptsUsed")) await actor.unsetFlag(MODULE_ID, "gatherAttemptsUsed");
+  });
 }
