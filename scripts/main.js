@@ -18,6 +18,7 @@ import { toolDurability, wearTool, durabilityLabel, normalizeDurability } from "
 import { buildRareFinds, RARE_FINDS } from "./rareitems.js";
 import { gatheringAllowance, reserveGatherAttempt, resetGatherAttempts } from "./gather-limits.js";
 import { LEGACY_MODULE_ID, migrateLegacyNamespace } from "./migration.js";
+import { gpDialog } from "./dialogs.js";
 
 const RESULT = Symbol("gatheringProfessionResult");
 const actorQueues = new WeakMap();
@@ -393,7 +394,7 @@ function takeIntent(actor) {
 
 /** Second Look is optional: ask the player each time a gather fails. */
 async function askSecondLook(actor, roll, check, left) {
-  const Dialog = foundry.applications?.api?.DialogV2;
+  const Dialog = foundry.applications?.api?.DialogV2 ? gpDialog() : null;
   if (!Dialog?.confirm) return false;
   try {
     return await Dialog.confirm({

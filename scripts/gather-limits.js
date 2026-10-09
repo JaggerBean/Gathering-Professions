@@ -1,6 +1,7 @@
 // Per-character gathering attempts. A long rest restores the free allowance;
 // dnd5e remains responsible for reducing existing exhaustion on rest.
 import { MODULE_ID, activeRules } from "./rules.js";
+import { gpDialog } from "./dialogs.js";
 
 const reservations = new WeakMap();
 const pendingExhaustion = new WeakMap();
@@ -39,7 +40,7 @@ export function reserveGatherAttempt(actor) {
       const exhausted = used >= limit;
       if (exhausted) {
         const next = exhaustion + 1;
-        const confirmed = await foundry.applications.api.DialogV2.confirm({
+        const confirmed = await gpDialog().confirm({
           window: { title: "Gather beyond your limit?" },
           content: `<p>You have used ${used} of ${limit} free gathering attempts since your last long rest.</p>
             <p>This attempt raises exhaustion from <strong>${exhaustion}</strong> to <strong>${next}</strong>, even if it fails or finds nothing.${next === maxExhaustion ? " This reaches the system maximum and may be fatal." : ""}</p>

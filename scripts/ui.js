@@ -8,8 +8,9 @@ import { SKILL_TREE_ID, skillTreeConfig, skillTreeApi, availableSkillTrees, conf
 import { PERK_EFFECTS, readPerk } from "./perks.js";
 import { toolDurability } from "./durability.js";
 import { getToolLibrary } from "./nodes.js";
+import { gpDialog } from "./dialogs.js";
 
-const Dialog = () => foundry.applications.api.DialogV2;
+const Dialog = () => gpDialog();
 const escape = value => String(value ?? "").replace(/[&<>"']/g, character => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
 })[character]);

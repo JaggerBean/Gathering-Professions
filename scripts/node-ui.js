@@ -8,8 +8,9 @@ import {
 } from "./nodes.js";
 import { getBiomes } from "./conditions.js";
 import { rulesEditorHtml, bindRulesEditors, parseRules, rulesSummary, openConditionsWindow } from "./conditions-ui.js";
+import { gpDialog } from "./dialogs.js";
 
-const Dialog = () => foundry.applications.api.DialogV2;
+const Dialog = () => gpDialog();
 export const escape = value => String(value ?? "").replace(/[&<>"']/g, character => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
 })[character]);

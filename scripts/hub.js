@@ -10,6 +10,7 @@ import { saveRulesValues, openMaterialEditor } from "./ui.js";
 import { availablePresets, applyMaterialPreset } from "./presets.js";
 import { nodeManagerCore } from "./node-ui.js";
 import { materialsModel, addRareItem, removeRareResult, setRareWeights, assignMaterial, unassignMaterial } from "./materials.js";
+import { gpDialog } from "./dialogs.js";
 
 export const HUB_SECTIONS = Object.freeze([
   { id: "professions", label: "Professions", icon: "fa-hammer", blurb: "Gathering professions, their check ability, and a fallback rare table." },
@@ -401,7 +402,7 @@ function defineClass() {
         case "apply-preset": {
           const preset = availablePresets().find(entry => entry.key === button.dataset.preset);
           if (!preset) return;
-          const ok = await foundry.applications.api.DialogV2.confirm({
+          const ok = await gpDialog().confirm({
             window: { title: "Apply material preset" },
             content: `<p>Apply <strong>${escape(preset.label)}</strong>?</p><p>Missing Items are imported from the compendiums, listed Items are assigned to ${escape(PROFESSIONS[preset.profession]?.label ?? preset.profession)} at their tier, and each tier's rare table is replaced with the preset's rare finds. Other materials are not changed.</p>`,
             rejectClose: false
