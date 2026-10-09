@@ -490,8 +490,11 @@ assert.equal(managerCore.view.selected, "new");
 const hubWindow = (await import("../scripts/hub.js"));
 assert.match(hubWindow.renderHub({ ...hubWindow.initialHubView("nodes"), section: "nodes" }), /class="gp-hub-nodes gp-node-manager"/);
 // Other modules add hub sections (Crafting Professions → "Crafting").
-hubWindow.registerHubSection({ id: "testcraft", label: "Test Craft", icon: "fa-hammer", blurb: "Test section.", render: () => '<form class="tc-form"><button type="button" data-tc="go">Go</button></form>' });
+hubWindow.registerHubSection({ id: "testcraft", label: "Test Craft", group: "Crafting Professions", icon: "fa-hammer", blurb: "Test section.", render: () => '<form class="tc-form"><button type="button" data-tc="go">Go</button></form>' });
 const extHub = hubWindow.renderHub({ ...hubWindow.initialHubView("testcraft"), section: "testcraft" });
+assert.match(extHub, /Profession<br>GM Hub/, "The hub brand uses the shared GM hub name");
+assert.match(extHub, /aria-label="Gathering Professions">[\s\S]*data-section="professions"[\s\S]*<\/div><div class="gp-hub-nav-group" role="group" aria-label="Crafting Professions">/, "Gathering and Crafting have separate sidebar groups");
+assert.match(extHub, /aria-label="Crafting Professions">[\s\S]*data-section="testcraft"/, "Crafting links appear in their own group");
 assert.match(extHub, /data-section="testcraft">\s*<i class="fas fa-hammer"><\/i><span>Test Craft/, "Added sections appear in the hub navigation");
 assert.match(extHub, /<div class="gp-hub-external" data-section="testcraft"><form class="tc-form">/, "Their own markup, not inside the hub form");
 assert.ok(hubWindow.hubSections().some(section => section.id === "testcraft"));
