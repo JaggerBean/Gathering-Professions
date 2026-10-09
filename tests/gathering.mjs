@@ -17,7 +17,9 @@ const confirmPrompts = [];
 let dialogHtml = "";
 let savedRules = {};
 // worldContentVersion 2: skip the ready-time world content setup in this suite.
-const settingsStore = { worldContentVersion: 3 };
+// Content/bootstrap coverage lives in world.mjs; do not run it with incomplete
+// folder/import doubles in this check-and-gather integration suite.
+const settingsStore = { worldContentVersion: 3, refiningVersion: 1 };
 class Item {
   constructor(name, material, folder = "Wkx8ircLDt9noLvA") {
     Object.assign(this, { name, material, id: name, img: "stone.webp", _source: { folder } });

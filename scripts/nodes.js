@@ -187,6 +187,13 @@ export function itemMatchesTool(item, tool) {
     if (defaultType && item.flags?.[MODULE_ID]?.defaultTool === defaultType) return true;
   }
   const name = String(liveName(tool) ?? "").trim().toLowerCase();
+  const sourceUuid = item.flags?.[MODULE_ID]?.toolSource;
+  const source = sourceUuid ? globalThis.fromUuidSync?.(sourceUuid) : null;
+  if (name && String(source?.name ?? "").trim().toLowerCase() === name) return true;
+  if (!tool.uuid && item.flags?.[MODULE_ID]?.defaultTool) {
+    const original = Array.from(game.items ?? []).find(entry => String(entry.name ?? "").trim().toLowerCase() === name);
+    if (original?.flags?.[MODULE_ID]?.defaultTool === item.flags[MODULE_ID].defaultTool) return true;
+  }
   return Boolean(name) && String(item.name ?? "").trim().toLowerCase() === name;
 }
 
