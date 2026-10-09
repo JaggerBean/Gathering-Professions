@@ -537,8 +537,8 @@ const plainResults = things => things.filter(thing => thing?.item)
 
 /* Pull refunds: Gatherer does not await its pull update. The owner requests a
  * refund through an authenticated actor update; the GM waits for the pull. */
-async function requestPullRefund(page, before, actor) {
-  const data = { type: "refundPull", pageUuid: page.uuid, before, actorUuid: actor.uuid };
+async function requestPullRefund(page, before, actor, ticket) {
+  const data = { type: "refundPull", pageUuid: page.uuid, before, actorUuid: actor.uuid, ticket };
   if (isActiveGM()) return handleRefundPull(data, game.user);
   await actor.setFlag(MODULE_ID, "refundRequest", { ...data, requestId: foundry.utils.randomID() });
 }
@@ -547,16 +547,27 @@ async function handleRefundPull(data, user) {
   const page = await fromUuid(data.pageUuid);
   const actor = data.actorUuid ? await fromUuid(data.actorUuid) : null;
   if (!isGathererPage(page) || !actor || !user || (!user.isGM && !actor.testUserPermission?.(user, "OWNER"))) return;
-  if (!(actorPerks(actor, selectedProfession(actor)).conserveChance > 0)) return;
-  const before = Math.max(0, Math.trunc(Number(data.before) || 0));
-  for (let attempt = 0; attempt < 25; attempt++) {
-    const used = Number(page.getFlag("gatherer", "data")?.drawsUsed) || 0;
-    if (used > before) {
-      await page.update({ "flags.gatherer.data.drawsUsed": before });
-      return;
+  return runActorAction(actor, async () => {
+    const record = typeof data.ticket === "string" ? actor.getFlag(MODULE_ID, `gatherTickets.${data.ticket}`) : null;
+    if (!record || record.pageUuid !== page.uuid || record.expires < Date.now()) return;
+    const perks = actorPerks(actor, readNode(page)?.profession || selectedProfession(actor));
+    await actor.unsetFlag(MODULE_ID, `gatherTickets.${data.ticket}`);
+    if (!(perks.conserveChance > 0)) return;
+    const roll = await new Roll("1d100").evaluate({ allowInteractive: false });
+    if (roll.total > perks.conserveChance) return;
+    const before = Number(data.before);
+    if (!Number.isInteger(before) || before < 0) return;
+    for (let attempt = 0; attempt < 25; attempt++) {
+      const used = Number(page.getFlag("gatherer", "data")?.drawsUsed) || 0;
+      if (used > before) {
+        // Refund this action's one pull, never restore the caller's old snapshot.
+        await page.update({ "flags.gatherer.data.drawsUsed": Math.max(0, used - 1) });
+        ui.notifications.info(`${actor.name} gathered with care: one pull refunded.`);
+        return;
+      }
+      await new Promise(resolve => setTimeout(resolve, 200));
     }
-    await new Promise(resolve => setTimeout(resolve, 200));
-  }
+  });
 }
 
 /** Mirror Gatherer's early refusals so they do not spend a gathering attempt. */
@@ -597,9 +608,10 @@ function integrateGatherer() {
       // Season, weather, time, and biome reweight the node's table for this draw.
       const table = this.table;
       let started = false;
+      let refundTicket = null;
       const runGather = async () => {
         if (actor?.type === "character" && gathererCanStart(this, actor)) {
-          try { if (!await reserveGatherAttempt(actor)) return; }
+          try { if (!await reserveGatherAttempt(actor, { pageUuid: this.document?.uuid, onReserved: ticket => { refundTicket = ticket; } })) return; }
           catch (error) {
             console.error(`${MODULE_ID}: could not reserve a gathering attempt`, error);
             ui.notifications.error(error.message || "Could not start gathering.");
@@ -631,11 +643,7 @@ function integrateGatherer() {
       }
       // Light Touch / Conservationist / Steward: chance the pull is refunded.
       if (perks?.conserveChance > 0 && actor && gathered && nodeUsage(this.document).draws > 0) {
-        const conserve = await new Roll("1d100").evaluate({ allowInteractive: false });
-        if (conserve.total <= perks.conserveChance) {
-          ui.notifications.info(`${actor.name} gathered with care: no pull used (${conserve.total} ≤ ${perks.conserveChance}%, ${perks.effectSources.conserveChance.join(", ")}).`);
-          void requestPullRefund(this.document, pullsBefore, actor).catch(logFailure("pull refund failed"));
-        }
+        void requestPullRefund(this.document, pullsBefore, actor, refundTicket).catch(logFailure("pull refund failed"));
       }
       return outcome;
     };

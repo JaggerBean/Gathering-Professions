@@ -26,17 +26,17 @@ export function gatheringAllowance(actor) {
 }
 
 /** Reserve one attempt before Gatherer starts. Re-read inside the queue after prompts. */
-export function reserveGatherAttempt(actor) {
+export function reserveGatherAttempt(actor, { pageUuid = null, onReserved = null } = {}) {
   return runActorAction(actor, async () => {
     if (!actor || !(game.user?.isGM || actor.isOwner)) throw new Error("Choose a character you own to gather.");
     while (true) {
       const { limit, used, exhaustion, maxExhaustion } = gatheringAllowance(actor);
-      if (!limit) return true;
-      if (exhaustion >= maxExhaustion) {
+      if (!limit && !pageUuid) return true;
+      if (limit && exhaustion >= maxExhaustion) {
         ui.notifications.warn(`Cannot gather: exhaustion is already at its maximum (${maxExhaustion}).`);
         return false;
       }
-      const exhausted = used >= limit;
+      const exhausted = limit > 0 && used >= limit;
       if (exhausted) {
         const next = exhaustion + 1;
         const confirmed = await gpDialog().confirm({
@@ -51,18 +51,26 @@ export function reserveGatherAttempt(actor) {
         if (now.limit !== limit || now.used !== used || now.exhaustion !== exhaustion) continue;
       }
       // One Actor update keeps the counter and exhaustion change together.
-      const changes = { [`flags.${MODULE_ID}.gatherAttemptsUsed`]: used + 1 };
+      const changes = limit ? { [`flags.${MODULE_ID}.gatherAttemptsUsed`]: used + 1 } : {};
+      const ticket = pageUuid ? foundry.utils.randomID() : null;
+      if (ticket) {
+        changes[`flags.${MODULE_ID}.gatherTickets.${ticket}`] = { pageUuid, expires: Date.now() + 120000 };
+        for (const [id, record] of Object.entries(actor.getFlag(MODULE_ID, "gatherTickets") ?? {})) {
+          if (record.expires <= Date.now()) changes[`flags.${MODULE_ID}.gatherTickets.-=${id}`] = null;
+        }
+      }
       if (exhausted) changes["system.attributes.exhaustion"] = exhaustion + 1;
       if (!await actor.update(changes)) throw new Error("Could not save the gathering attempt on this character.");
       if (exhausted) pendingExhaustion.set(actor, exhaustion + 1);
+      onReserved?.(ticket);
       return true;
     }
   });
 }
 
 export async function resetGatherAttempts(actor) {
-  return runActorAction(actor, async () => {
-    pendingExhaustion.delete(actor);
-    if (actor?.getFlag?.(MODULE_ID, "gatherAttemptsUsed")) await actor.unsetFlag(MODULE_ID, "gatherAttemptsUsed");
-  });
+  // A rest may occur while the exhaustion confirmation is open. The reservation
+  // deliberately rereads this value after the prompt; do not wait on its lease.
+  pendingExhaustion.delete(actor);
+  if (actor?.getFlag?.(MODULE_ID, "gatherAttemptsUsed")) await actor.unsetFlag(MODULE_ID, "gatherAttemptsUsed");
 }
