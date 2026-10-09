@@ -891,7 +891,7 @@ game.modules.get("skill-tree").active = true;
   const heliana = name => /^(Beast|Monstrosity|Dragon) (?!Bones|Scales|Talons)/.test(name);
   const fakePack = (id, packNames) => [id, { title: id, async getIndex() { return packNames.map(name => ({ _id: `id-${name}`, name })); },
     async getDocument(entryId) { const name = entryId.slice(3); return { uuid: `Compendium.${id}.Item.${entryId}`, toObject: () => ({ _id: entryId, name, type: "loot", img: "pack.webp", system: {}, flags: {} }) }; } }];
-  const kctgNames = [...new Set([...["herbalism", "mining", "logging", "skinning"].flatMap(all), ...refiningNames])].filter(name => !heliana(name) && !CUSTOM_ITEMS[name]);
+  const kctgNames = [...new Set([...["herbalism", "mining", "logging", "skinning"].flatMap(all), ...refiningNames])].filter(name => !heliana(name) && !CUSTOM_ITEMS[name] && !refiningLib.GENERATED[name]);
   const helianaNames = type => all("skinning").filter(name => name.startsWith(`${type} `) && heliana(name));
   game.packs = new Map([fakePack("kctg-5e.kctg-dnd5e", kctgNames),
     ...["Beast", "Monstrosity", "Dragon"].map(type => fakePack(`helianas-harvest-compendium.${type.toLowerCase()}`, helianaNames(type)))]);
@@ -930,58 +930,79 @@ game.modules.get("skill-tree").active = true;
   assert.deepEqual([skinning.materials, skinning.rare], [25, 15]);
   assert.match(items.find(item => item.name === "Dragon Breath Sac")._stats.compendiumSource, /^Compendium\.helianas-harvest-compendium\.dragon\./, "Found in the later Heliana pack");
   assert.ok(items.some(item => item.name === "Beast Pelt" && item.flags["gathering-professions"].material.tier === 2), "Heliana beast part imported and assigned");
-  // Refining (Mastercrafted books; check uses the gathering profession).
-  assert.deepEqual(refiningLib.availableRefining(), [], "Refining needs Mastercrafted");
-  game.modules.set("mastercrafted", { active: true });
-  assert.deepEqual(refiningLib.availableRefining().map(entry => entry.key).sort(), ["herbalism", "logging", "mining", "skinning"]);
-  const smelting = await api.refining.build("mining");
-  assert.deepEqual([smelting.created, smelting.updated], [refiningLib.REFINING.mining.recipes.length, 0]);
-  assert.equal(smelting.book.getFlag("gathering-professions", "refiningBook"), "mining");
-  assert.equal(smelting.book.ownership.default, 2, "Players can open the refining book");
-  const refiningFolderDoc = folders.find(folder => folder.id === smelting.book.folder);
-  const rootFolder = folders.find(folder => folder.id === refiningFolderDoc.folder);
-  assert.deepEqual([refiningFolderDoc.name, rootFolder.name, rootFolder.flags.mastercrafted.mainMastercraftedFolder], ["Refining", "Mastercrafted", true], "Books go in Refining inside Mastercrafted's root folder");
-  const copper = smelting.book.pages.find(page => page.name === "Copper Ingot");
-  const copperFlags = copper.flags.mastercrafted;
-  assert.equal(copper.type, "mastercrafted.mastercrafted");
-  assert.deepEqual(copperFlags.ingredients.map(row => [row.name, row.components[0].quantity]), [["Copper Ore", 2], ["Coal", 1]]);
-  assert.equal(copperFlags.ingredients[0].components[0].uuid, items.find(item => item.name === "Copper Ore").uuid, "Ingredients point at the world materials");
-  assert.equal(copperFlags.products[0].components[0].name, "Copper Ingot");
-  assert.equal(copperFlags.time, 30, "Tier 1 refining takes 30 minutes");
-  assert.match(copperFlags.macroName, /api\?\.refining\?\.check\(/);
-  assert.match(copperFlags.macroName, /"profession":"mining","tier":1/);
-  assert.deepEqual(copperFlags.modifierList, [{ DC: 2, modifier: "+2" }, { DC: 1, modifier: "+1" }]);
-  const again = await api.refining.build("mining");
-  assert.deepEqual([again.created, again.updated, journal.filter(entry => entry.getFlag?.("gathering-professions", "refiningBook") === "mining").length], [0, refiningLib.REFINING.mining.recipes.length, 1], "Rebuilding updates in place");
-  // Herbalism: one dried recipe per assigned herb; dried Items lose the gathering flags.
-  const preparation = await api.refining.build("herbalism");
-  assert.equal(preparation.created, 25);
-  const driedClover = items.find(item => item.name === "Dried Clover");
-  assert.equal(driedClover.flags["gathering-professions"].material, undefined, "Dried herbs are not gathering materials");
-  assert.equal(driedClover.flags["gathering-professions"].preparedFrom, "Clover");
-  assert.deepEqual(preparation.book.pages.find(page => page.name === "Dried Clover").flags.mastercrafted.ingredients.map(row => [row.name, row.components[0].quantity]), [["Clover", 2]]);
-  // The check: Near miss keeps materials, a bad failure halves them, success pays half the tier XP.
+  // Refining: every preset material refines into something.
+  for (const key of ["mining", "logging", "skinning"]) {
+    const inputs = new Set(refiningLib.refiningRecipes(key).flatMap(row => row.inputs.map(([name]) => name)));
+    const materials = all(key).filter(name => !Object.values(presetLib.MATERIAL_PRESETS[key].rare).flat().includes(name));
+    assert.deepEqual(materials.filter(name => !inputs.has(name) && !inputs.has(refiningLib.canonicalName(name))), [], `${key}: every material has a refining recipe`);
+  }
+  const stoneBrick = refiningLib.refiningRecipes("mining").filter(row => row.output === "Stone Brick");
+  assert.deepEqual(stoneBrick.map(row => row.inputs[0]), [["Stone", 3], ["Cobblestones", 2], ["Granite", 1]], "Several materials share one product");
+  assert.ok(refiningLib.refiningRecipes("mining").some(row => row.inputs.some(([name]) => name === "Mithril")), "Recipes use the world's spelling (Mithril)");
+  assert.equal(new Set(refiningLib.refiningRecipes("mining").map(row => row.id)).size, refiningLib.refiningRecipes("mining").length, "Recipe ids are unique");
+  // The GM prepares every product (imported, generated, or dried), visible to players.
+  const prepared = await api.refining.prepare();
+  assert.deepEqual(prepared.missing, [], "Every input and product exists");
+  const coke = items.find(item => item.name === "Coke");
+  assert.equal(coke.flags["gathering-professions"].refinedFrom, "Coal");
+  assert.equal(coke.flags["gathering-professions"].material, undefined, "Generated items are not gathering materials");
+  assert.equal(coke.ownership.default, 2);
+  assert.equal(items.find(item => item.name === "Copper Ingot").ownership.default, 2, "Imported products are shared with players");
+  assert.ok(items.some(item => item.name === "Mithral Ingot") && items.some(item => item.name === "Dried Clover"));
+  assert.equal((await api.refining.prepare()).created, 0, "Preparing again creates nothing");
+  // Discovery: a recipe is known once the party has had every input.
+  settings.discoveredItems = [];
+  const recipesUi = await import("../scripts/recipes-ui.js");
+  const [smith] = await Actor.implementation.create([{ name: "Smith", type: "character", hasPlayerOwner: true, system: { abilities: { str: { mod: 2 } } }, flags: {}, items: [] }]);
+  await smith.createEmbeddedDocuments("Item", [{ name: "Cobblestones", type: "loot", system: { quantity: 5 } }, { name: "Copper Ore", type: "loot", system: { quantity: 9 } }, { name: "Coal", type: "loot", system: { quantity: 4 } }]);
+  assert.deepEqual((await refiningLib.backfillDiscoveries()).sort(), ["Coal", "Cobblestones", "Copper Ore"]);
+  let model = recipesUi.buildRecipesModel(smith, { tab: "mining" });
+  const brickCard = model.products.find(group => group.name === "Stone Brick");
+  assert.deepEqual([brickCard.recipes.length, brickCard.hidden], [1, 2], "Stone and Granite recipes stay hidden until found");
+  assert.deepEqual(model.products.map(group => group.name), ["Coke", "Copper Ingot", "Stone Brick"]);
+  const copperRow = model.products.find(group => group.name === "Copper Ingot").recipes[0];
+  assert.deepEqual([copperRow.max, copperRow.inputs.map(input => input.have)], [4, [9, 4]]);
+  assert.equal(model.tabs.find(tab => tab.key === "mining").known, 3);
+  const gmModel = recipesUi.buildRecipesModel(null, { isGM: true, tab: "mining" });
+  assert.equal(gmModel.products.find(group => group.name === "Stone Brick").recipes.length, 3, "The GM sees undiscovered recipes");
+  const html = recipesUi.renderRecipesWindow(model, { characters: [smith] });
+  assert.match(html, /2 more undiscovered/);
+  assert.match(html, /data-act="craft" data-recipe="mining:copper-ingot:2-copper-ore\+1-coal"/);
+  assert.match(html, /> Smelt</);
+  // Crafting: one roll per batch.
   const originalRoll = globalThis.Roll;
   const rolls = [];
   globalThis.Roll = class { constructor(formula) { this.formula = formula; }
     async evaluate() { const [d20, total] = rolls.shift(); this.total = total; this.dice = [{ total: d20 }]; return this; }
     async toMessage(data) { this.message = data; return data; } };
   globalThis.ChatMessage = { getSpeaker: () => ({}) };
-  const [smelter] = await Actor.implementation.create([{ name: "Smelter", type: "character", system: { abilities: { str: { mod: 2 } } }, flags: {} }]);
-  const parts = () => [{ name: "Copper Ore", quantity: 2, clone(diff) { return { ...this, ...diff }; } }, { name: "Coal", quantity: 1, clone(diff) { return { ...this, ...diff }; } }];
-  const run = async (d20, total) => { rolls.push([d20, total]); const componentsToConsume = parts(); const result = await api.refining.check({ actor: smelter, componentsToConsume, profession: "mining", tier: 1, recipe: "Copper Ingot" }); return { result, quantities: componentsToConsume.map(row => row.quantity) }; };
-  assert.deepEqual(await run(10, 16), { result: { success: true, consume: true, checkResult: 1 }, quantities: [2, 1] }, "Excellent (DC 10, 16): +1 output");
-  assert.equal(smelter.flags["gathering-professions"].xp.mining, 3, "Half of tier 1's 5 XP, rounded");
-  assert.deepEqual(await run(8, 8), { result: { success: false, consume: false }, quantities: [2, 1] }, "Near miss keeps the materials");
-  assert.deepEqual(await run(3, 4), { result: { success: false, consume: true }, quantities: [1, 1] }, "Fail by 5+: half the materials (rounded up) are lost");
-  assert.deepEqual((await run(1, 15)).result, { success: false, consume: true }, "A natural 1 fails");
-  assert.deepEqual((await run(20, 12)).result, { success: true, consume: true, checkResult: 2 }, "A natural 20 is Masterful");
-  settings.rules = { ...(settings.rules ?? {}), refineXpPercent: 0 };
-  await run(10, 12);
-  assert.equal(smelter.flags["gathering-professions"].xp.mining, 6, "0% refining XP gives none");
-  delete settings.rules.refineXpPercent;
+  const count = name => smith.items.filter(item => item.name === name).reduce((sum, item) => sum + item.system.quantity, 0);
+  const copperId = copperRow.id;
+  await assert.rejects(api.refining.craft(smith, copperId, 5), /not have enough/);
+  rolls.push([12, 16]);
+  let result = await api.refining.craft(smith, copperId, 2);
+  assert.deepEqual([result.degree, result.made, result.xp], ["excellent", 3, 6], "Batch of 2, Excellent +1; 3 XP per unit");
+  assert.deepEqual([count("Copper Ore"), count("Coal"), count("Copper Ingot")], [5, 2, 0], "Inputs consumed; timed products not here yet");
+  assert.equal(result.job.minutes, 60, "30 minutes per unit at tier 1");
+  assert.equal(api.refining.jobs(smith).length, 1);
+  assert.deepEqual(await refiningLib.deliverDueJobs(smith, game.time.worldTime + 59 * 60), [], "Not ready before its time");
+  await refiningLib.deliverDueJobs(smith, game.time.worldTime + 3600);
+  assert.deepEqual([count("Copper Ingot"), api.refining.jobs(smith).length], [3, 0], "Delivered after an hour of world time");
+  rolls.push([8, 8]);
+  result = await api.refining.craft(smith, copperId, 1);
+  assert.deepEqual([result.degree, count("Copper Ore"), count("Coal")], ["partial", 5, 2], "Near miss keeps the materials");
+  rolls.push([3, 4]);
+  result = await api.refining.craft(smith, copperId, 2);
+  assert.deepEqual([result.degree, count("Copper Ore"), count("Coal")], ["failed", 3, 1], "Bad failure: half of 4 ore and 2 coal lost");
+  settings.rules = { ...(settings.rules ?? {}), craftingTimed: false };
+  rolls.push([20, 9]);
+  result = await api.refining.craft(smith, copperId, 1);
+  assert.deepEqual([result.degree, result.job, count("Copper Ingot")], ["masterful", null, 6], "Natural 20 Masterful +2; instant when timing is off");
+  delete settings.rules.craftingTimed;
+  settings.discoveredItems = [];
+  smith.isOwner = true;
+  await assert.rejects((async () => { game.user.isGM = false; try { await api.refining.craft(smith, copperId, 1); } finally { game.user.isGM = true; } })(), /not discovered/, "Players cannot craft undiscovered recipes");
   globalThis.Roll = originalRoll;
-  game.modules.delete("mastercrafted");
   game.modules.delete("helianas-harvest-compendium");
   game.modules.delete("kctg-5e");
 }
