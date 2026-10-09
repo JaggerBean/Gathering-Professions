@@ -5,6 +5,8 @@
 import { MODULE_ID, PROFESSIONS, MAX_REFINE_MINUTES, activeRules, checkFormula, materialRule, professionFlag } from "./rules.js";
 import { getDegreeOfSuccess, naturalMasterful } from "./gathering.js";
 import { MATERIAL_PRESETS, folderPath, worldItem } from "./presets.js";
+import { runActorAction } from "./actions.js";
+import { rollProfessionCheck } from "./checks.js";
 
 const KCTG = "kctg-5e.kctg-dnd5e";
 const HELIANA = "helianas-harvest-compendium";

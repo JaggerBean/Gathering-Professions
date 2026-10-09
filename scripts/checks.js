@@ -1,7 +1,8 @@
 // Let dnd5e apply conditions, roll bonuses and advantage/disadvantage. Only the
 // profession-specific dice/modifiers are added by this module.
 export async function rollProfessionCheck(actor, check, { skill, tool } = {}) {
-  const ability = check.ability || actor.system?.skills?.[skill]?.ability || globalThis.CONFIG?.DND5E?.skills?.[skill]?.ability;
+  const ability = check.abilityKey || (typeof check.ability === "string" ? check.ability : null)
+    || actor.system?.skills?.[skill]?.ability || globalThis.CONFIG?.DND5E?.skills?.[skill]?.ability;
   const method = tool ? "rollToolCheck" : skill ? "rollSkill" : "rollAbilityCheck";
   if (ability && typeof actor[method] === "function") {
     const base = tool || skill ? Number(check.modifier) || 0 : Number(actor.system?.abilities?.[ability]?.mod) || 0;

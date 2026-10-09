@@ -24,6 +24,8 @@ import { buildRareFinds, RARE_FINDS } from "./rareitems.js";
 import { gatheringAllowance, reserveGatherAttempt, resetGatherAttempts } from "./gather-limits.js";
 import { LEGACY_MODULE_ID, migrateLegacyNamespace } from "./migration.js";
 import { gpDialog } from "./dialogs.js";
+import { runActorAction, registerActionHooks } from "./actions.js";
+import { rollProfessionCheck } from "./checks.js";
 
 const RESULT = Symbol("gatheringProfessionResult");
 const actorQueues = new WeakMap();
@@ -213,15 +215,15 @@ async function rollPendingClimb(actor, id) {
 function bindClimbButtons(_message, html) {
   const root = html instanceof HTMLElement ? html : html?.[0];
   for (const button of root?.querySelectorAll?.("[data-gp-climb]") ?? []) {
-    const actor = globalThis.fromUuidSync?.(button.dataset.epActor);
-    const waiting = actor?.getFlag?.(MODULE_ID, `${CLIMB_FLAG}.${button.dataset.epClimb}`)?.pending;
+    const actor = globalThis.fromUuidSync?.(button.dataset.gpActor);
+    const waiting = actor?.getFlag?.(MODULE_ID, `${CLIMB_FLAG}.${button.dataset.gpClimb}`)?.pending;
     const allowed = Boolean(actor && (game.user.isGM || actor.isOwner) && waiting);
     button.disabled = !allowed;
     if (!waiting) button.innerHTML = '<i class="fas fa-check"></i> Rolled';
     button.addEventListener("click", event => {
       event.preventDefault();
       button.disabled = true;
-      void requestPendingClimb(actor, button.dataset.epClimb).catch(error => {
+      void requestPendingClimb(actor, button.dataset.gpClimb).catch(error => {
         button.disabled = false;
         logFailure("Fortune die failed")(error);
         ui.notifications.error(error.message || "Fortune die failed.");
@@ -433,7 +435,7 @@ async function resolveCheck({ thing, rule }, actor, sheet, originalToChat) {
     check.assist = { name: assist.helper.name, label: assistLabel(assist) };
     void consumeAssist(assist.helper, page, actor).catch(logFailure("could not clear assist"));
   }
-  let roll = auto ? null : await new Roll(check.formula).evaluate();
+  let roll = auto ? null : await rollProfessionCheck(actor, check);
   let degree = auto ? autoMasterful() : getDegreeOfSuccess(roll.total, check.target);
   const isNatural20 = result => result?.dice?.[0]?.total === 20;
   // Every natural 1 rolled on the check (a Second Look reroll included) wears the tool.
@@ -443,7 +445,7 @@ async function resolveCheck({ thing, rule }, actor, sheet, originalToChat) {
     && await askSecondLook(actor, roll, check, rerollsLeft(actor, perks))) {
     await spendReroll(actor);
     check.reroll = { first: roll.total, label: perks.effectSources.rerolls.join(", ") };
-    roll = await new Roll(check.formula).evaluate();
+    roll = await rollProfessionCheck(actor, check);
     degree = getDegreeOfSuccess(roll.total, check.target);
     if (roll.dice?.[0]?.total === 1) naturalOnes++;
   }
@@ -795,6 +797,7 @@ Hooks.once("ready", async () => {
       providers: () => recipeProviders(),
       provider: key => providerFor(key),
       inventoryCount, maxBatch, removeFromInventory, addToInventory, addGold, queueJob, formatMinutes, itemPickerGroups, successChance,
+      runActorAction, rollProfessionCheck,
       degree: (total, target) => getDegreeOfSuccess(total, target),
       naturalMasterful: degree => naturalMasterful(degree),
       openRecipes
@@ -1004,6 +1007,7 @@ Hooks.once("ready", async () => {
   Hooks.on("updateSetting", setting => {
     if (setting?.key === `${MODULE_ID}.skillTree` && isActiveGM()) syncEveryCharacter();
   });
+  registerActionHooks();
   registerNodeHooks();
   registerGatheringHooks();
   console.info(`${MODULE_ID}: Gatherer profession checks active.`);
@@ -1049,7 +1053,6 @@ function logFailure(label) {
 
 // Only the active GM writes ownership, pin tint, and timer resets.
 function registerNodeHooks() {
-  if (!isActiveGM()) return;
   const refreshAllVisibility = foundry.utils.debounce?.(() => void refreshNodeVisibility().catch(logFailure("node visibility refresh failed")), 500)
     ?? (() => void refreshNodeVisibility().catch(logFailure("node visibility refresh failed")));
   Hooks.on("updateJournalEntryPage", (page, changes) => {
@@ -1069,6 +1072,13 @@ function registerNodeHooks() {
     if (isActiveGM() && "character" in changes) refreshAllVisibility();
   });
   Hooks.on("createUser", () => { if (isActiveGM()) refreshAllVisibility(); });
+  Hooks.on("userConnected", () => {
+    if (!isActiveGM()) return;
+    refreshAllVisibility();
+    void deliverAllDueJobs().catch(logFailure("refining delivery failed"));
+    void autoResetExpired().catch(logFailure("node timer reset failed"));
+    syncEveryCharacter();
+  });
   let lastCheck = 0;
   Hooks.on("updateWorldTime", worldTime => {
     if (isActiveGM()) void deliverAllDueJobs(worldTime).catch(logFailure("refining delivery failed"));
@@ -1076,8 +1086,10 @@ function registerNodeHooks() {
     lastCheck = worldTime;
     void autoResetExpired().catch(logFailure("node timer reset failed"));
   });
-  void refreshNodeVisibility().catch(logFailure("node visibility refresh failed"));
-  for (const page of allNodePages()) void refreshPinTint(page).catch(logFailure("pin tint failed"));
+  if (isActiveGM()) {
+    void refreshNodeVisibility().catch(logFailure("node visibility refresh failed"));
+    for (const page of allNodePages()) void refreshPinTint(page).catch(logFailure("pin tint failed"));
+  }
 }
 
 // Pins open the gathering window; the active GM records party discoveries.
