@@ -969,6 +969,18 @@ game.modules.get("skill-tree").active = true;
   assert.match(html, /2 more undiscovered/);
   assert.match(html, /data-act="craft" data-recipe="mining:copper-ingot:2-copper-ore\+1-coal"/);
   assert.match(html, /> Smelt</);
+  if (process.env.GP_PREVIEW) {
+    const fs = await import("node:fs");
+    const css = fs.readFileSync(new URL("../styles/module.css", import.meta.url), "utf8");
+    const shell = body => `<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"><style>
+      body{margin:0;background:#15121a;color:#efe6d8;font-family:Signika,Arial,sans-serif;font-size:14px} button{font:inherit}
+      .application{width:640px;height:720px;margin:10px;border:1px solid #4a3f35;border-radius:6px;display:flex;flex-direction:column}
+      .window-content{flex:1;min-height:0;display:flex;flex-direction:column}${css}</style></head><body>
+      <div class="application gathering-professions-ui gp-recipes-window"><div class="window-content">${body}</div></div></body></html>`;
+    await refiningLib.recordDiscoveries(["Stone", "Granite", "Sandstone", "Iron Ore", "Tin", "Copper Ingot", "Tin Ingot"]);
+    fs.writeFileSync(`${process.env.GP_PREVIEW}/recipes-window.html`, shell(recipesUi.renderRecipesWindow(recipesUi.buildRecipesModel(smith, { tab: "mining" }), { characters: [smith] })));
+    settings.discoveredItems = ["Coal", "Cobblestones", "Copper Ore"];
+  }
   // Crafting: one roll per batch.
   const originalRoll = globalThis.Roll;
   const rolls = [];
