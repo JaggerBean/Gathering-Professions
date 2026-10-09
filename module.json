@@ -2,7 +2,7 @@
   "id": "gathering-professions",
   "title": "Gathering Professions",
   "description": "Profession progression, material checks, Skill Tree perks, rare finds, and a gathering node builder for Gatherer 5.",
-  "version": "0.22.0",
+  "version": "0.23.0",
   "authors": [
     {
       "name": "JaggerBean"
@@ -29,6 +29,11 @@
         "id": "simple-timekeeping",
         "type": "module",
         "reason": "Season, weather, and time of day for conditional loot."
+      },
+      {
+        "id": "mastercrafted",
+        "type": "module",
+        "reason": "Refining recipes (smelting, milling, tanning, herb preparation) run in Mastercrafted recipe books."
       }
     ]
   },
