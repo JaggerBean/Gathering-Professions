@@ -979,6 +979,7 @@ game.modules.get("skill-tree").active = true;
       <div class="application gathering-professions-ui gp-recipes-window"><div class="window-content">${body}</div></div></body></html>`;
     await refiningLib.recordDiscoveries(["Stone", "Granite", "Sandstone", "Iron Ore", "Tin", "Copper Ingot", "Tin Ingot"]);
     fs.writeFileSync(`${process.env.GP_PREVIEW}/recipes-window.html`, shell(recipesUi.renderRecipesWindow(recipesUi.buildRecipesModel(smith, { tab: "mining" }), { characters: [smith] })));
+    fs.writeFileSync(`${process.env.GP_PREVIEW}/recipes-gm.html`, shell(recipesUi.renderRecipesWindow(recipesUi.buildRecipesModel(smith, { isGM: true, tab: "mining" }), { characters: [smith] })));
     settings.discoveredItems = ["Coal", "Cobblestones", "Copper Ore"];
   }
   // Crafting: one roll per batch.
@@ -1014,6 +1015,48 @@ game.modules.get("skill-tree").active = true;
   settings.discoveredItems = [];
   smith.isOwner = true;
   await assert.rejects((async () => { game.user.isGM = false; try { await api.refining.craft(smith, copperId, 1); } finally { game.user.isGM = true; } })(), /not discovered/, "Players cannot craft undiscovered recipes");
+  // GM: learned / unlearned / auto.
+  settings.discoveredItems = ["Coal", "Cobblestones", "Copper Ore"];
+  const glassId = refiningLib.refiningRecipes("mining").find(row => row.output === "Glass").id;
+  const brickFromStone = refiningLib.refiningRecipes("mining").find(row => row.output === "Stone Brick" && row.inputs[0][0] === "Stone").id;
+  await api.refining.setLearned(glassId, "learned");
+  await api.refining.setLearned(copperId, "unlearned");
+  model = recipesUi.buildRecipesModel(smith, { tab: "mining" });
+  assert.ok(model.products.some(group => group.name === "Glass"), "Learned without the ingredients");
+  assert.ok(!model.products.some(group => group.name === "Copper Ingot"), "Unlearned although the party has the ingredients");
+  await api.refining.setLearned(copperId, "auto");
+  assert.deepEqual(settings.recipeLearned, { [glassId]: "learned" }, "Auto removes the override");
+  await assert.rejects(api.refining.setLearned(glassId, "maybe"), /Auto, Learned, or Unlearned/);
+  // GM: edit a built-in (id kept), disable it, reset it.
+  await assert.rejects(api.refining.update(brickFromStone, { tier: 1, output: "Stone Brick", quantity: 1, inputs: [["Nothing Real", 2]] }), /No world Item is named "Nothing Real"/);
+  await api.refining.update(brickFromStone, { tier: 2, output: "Stone Brick", quantity: 2, inputs: [["Stone", 4]] });
+  const edited = refiningLib.findRecipe(brickFromStone);
+  assert.deepEqual([edited.tier, edited.quantity, edited.inputs, edited.edited], [2, 2, [["Stone", 4]], true], "Edits keep the recipe id");
+  await api.refining.disable(brickFromStone);
+  assert.equal(refiningLib.findRecipe(brickFromStone), null, "Disabled recipes are gone for crafting");
+  await api.refining.setLearned(brickFromStone, "learned");
+  assert.ok(!recipesUi.buildRecipesModel(smith, { tab: "mining" }).products.find(group => group.name === "Stone Brick").recipes.some(row => row.id === brickFromStone), "Players never see a disabled recipe");
+  const gmBricks = recipesUi.buildRecipesModel(smith, { isGM: true, tab: "mining" }).products.find(group => group.name === "Stone Brick").recipes;
+  assert.ok(gmBricks.find(row => row.id === brickFromStone).disabled, "The GM still sees it, marked disabled");
+  await api.refining.reset(brickFromStone);
+  assert.deepEqual(refiningLib.findRecipe(brickFromStone).inputs, [["Stone", 3]], "Reset restores the default");
+  await api.refining.setLearned(brickFromStone, "auto");
+  // GM: their own recipe.
+  await assert.rejects(api.refining.create({ profession: "mining", tier: 1, output: "Copper Ingot", quantity: 1, inputs: [] }), /at least one ingredient/);
+  await assert.rejects(api.refining.create({ profession: "mining", tier: 1, output: "Copper Ingot", quantity: 1, inputs: [["Copper Ingot", 1]] }), /its own product/);
+  const mine = await api.refining.create({ profession: "mining", tier: 1, output: "Copper Ingot", quantity: 3, inputs: [["Copper Ore", 5]] });
+  assert.match(mine.id, /^mining:custom-/);
+  const customRow = recipesUi.buildRecipesModel(smith, { tab: "mining" }).products.find(group => group.name === "Copper Ingot").recipes.find(row => row.id === mine.id);
+  assert.ok(customRow?.custom, "The party knows it (they have Copper Ore) and it is grouped with Copper Ingot");
+  const gmHtml = recipesUi.renderRecipesWindow(recipesUi.buildRecipesModel(smith, { isGM: true, tab: "mining" }), { characters: [smith] });
+  assert.match(gmHtml, /data-act="new-recipe"/);
+  assert.match(gmHtml, new RegExp(`data-act="delete-recipe" data-recipe="${mine.id}"`));
+  assert.match(gmHtml, /data-learn="mining:glass:/);
+  assert.match(recipesUi.recipeEditorHtml(mine, refiningLib.refiningProfessions()), /name="input0" value="Copper Ore"/);
+  await api.refining.setLearned(mine.id, "learned");
+  await api.refining.delete(mine.id);
+  assert.deepEqual([settings.customRecipes, settings.recipeLearned[mine.id]], [[], undefined], "Deleting removes the recipe and its learned state");
+  await api.refining.setLearned(glassId, "auto");
   globalThis.Roll = originalRoll;
   game.modules.delete("helianas-harvest-compendium");
   game.modules.delete("kctg-5e");

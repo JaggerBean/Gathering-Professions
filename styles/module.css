@@ -578,3 +578,20 @@
 .gp-rw-job small { margin-left: auto; opacity: .7; }
 .gp-rw-job.done small { color: var(--gp-good); opacity: 1; }
 .gp-rw-jobs button { margin-top: .3rem; width: auto; }
+
+/* Recipes window: GM controls and editor */
+.gp-rw-gmbar { display: flex; align-items: center; gap: .6rem; padding: .45rem .8rem 0; font-size: .8em; opacity: .9; }
+.gp-rw-gmbar button { width: auto; flex: 0 0 auto; }
+.gp-rw-gmbar span { opacity: .7; }
+.gp-rw-gm { grid-column: 1 / -1; display: flex; align-items: center; gap: .35rem; padding-top: .25rem; font-size: .8em; }
+.gp-rw-gm select { width: auto; height: 24px; }
+.gp-rw-gm button { width: auto; flex: 0 0 auto; height: 24px; line-height: 1; padding: 0 .45rem; }
+.gp-rw-known.yes { color: var(--gp-good); } .gp-rw-known.no { color: var(--gp-bad); }
+.gp-rw-tag { padding: 0 .4rem; border-radius: 4px; background: rgba(217,180,90,.2); color: var(--gp-gold); }
+.gp-rw-tag.off { background: rgba(224,123,116,.2); color: var(--gp-bad); }
+.gp-rw-recipe.disabled { opacity: .55; }
+.gp-rw-recipe { grid-template-areas: "inputs make" "meta make" "gm gm"; }
+.gp-rw-editor .form-group { display: flex; align-items: center; gap: .4rem; }
+.gp-rw-editor .form-group label { flex: 0 0 70px; }
+.gp-rw-editor .form-group input[type="text"] { flex: 1 1 auto; }
+.gp-rw-editor .form-group input[type="number"] { flex: 0 0 56px; text-align: center; }
