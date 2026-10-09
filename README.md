@@ -330,7 +330,7 @@ Gatherers refine their own materials; no crafting profession is needed, and no o
 
 The Recipes window shows one tab per **recipe provider**. Gathering Professions registers a refining provider per gathering profession; companion modules such as **Crafting Professions** (Blacksmith) register their own. After Gathering Professions' API is ready it calls the hook `gatheringProfessions.ready` with the API; register there with `api.recipes.register(provider)` (see the provider shape at the top of `scripts/recipe-registry.js`). Shared helpers: `api.recipes.inventoryCount`, `maxBatch`, `removeFromInventory`, `addToInventory`, `queueJob` (timed delivery), `formatMinutes`, `itemPickerGroups`, `successChance`, `degree`, `naturalMasterful`. A provider may show a "blocked" reason per recipe (e.g. rank or tool), use per-character learning (the GM chooses a character to grant recipes), offer **Make recipe scroll**, and an **Experiment** panel (put inventory items in and Try).
 
-The profession menu accepts extra sections: hooks `gatheringProfessions.menuSections` ({ actor, canEdit, sections }: push { html }) and `gatheringProfessions.menuRender` ({ actor, canEdit, element, dialog }: bind buttons).
+The GM hub accepts extra sections: `api.hub.registerSection({ id, label, icon, blurb, order, render() → html, onClick(event, { hub, root }) })` (they appear in the hub's navigation; `api.hub.open(id)` opens one). The profession menu accepts extra sections: hooks `gatheringProfessions.menuSections` ({ actor, canEdit, sections }: push { html }) and `gatheringProfessions.menuRender` ({ actor, canEdit, element, dialog }: bind buttons).
 
 ## Material presets (0.22.0)
 

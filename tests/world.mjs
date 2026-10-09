@@ -489,6 +489,12 @@ const managerCore = await nodeUi.openNodeManager({ select: "new" });
 assert.equal(managerCore.view.selected, "new");
 const hubWindow = (await import("../scripts/hub.js"));
 assert.match(hubWindow.renderHub({ ...hubWindow.initialHubView("nodes"), section: "nodes" }), /class="gp-hub-nodes gp-node-manager"/);
+// Other modules add hub sections (Crafting Professions → "Crafting").
+hubWindow.registerHubSection({ id: "testcraft", label: "Test Craft", icon: "fa-hammer", blurb: "Test section.", render: () => '<form class="tc-form"><button type="button" data-tc="go">Go</button></form>' });
+const extHub = hubWindow.renderHub({ ...hubWindow.initialHubView("testcraft"), section: "testcraft" });
+assert.match(extHub, /data-section="testcraft">\s*<i class="fas fa-hammer"><\/i><span>Test Craft/, "Added sections appear in the hub navigation");
+assert.match(extHub, /<div class="gp-hub-external" data-section="testcraft"><form class="tc-form">/, "Their own markup, not inside the hub form");
+assert.ok(hubWindow.hubSections().some(section => section.id === "testcraft"));
 
 // Hidden seam: page ownership NONE for players; revealed nodes OBSERVER.
 const seam = nodes.pages.find(page => page.name === "Deep Silver Seam");
