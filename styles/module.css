@@ -464,10 +464,14 @@
 .gp-hub .gp-cond-body { overflow: visible; padding: 0; flex: 1 1 auto; }
 
 /* ---- Hub: Materials (gathering materials and rare finds per profession) ---- */
-.gp-mat-row { display: grid; grid-template-columns: 70px 1fr; gap: .5rem; padding: .45rem 0; border-top: 1px solid rgba(255,255,255,.06); }
-.gp-mat-row:first-of-type { border-top: none; }
-.gp-mat-tier { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .1rem; border-radius: 6px; background: rgba(0,0,0,.3); font-weight: 700; color: var(--gp-gold); font-size: .85em; letter-spacing: .05em; text-transform: uppercase; }
-.gp-mat-tier small { font-weight: 400; color: var(--gp-ink); opacity: .6; text-transform: none; letter-spacing: 0; }
+.gp-mtier-row { display: flex; flex-direction: column; gap: .4rem; padding: .55rem 0 .35rem; }
+.gp-mat-tier { --tier: #b8a27a; display: flex; align-items: center; gap: .55rem; }
+.gp-mat-tier.tier-2 { --tier: #7fb27a; } .gp-mat-tier.tier-3 { --tier: #6f9fd0; } .gp-mat-tier.tier-4 { --tier: #b07ad6; } .gp-mat-tier.tier-5 { --tier: #e0a23c; }
+.gp-tier-badge { flex: 0 0 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-family: var(--font-h1, serif); font-weight: 700; font-size: .85em; color: #fff3d6;
+  background: radial-gradient(circle, color-mix(in srgb, var(--tier) 55%, #000) 0%, #120e14 78%); box-shadow: 0 0 0 1.5px var(--tier), 0 0 10px color-mix(in srgb, var(--tier) 45%, transparent); }
+.gp-tier-label { font-weight: 700; font-size: .85em; letter-spacing: .08em; text-transform: uppercase; color: var(--tier); }
+.gp-tier-rule { flex: 1 1 auto; height: 1px; background: linear-gradient(90deg, color-mix(in srgb, var(--tier) 60%, transparent), transparent); }
+.gp-mat-tier small { font-size: .78em; opacity: .65; white-space: nowrap; }
 .gp-mat-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .4rem; }
 .gp-mat-tile { position: relative; display: flex; flex-direction: column; align-items: center; gap: .15rem; padding: .45rem .4rem .4rem; border-radius: 6px; background: rgba(0,0,0,.35); box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); text-align: center; font-size: .82em; cursor: pointer; }
 .gp-mat-tile:hover { box-shadow: inset 0 0 0 1px var(--gp-gold); }
