@@ -1,20 +1,20 @@
-// Player-facing Recipes window: refining recipes the party has discovered,
-// grouped by product under one tab per profession, with have/need counts,
-// success chance, batch crafting, and the character's timed jobs.
-import { MODULE_ID, PROFESSIONS, materialRule } from "./rules.js";
+// Recipes window: one tab per recipe provider (refining per gathering
+// profession, plus crafting professions from other modules), products grouped
+// with their recipes, have/need counts, success chance, batch crafting, timed
+// jobs, GM controls and inline editor, and an experiment panel for providers
+// that support it.
+import { MODULE_ID } from "./rules.js";
 import { successChance, formatDuration } from "./gather-ui.js";
 import { gpDialog } from "./dialogs.js";
-import {
-  recipeMinutes, refiningProfessions, refiningRecipes, allRecipes, discoveredNames, isKnown, learnedStates, findRecipe, inventoryCount, maxBatch,
-  refineCheckFor, actorJobs, deliverDueJobs, formatMinutes, productItem
-} from "./refining.js";
+import { inventoryCount, maxBatch, actorJobs, deliverDueJobs, formatMinutes, productItem, itemPickerGroups } from "./refining.js";
+import { recipeProviders, providerFor } from "./recipe-registry.js";
 
 const FALLBACK_ICON = "icons/svg/item-bag.svg";
 const escape = value => String(value ?? "").replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
 
 function report(error) {
   console.error(`${MODULE_ID}:`, error);
-  ui.notifications.error(error.message || "Refining failed.");
+  ui.notifications.error(error.message || "Crafting failed.");
 }
 
 const imgFor = name => productItem(name)?.img || Array.from(game.items ?? []).find(item => item.name === name)?.img || FALLBACK_ICON;
@@ -25,19 +25,20 @@ const imgFor = name => productItem(name)?.img || Array.from(game.items ?? []).fi
 
 /**
  * @param {Actor|null} actor
- * @param {{isGM?: boolean, names?: Set<string>, tab?: string, onlyCraftable?: boolean, search?: string, now?: number}} options
+ * @param {{isGM?: boolean, tab?: string, onlyCraftable?: boolean, search?: string, now?: number}} options
  */
-export function buildRecipesModel(actor, { isGM = false, names = discoveredNames(), states = learnedStates(), tab = "", onlyCraftable = false, search = "", now = game.time?.worldTime ?? 0 } = {}) {
-  const professions = refiningProfessions();
-  const active = professions.find(entry => entry.key === tab)?.key ?? professions[0]?.key ?? "";
+export function buildRecipesModel(actor, { isGM = false, tab = "", onlyCraftable = false, search = "", now = game.time?.worldTime ?? 0 } = {}) {
+  const providers = recipeProviders().filter(entry => entry.visible?.(actor, isGM) ?? true);
+  const provider = providers.find(entry => entry.key === tab) ?? providers[0] ?? null;
   const query = search.trim().toLowerCase();
-  const tabs = professions.map(entry => {
-    const recipes = refiningRecipes(entry.key);
-    return { ...entry, total: recipes.length, known: recipes.filter(row => isKnown(row, names, states)).length, active: entry.key === active };
+  const tabs = providers.map(entry => {
+    const rows = entry.recipes({});
+    return { key: entry.key, label: entry.label, verb: entry.verb, icon: entry.icon, total: rows.length,
+      known: rows.filter(row => entry.isKnown(row, actor)).length, active: entry === provider };
   });
   const groups = new Map();
-  for (const row of refiningRecipes(active, { includeDisabled: isGM })) {
-    const known = isKnown(row, names, states);
+  for (const row of provider ? provider.recipes({ includeDisabled: isGM }) : []) {
+    const known = provider.isKnown(row, actor);
     const group = groups.get(row.output) ?? { name: row.output, img: imgFor(row.output), tier: row.tier, recipes: [], hidden: 0 };
     groups.set(row.output, group);
     group.tier = Math.min(group.tier, row.tier);
@@ -47,27 +48,33 @@ export function buildRecipesModel(actor, { isGM = false, names = discoveredNames
       return { name, img: imgFor(name), need, have, ok: have >= need };
     });
     const max = actor ? maxBatch(actor, row) : 0;
+    const blocked = actor ? provider.blocked?.(actor, row) ?? null : null;
     let chance = null;
     let target = null;
-    if (actor) {
-      const check = refineCheckFor(actor, row);
+    const check = actor ? provider.check?.(actor, row) ?? null : null;
+    if (check) {
       target = check.target;
-      chance = Math.round(successChance(check.modifier, check.die ?? 0, check.target) * 100);
+      chance = Math.round(successChance(check.modifier, check.die ?? 0, check.target, check.extraDice ?? []) * 100);
     }
-    group.recipes.push({ id: row.id, tier: row.tier, quantity: row.quantity, inputs, max, chance, target, known,
-      learn: states[row.id] ?? "auto", disabled: Boolean(row.disabled), edited: Boolean(row.edited), custom: Boolean(row.custom),
-      minutes: recipeMinutes(row), time: formatMinutes(recipeMinutes(row)), ownTime: row.minutes !== undefined && row.minutes !== null });
+    const minutes = provider.minutes(row);
+    group.recipes.push({ id: row.id, tier: row.tier, quantity: row.quantity, inputs, max, chance, target, known, blocked,
+      learn: provider.learnState(row, actor), disabled: Boolean(row.disabled), edited: Boolean(row.edited), custom: Boolean(row.custom),
+      minutes, time: formatMinutes(minutes), ownTime: row.minutes !== undefined && row.minutes !== null });
   }
   let products = [...groups.values()].filter(group => group.recipes.length)
     .sort((a, b) => a.tier - b.tier || a.name.localeCompare(b.name));
   if (query) products = products.filter(group => group.name.toLowerCase().includes(query)
     || group.recipes.some(row => row.inputs.some(input => input.name.toLowerCase().includes(query))));
-  if (onlyCraftable) products = products.map(group => ({ ...group, recipes: group.recipes.filter(row => row.max > 0) })).filter(group => group.recipes.length);
+  if (onlyCraftable) products = products.map(group => ({ ...group, recipes: group.recipes.filter(row => row.max > 0 && !row.blocked) })).filter(group => group.recipes.length);
   const jobs = actor ? actorJobs(actor).map(job => ({ ...job, img: job.img || imgFor(job.name), done: job.ready <= now, left: formatDuration(Math.max(0, job.ready - now)) })) : [];
-  const profession = PROFESSIONS[active];
-  const current = tabs.find(entry => entry.active);
-  return { tabs, active, verb: current?.verb ?? "", action: current?.action ?? "Make", professionLabel: profession?.label ?? "", products, jobs, isGM,
-    actor: actor ? { id: actor.id, name: actor.name, img: actor.img } : null };
+  return {
+    tabs, active: provider?.key ?? "", verb: provider?.verb ?? "", action: provider?.action ?? "Make", rollLabel: provider?.rollLabel ?? "",
+    learnOptions: provider?.learnOptions ?? [], learnHint: provider?.learnHint ?? "", perCharacter: Boolean(provider?.perCharacter),
+    hiddenHint: provider?.hiddenHint ?? "Not yet discovered", emptyText: provider?.emptyText ?? "No recipes known yet.",
+    gmHint: provider?.gmHint ?? "", canEdit: Boolean(provider?.gm?.create), canScroll: Boolean(provider?.gm?.scroll),
+    experiment: Boolean(provider?.experiment), products, jobs, isGM,
+    actor: actor ? { id: actor.id, name: actor.name, img: actor.img } : null
+  };
 }
 
 /* ---------------------------------------------------------------------- */
@@ -80,35 +87,65 @@ function chanceWord(chance) {
   return `<span class="gp-rw-chance gp-chance-${word.toLowerCase().replace(" ", "-")}" title="Chance of a success or better">${chance}% · ${word}</span>`;
 }
 
+function gmControls(row, model) {
+  if (!model.isGM) return "";
+  const needsActor = model.perCharacter && !model.actor;
+  const learnOption = ([value, label]) => `<option value="${value}" ${row.learn === value ? "selected" : ""}>${label}</option>`;
+  const seeTitle = model.perCharacter ? (row.known ? `${model.actor?.name ?? "This character"} knows this recipe` : "Not known") : (row.known ? "The party knows this recipe" : "Hidden from players");
+  return `<div class="gp-rw-gm">
+      <span class="gp-rw-known ${row.known ? "yes" : "no"}" title="${escape(seeTitle)}"><i class="fas ${row.known ? "fa-eye" : "fa-eye-slash"}"></i></span>
+      <select data-learn="${escape(row.id)}" ${needsActor ? "disabled" : ""} title="${escape(needsActor ? "Choose a character above to grant recipes" : model.learnHint)}">${model.learnOptions.map(learnOption).join("")}</select>
+      ${model.canEdit ? `<button type="button" data-act="edit-recipe" data-recipe="${escape(row.id)}" title="Edit recipe"><i class="fas fa-pen"></i></button>` : ""}
+      ${model.canScroll ? `<button type="button" data-act="make-scroll" data-recipe="${escape(row.id)}" title="Make a recipe scroll Item (for loot or shops)"><i class="fas fa-scroll"></i></button>` : ""}
+      ${row.custom ? `<button type="button" data-act="delete-recipe" data-recipe="${escape(row.id)}" title="Delete your recipe"><i class="fas fa-trash"></i></button>`
+        : model.canEdit ? `<button type="button" class="${row.disabled ? "gp-rw-enable" : ""}" data-act="toggle-recipe" data-recipe="${escape(row.id)}" title="${row.disabled ? "Enable this recipe again" : "Disable for everyone"}"><i class="fas ${row.disabled ? "fa-toggle-off" : "fa-toggle-on"}"></i>${row.disabled ? " Enable" : ""}</button>
+           ${row.edited ? `<button type="button" data-act="reset-recipe" data-recipe="${escape(row.id)}" title="Reset to the module's default"><i class="fas fa-rotate-left"></i></button>` : ""}` : ""}
+      ${row.custom ? '<span class="gp-rw-tag">Yours</span>' : row.disabled ? '<span class="gp-rw-tag off">Disabled</span>' : row.edited ? '<span class="gp-rw-tag">Edited</span>' : ""}
+    </div>`;
+}
+
 function recipeRow(row, model, state) {
   const inputs = row.inputs.map(input => `<span class="gp-rw-input ${input.ok ? "ok" : "missing"}" title="${escape(input.name)}: have ${input.have}, need ${input.need}">
       <img src="${escape(input.img)}" alt=""><span>${input.need}× ${escape(input.name)}</span><small>${input.have}</small></span>`).join('<i class="fas fa-plus gp-rw-plus"></i>');
   const batch = Math.min(Math.max(1, Number(state.batch?.[row.id]) || 1), Math.max(1, row.max));
-  const canCraft = model.actor && row.max > 0 && !state.busy && !row.disabled;
-  const learnOption = (value, label) => `<option value="${value}" ${row.learn === value ? "selected" : ""}>${label}</option>`;
-  const gm = model.isGM ? `<div class="gp-rw-gm">
-        <span class="gp-rw-known ${row.known ? "yes" : "no"}" title="${row.known ? "The party knows this recipe" : "Hidden from players"}"><i class="fas ${row.known ? "fa-eye" : "fa-eye-slash"}"></i></span>
-        <select data-learn="${escape(row.id)}" title="Auto: learned once the party has had every ingredient">${learnOption("auto", "Auto")}${learnOption("learned", "Learned")}${learnOption("unlearned", "Unlearned")}</select>
-        <button type="button" data-act="edit-recipe" data-recipe="${escape(row.id)}" title="Edit recipe"><i class="fas fa-pen"></i></button>
-        ${row.custom ? `<button type="button" data-act="delete-recipe" data-recipe="${escape(row.id)}" title="Delete your recipe"><i class="fas fa-trash"></i></button>`
-          : `<button type="button" class="${row.disabled ? "gp-rw-enable" : ""}" data-act="toggle-recipe" data-recipe="${escape(row.id)}" title="${row.disabled ? "Enable this recipe again" : "Disable for everyone"}"><i class="fas ${row.disabled ? "fa-toggle-off" : "fa-toggle-on"}"></i>${row.disabled ? " Enable" : ""}</button>
-             ${row.edited ? `<button type="button" data-act="reset-recipe" data-recipe="${escape(row.id)}" title="Reset to the module's default"><i class="fas fa-rotate-left"></i></button>` : ""}`}
-        ${row.custom ? '<span class="gp-rw-tag">Yours</span>' : row.disabled ? '<span class="gp-rw-tag off">Disabled</span>' : row.edited ? '<span class="gp-rw-tag">Edited</span>' : ""}
-      </div>` : "";
-  return `<div class="gp-rw-recipe ${row.max > 0 ? "craftable" : ""} ${row.disabled ? "gp-rw-off" : ""}">
+  const canCraft = model.actor && row.max > 0 && !row.blocked && !state.busy && !row.disabled;
+  const why = !model.actor ? "Choose a character" : row.blocked ? row.blocked : row.max > 0 ? `Up to ${row.max}` : "Not enough materials";
+  return `<div class="gp-rw-recipe ${canCraft ? "craftable" : ""} ${row.disabled ? "gp-rw-off" : ""}">
       <div class="gp-rw-inputs">${inputs}<i class="fas fa-arrow-right gp-rw-arrow"></i><span class="gp-rw-out">${row.quantity}×</span></div>
       <div class="gp-rw-meta">
         <span class="gp-tier-badge tier-${row.tier}">T${row.tier}</span>
         ${row.target !== null ? `<span title="Check DC">DC ${row.target}</span>` : ""}
         ${chanceWord(row.chance)}
         <span title="${row.ownTime ? "Time per unit (this recipe)" : "Time per unit (tier default)"}"><i class="fas fa-hourglass-half"></i> ${escape(row.minutes ? row.time : "Instant")}</span>
+        ${row.blocked ? `<span class="gp-rw-blocked" title="${escape(row.blocked)}"><i class="fas fa-lock"></i> ${escape(row.blocked)}</span>` : ""}
       </div>
-      ${gm}
+      ${gmControls(row, model)}
       <div class="gp-rw-make">
         <input type="number" min="1" max="${Math.max(1, row.max)}" value="${batch}" data-batch="${escape(row.id)}" ${row.max > 1 ? "" : "disabled"} aria-label="How many">
-        <button type="button" class="gp-rw-craft" data-act="craft" data-recipe="${escape(row.id)}" ${canCraft ? "" : "disabled"} title="${model.actor ? (row.max > 0 ? `Up to ${row.max}` : "Not enough materials") : "Choose a character"}"><i class="fas fa-hammer"></i> ${escape(model.action)}</button>
+        <button type="button" class="gp-rw-craft" data-act="craft" data-recipe="${escape(row.id)}" ${canCraft ? "" : "disabled"} title="${escape(why)}"><i class="fas fa-hammer"></i> ${escape(model.action)}</button>
       </div>
     </div>`;
+}
+
+/** Experiment panel: put inventory items in and try (providers with experiment()). */
+export function renderExperiment(model, experiment = {}, inventory = []) {
+  if (!model.experiment || !model.actor) return "";
+  const names = experiment.names ?? [];
+  const query = String(experiment.search ?? "").trim().toLowerCase();
+  const choices = inventory.filter(item => !names.includes(item.name) && (!query || item.name.toLowerCase().includes(query)));
+  const picker = experiment.picker ? `<div class="gp-rw-picker">
+      <input type="search" class="gp-rw-picksearch" data-exp="search" value="${escape(experiment.search ?? "")}" placeholder="Search ${escape(model.actor.name)}'s inventory" data-focus-key="exp">
+      <div class="gp-rw-picktiles">${choices.map(item => `<button type="button" class="gp-rw-picktile" data-act="exp-add" data-name="${escape(item.name)}" title="${escape(item.name)} (${item.quantity})"><img src="${escape(item.img)}" alt=""><span>${escape(item.name)}</span><small>${item.quantity}</small></button>`).join("") || '<p class="gp-rw-empty">Nothing else to add.</p>'}</div>
+    </div>` : "";
+  const result = experiment.result ? `<p class="gp-rw-expresult ${escape(experiment.result.kind)}"><i class="fas ${experiment.result.kind === "learned" ? "fa-lightbulb" : experiment.result.kind === "warm" ? "fa-fire-flame-curved" : "fa-wind"}"></i> ${escape(experiment.result.message)}</p>` : "";
+  return `<section class="gp-rw-experiment" data-drop-slot="experiment" title="Drag items from ${escape(model.actor.name)}'s sheet here">
+      <h4><i class="fas fa-flask"></i> Experiment <small>Try combining items to discover a recipe. Nothing is used up.</small></h4>
+      <div class="gp-rw-expslots">${names.map((name, index) => `<span class="gp-rw-input ok"><img src="${escape(imgFor(name))}" alt=""><span>${escape(name)}</span>
+        <button type="button" class="gp-rw-iconbtn" data-act="exp-remove" data-index="${index}" title="Take out"><i class="fas fa-xmark"></i></button></span>`).join("")}
+        ${names.length < 6 ? `<button type="button" class="gp-rw-addinput" data-act="exp-pick"><i class="fas fa-plus"></i> Add item</button>` : ""}
+        <button type="button" class="gp-rw-craft" data-act="exp-try" ${names.length ? "" : "disabled"}><i class="fas fa-flask"></i> Try</button></div>
+      ${picker}${result}
+    </section>`;
 }
 
 export function renderRecipesWindow(model, state = {}) {
@@ -122,27 +159,98 @@ export function renderRecipesWindow(model, state = {}) {
   const cards = model.products.map(group => `<section class="gp-rw-card">
       <header><img src="${escape(group.img)}" alt=""><strong>${escape(group.name)}</strong>
         ${group.recipes.length > 1 ? `<small>${group.recipes.length} recipes</small>` : ""}
-        ${group.hidden ? `<em class="gp-rw-more" title="Gather new materials to discover more ways to make this"><i class="fas fa-question"></i> ${group.hidden} more undiscovered</em>` : ""}</header>
+        ${group.hidden ? `<em class="gp-rw-more" title="${escape(model.hiddenHint)}"><i class="fas fa-question"></i> ${group.hidden} more unknown</em>` : ""}</header>
       ${group.recipes.map(row => recipeRow(row, model, state) + (state.editing?.id === row.id ? renderEditor(state.editing, state.editorItems) : "")).join("")}
     </section>`).join("");
-  const empty = state.onlyCraftable ? "Nothing you can make right now." : "No recipes discovered yet. Gather materials to discover what they refine into.";
+  const empty = state.onlyCraftable ? "Nothing you can make right now." : model.emptyText;
   const jobs = model.jobs.length ? `<section class="gp-rw-jobs"><h4><i class="fas fa-hourglass-half"></i> In progress</h4>
       ${model.jobs.map(job => `<div class="gp-rw-job ${job.done ? "done" : ""}"><img src="${escape(job.img)}" alt=""><span>${job.quantity}× ${escape(job.name)}</span>
         <small>${job.done ? "Ready" : `${escape(job.left)} left`}</small></div>`).join("")}
       ${model.jobs.some(job => job.done) && state.canCollect ? '<button type="button" data-act="collect"><i class="fas fa-box-open"></i> Collect finished work</button>' : ""}
     </section>` : "";
+  const gmBar = model.isGM && model.active ? `<div class="gp-rw-gmbar">${model.canEdit ? `<button type="button" data-act="new-recipe"><i class="fas fa-plus"></i> New ${escape(model.verb.toLowerCase())} recipe</button>` : ""}<span>${escape(model.gmHint)}</span></div>` : "";
   return `<div class="gp-rw">
     <header class="gp-rw-head">
       ${model.actor ? `<img class="gp-rw-portrait" src="${escape(model.actor.img || FALLBACK_ICON)}" alt="">` : ""}
-      <div class="gp-rw-who">${who}${model.professionLabel ? `<small>Rolls ${escape(model.professionLabel)} at the recipe's tier</small>` : ""}</div>
+      <div class="gp-rw-who">${who}${model.rollLabel ? `<small>${escape(model.rollLabel)}</small>` : ""}</div>
       <label class="gp-rw-filter"><input type="checkbox" data-act-change="craftable" ${state.onlyCraftable ? "checked" : ""}> Can make now</label>
       <input type="search" class="gp-rw-search" data-act-change="search" placeholder="Search" value="${escape(state.search ?? "")}">
     </header>
-    <nav class="gp-rw-tabs">${tabs || '<span class="gp-rw-noactor">No refining available (needs the professions and their source modules).</span>'}</nav>
+    <nav class="gp-rw-tabs">${tabs || '<span class="gp-rw-noactor">No recipes available yet.</span>'}</nav>
     ${jobs}
-    ${model.isGM && model.active ? `<div class="gp-rw-gmbar"><button type="button" data-act="new-recipe"><i class="fas fa-plus"></i> New ${escape(model.verb.toLowerCase())} recipe</button><span>Eye: whether players see it. Auto = learned once the party has had every ingredient.</span></div>` : ""}
-    <div class="gp-rw-list">${state.editing && !state.editing.id ? `<section class="gp-rw-card">${renderEditor(state.editing, state.editorItems)}</section>` : ""}${cards || `<p class="gp-rw-empty">${empty}</p>`}</div>
+    ${gmBar}
+    ${renderExperiment(model, state.experiment, state.inventory)}
+    <div class="gp-rw-list">${state.editing && !state.editing.id ? `<section class="gp-rw-card">${renderEditor(state.editing, state.editorItems)}</section>` : ""}${cards || `<p class="gp-rw-empty">${escape(empty)}</p>`}</div>
   </div>`;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Inline recipe editor (GM)                                               */
+/* ---------------------------------------------------------------------- */
+
+const MAX_INPUTS = 6;
+
+/** Editor state for a recipe (row) or a new one on a provider's tab. */
+export function editorDraft(row, providerKey) {
+  return { id: row?.id ?? null, profession: providerKey, tier: row?.tier ?? 1, output: row?.output ?? "", quantity: row?.quantity ?? 1,
+    minutes: row?.minutes ?? "",
+    inputs: (row?.inputs?.length ? row.inputs : [["", 1]]).map(([name, quantity]) => [name, quantity]), picker: null, search: "" };
+}
+
+/** Picker groups for the editor: the provider's own groups, else Other items. */
+export function itemOptions(providerKey, search = "") {
+  const provider = providerFor(providerKey);
+  return provider?.itemGroups ? provider.itemGroups(search) : itemPickerGroups(search, []);
+}
+
+function slotButton(slot, name, picking) {
+  return `<button type="button" class="gp-rw-slot ${name ? "" : "empty"} ${picking ? "open" : ""}" data-act="pick" data-slot="${slot}" data-drop-slot="${slot}"
+      title="Click to choose, or drag an Item from the Items sidebar here">${name ? `<img src="${escape(imgFor(name))}" alt=""><span>${escape(name)}</span>` : '<i class="fas fa-plus"></i><span>Choose an item</span>'}<i class="fas fa-caret-down gp-rw-caret"></i></button>`;
+}
+
+function pickerPanel(draft, groups) {
+  return `<div class="gp-rw-picker">
+      <input type="search" class="gp-rw-picksearch" data-draft="search" value="${escape(draft.search)}" placeholder="Search items" data-focus-key="picker">
+      ${groups.map(group => `<div class="gp-rw-pickgroup"><h5>${escape(group.label)}</h5><div class="gp-rw-picktiles">
+        ${group.items.map(item => `<button type="button" class="gp-rw-picktile" data-act="choose" data-name="${escape(item.name)}" title="${escape(item.name)}"><img src="${escape(item.img)}" alt=""><span>${escape(item.name)}</span></button>`).join("")}
+        ${group.more ? `<em class="gp-rw-pickmore">+${group.more} more: type to search</em>` : ""}</div></div>`).join("") || '<p class="gp-rw-empty">No items match.</p>'}
+    </div>`;
+}
+
+/** Inline editor shown under a recipe (or at the top for a new one). Pure; unit tested. */
+export function renderEditor(draft, groups = []) {
+  const provider = providerFor(draft.profession);
+  const picker = slot => (draft.picker === slot ? pickerPanel(draft, groups) : "");
+  const rows = draft.inputs.map(([name, quantity], index) => `<div class="gp-rw-editrow">
+      ${slotButton(String(index), name, draft.picker === String(index))}
+      <input type="number" min="1" max="99" value="${quantity}" data-draft="qty" data-index="${index}" aria-label="Quantity needed">
+      <button type="button" class="gp-rw-iconbtn" data-act="remove-input" data-index="${index}" title="Remove ingredient" ${draft.inputs.length > 1 ? "" : "disabled"}><i class="fas fa-xmark"></i></button>
+    </div>${picker(String(index))}`).join("");
+  return `<div class="gp-rw-edit">
+    <div class="gp-rw-edithead"><strong>${draft.id ? "Edit recipe" : "New recipe"}</strong>
+      <span class="gp-rw-editopts">
+        <label>Tier <select data-draft="tier">${[1, 2, 3, 4, 5].map(tier => `<option value="${tier}" ${tier === Number(draft.tier) ? "selected" : ""}>${tier}</option>`).join("")}</select></label>
+        <label title="Minutes per unit. Blank = the tier's default (60 = 1 hour, 1440 = 1 day, 0 = instant)">Time <input type="number" min="0" max="10080" step="1" data-draft="minutes" data-focus-key="minutes" value="${escape(draft.minutes ?? "")}" placeholder="${escape(provider?.defaultMinutes?.(Number(draft.tier)) ?? "")}"> min</label>
+      </span></div>
+    <div class="gp-rw-editlabel">Makes</div>
+    <div class="gp-rw-editrow">${slotButton("output", draft.output, draft.picker === "output")}
+      <input type="number" min="1" max="99" value="${draft.quantity}" data-draft="quantity" aria-label="Quantity made"></div>
+    ${picker("output")}
+    <div class="gp-rw-editlabel">From</div>
+    ${rows}
+    ${draft.inputs.length < MAX_INPUTS ? '<button type="button" class="gp-rw-addinput" data-act="add-input"><i class="fas fa-plus"></i> Add ingredient</button>' : ""}
+    <div class="gp-rw-editactions">
+      <button type="button" class="gp-rw-craft" data-act="save-edit"><i class="fas fa-check"></i> ${draft.id ? "Save" : "Create"}</button>
+      <button type="button" data-act="cancel-edit">Cancel</button>
+    </div>
+  </div>`;
+}
+
+/** The draft as recipe fields for the provider. */
+export function draftFields(draft) {
+  return { profession: draft.profession, tier: Number(draft.tier), output: draft.output, quantity: Number(draft.quantity),
+    minutes: String(draft.minutes ?? "").trim() === "" ? null : Number(draft.minutes),
+    inputs: draft.inputs.filter(([name]) => String(name ?? "").trim()).map(([name, quantity]) => [name, Number(quantity)]) };
 }
 
 /* ---------------------------------------------------------------------- */
@@ -162,92 +270,21 @@ function defaultActor() {
   return game.user.isGM ? null : owned[0] ?? null;
 }
 
-const api = () => game.modules.get(MODULE_ID).api.refining;
-const MAX_INPUTS = 6;
-
-/** Editor state for a recipe (row) or a new one on a profession's tab. */
-export function editorDraft(row, profession) {
-  return { id: row?.id ?? null, profession: row?.profession ?? profession, tier: row?.tier ?? 1, output: row?.output ?? "", quantity: row?.quantity ?? 1,
-    minutes: row?.minutes ?? "",
-    inputs: (row?.inputs?.length ? row.inputs : [["", 1]]).map(([name, quantity]) => [name, quantity]), picker: null, search: "" };
-}
-
-const OTHER_LIMIT = 60;
-
-/**
- * Items to pick from, grouped: the profession's materials, refined goods,
- * then every other world Item (first matches only until the GM searches).
- */
-export function itemOptions(profession, search = "") {
-  const query = search.trim().toLowerCase();
-  const items = Array.from(game.items ?? []).filter(item => item?.name).sort((a, b) => a.name.localeCompare(b.name));
-  const match = item => !query || item.name.toLowerCase().includes(query);
-  const refined = new Set(allRecipes({ includeDisabled: true }).map(row => row.output));
-  const seen = new Set();
-  const take = list => list.filter(item => match(item) && !seen.has(item.name) && seen.add(item.name)).map(item => ({ name: item.name, img: item.img || FALLBACK_ICON }));
-  const label = PROFESSIONS[profession]?.label ?? "Profession";
-  const groups = [
-    { label: `${label} materials`, items: take(items.filter(item => materialRule(item)?.profession === profession)) },
-    { label: "Refined goods", items: take(items.filter(item => refined.has(item.name))) },
-    { label: "Other items", items: take(items) }
-  ];
-  const other = groups[2];
-  other.more = Math.max(0, other.items.length - OTHER_LIMIT);
-  other.items = other.items.slice(0, OTHER_LIMIT);
-  return groups.filter(group => group.items.length || group.more);
-}
-
-function slotButton(slot, name, picking) {
-  return `<button type="button" class="gp-rw-slot ${name ? "" : "empty"} ${picking ? "open" : ""}" data-act="pick" data-slot="${slot}" data-drop-slot="${slot}"
-      title="Click to choose, or drag an Item from the Items sidebar here">${name ? `<img src="${escape(imgFor(name))}" alt=""><span>${escape(name)}</span>` : '<i class="fas fa-plus"></i><span>Choose an item</span>'}<i class="fas fa-caret-down gp-rw-caret"></i></button>`;
-}
-
-function pickerPanel(draft, groups) {
-  return `<div class="gp-rw-picker">
-      <input type="search" class="gp-rw-picksearch" data-draft="search" value="${escape(draft.search)}" placeholder="Search items" data-focus-key="picker">
-      ${groups.map(group => `<div class="gp-rw-pickgroup"><h5>${escape(group.label)}</h5><div class="gp-rw-picktiles">
-        ${group.items.map(item => `<button type="button" class="gp-rw-picktile" data-act="choose" data-name="${escape(item.name)}" title="${escape(item.name)}"><img src="${escape(item.img)}" alt=""><span>${escape(item.name)}</span></button>`).join("")}
-        ${group.more ? `<em class="gp-rw-pickmore">+${group.more} more: type to search</em>` : ""}</div></div>`).join("") || '<p class="gp-rw-empty">No items match.</p>'}
-    </div>`;
-}
-
-/** Inline editor shown under a recipe (or at the top for a new one). Pure; unit tested. */
-export function renderEditor(draft, groups = []) {
-  const picker = slot => (draft.picker === slot ? pickerPanel(draft, groups) : "");
-  const rows = draft.inputs.map(([name, quantity], index) => `<div class="gp-rw-editrow">
-      ${slotButton(String(index), name, draft.picker === String(index))}
-      <input type="number" min="1" max="99" value="${quantity}" data-draft="qty" data-index="${index}" aria-label="Quantity needed">
-      <button type="button" class="gp-rw-iconbtn" data-act="remove-input" data-index="${index}" title="Remove ingredient" ${draft.inputs.length > 1 ? "" : "disabled"}><i class="fas fa-xmark"></i></button>
-    </div>${picker(String(index))}`).join("");
-  return `<div class="gp-rw-edit">
-    <div class="gp-rw-edithead"><strong>${draft.id ? "Edit recipe" : "New recipe"}</strong>
-      <span class="gp-rw-editopts">
-        <label>Tier <select data-draft="tier">${[1, 2, 3, 4, 5].map(tier => `<option value="${tier}" ${tier === Number(draft.tier) ? "selected" : ""}>${tier}</option>`).join("")}</select></label>
-        <label title="Minutes per unit. Blank = the tier's default from GM hub → Rules (60 = 1 hour, 1440 = 1 day, 0 = instant)">Time <input type="number" min="0" max="10080" step="1" data-draft="minutes" data-focus-key="minutes" value="${escape(draft.minutes ?? "")}" placeholder="${escape(recipeMinutes({ tier: draft.tier }))}"> min</label>
-      </span></div>
-    <div class="gp-rw-editlabel">Makes</div>
-    <div class="gp-rw-editrow">${slotButton("output", draft.output, draft.picker === "output")}
-      <input type="number" min="1" max="99" value="${draft.quantity}" data-draft="quantity" aria-label="Quantity made"></div>
-    ${picker("output")}
-    <div class="gp-rw-editlabel">From</div>
-    ${rows}
-    ${draft.inputs.length < MAX_INPUTS ? '<button type="button" class="gp-rw-addinput" data-act="add-input"><i class="fas fa-plus"></i> Add ingredient</button>' : ""}
-    <div class="gp-rw-editactions">
-      <button type="button" class="gp-rw-craft" data-act="save-edit"><i class="fas fa-check"></i> ${draft.id ? "Save" : "Create"}</button>
-      <button type="button" data-act="cancel-edit">Cancel</button>
-    </div>
-  </div>`;
-}
-
-/** The draft as recipe fields for the API. */
-export function draftFields(draft) {
-  return { profession: draft.profession, tier: Number(draft.tier), output: draft.output, quantity: Number(draft.quantity),
-    minutes: String(draft.minutes ?? "").trim() === "" ? null : Number(draft.minutes),
-    inputs: draft.inputs.filter(([name]) => String(name ?? "").trim()).map(([name, quantity]) => [name, Number(quantity)]) };
+/** An actor's inventory as unique names with total quantity (experiment picker). */
+export function inventoryChoices(actor) {
+  const map = new Map();
+  for (const item of Array.from(actor?.items ?? [])) {
+    if (!["loot", "consumable", "tool", "weapon", "equipment", "container"].includes(item.type)) continue;
+    const entry = map.get(item.name) ?? { name: item.name, img: item.img || FALLBACK_ICON, quantity: 0 };
+    entry.quantity += Math.max(0, Number(item.system?.quantity) || 0);
+    map.set(item.name, entry);
+  }
+  return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 let RecipesClass = null;
 let instance = null;
+const freshExperiment = () => ({ names: [], picker: false, search: "", result: null });
 
 function defineClass() {
   const { ApplicationV2 } = foundry.applications.api;
@@ -260,7 +297,7 @@ function defineClass() {
       position: { width: 640, height: 720 }
     };
 
-    view = { actorId: defaultActor()?.id ?? null, tab: "", onlyCraftable: false, search: "", batch: {}, busy: false, editing: null };
+    view = { actorId: defaultActor()?.id ?? null, tab: "", onlyCraftable: false, search: "", batch: {}, busy: false, editing: null, experiment: freshExperiment() };
     #hooks = [];
     #timer = null;
 
@@ -269,14 +306,17 @@ function defineClass() {
       return actor && (game.user.isGM || actor.isOwner) ? actor : null;
     }
 
+    get provider() { return providerFor(this.view.tab); }
+
     async _prepareContext() { return {}; }
 
     async _renderHTML() {
       const model = buildRecipesModel(this.actor, { isGM: game.user.isGM, tab: this.view.tab, onlyCraftable: this.view.onlyCraftable, search: this.view.search });
-      this.view.tab = model.active;
+      if (model.active !== this.view.tab) { this.view.tab = model.active; this.view.experiment = freshExperiment(); }
       const editing = game.user.isGM ? this.view.editing : null;
       const editorItems = editing?.picker ? itemOptions(editing.profession, editing.search) : [];
-      return renderRecipesWindow(model, { ...this.view, editing, editorItems, characters: ownedCharacters(), canCollect: Boolean(this.actor) && !game.users?.activeGM });
+      return renderRecipesWindow(model, { ...this.view, editing, editorItems, inventory: this.view.experiment.picker ? inventoryChoices(this.actor) : [],
+        characters: ownedCharacters(), canCollect: Boolean(this.actor) && !game.users?.activeGM });
     }
 
     _replaceHTML(result, content) {
@@ -291,7 +331,7 @@ function defineClass() {
       if (target) { target.focus(); target.setSelectionRange?.(caret, caret); }
     }
 
-    #refresh() {
+    refresh() {
       clearTimeout(this.#timer);
       this.#timer = setTimeout(() => { if (this.rendered) void this.render(); }, 120);
     }
@@ -300,28 +340,29 @@ function defineClass() {
       super._onFirstRender?.(context, options);
       this.element.addEventListener("click", event => {
         const button = event.target.closest?.("[data-act]");
-        if (button && !button.disabled) void this.#onAction(button).catch(error => { this.view.busy = false; report(error); this.#refresh(); });
+        if (button && !button.disabled) void this.#onAction(button).catch(error => { this.view.busy = false; report(error); this.refresh(); });
       });
       this.element.addEventListener("change", event => this.#onChange(event.target));
       this.element.addEventListener("input", event => { if (event.target.matches?.(".gp-rw-search, .gp-rw-picksearch")) this.#onChange(event.target); });
-      // Drag an Item from the sidebar onto a product or ingredient slot.
+      // Drag Items onto editor slots (from the sidebar) or the experiment panel (from the sheet).
       this.element.addEventListener("dragover", event => { if (event.target.closest?.("[data-drop-slot]")) event.preventDefault(); });
       this.element.addEventListener("drop", event => {
         const slot = event.target.closest?.("[data-drop-slot]");
-        if (!slot || !this.view.editing) return;
+        if (!slot) return;
         event.preventDefault();
         let data = null;
         try { data = JSON.parse(event.dataTransfer.getData("text/plain")); } catch { data = null; }
         const item = data?.type === "Item" && data.uuid ? fromUuidSync(data.uuid) : null;
-        if (!item?.name) return ui.notifications.warn("Drop an Item from the Items sidebar.");
-        this.#choose(slot.dataset.dropSlot, item.name);
+        if (!item?.name) return ui.notifications.warn("Drop an Item.");
+        if (slot.dataset.dropSlot === "experiment") return this.#expAdd(item.name);
+        if (this.view.editing) this.#choose(slot.dataset.dropSlot, item.name);
       });
       const mine = document => [document?.parent?.id, document?.id].includes(this.view.actorId);
-      for (const hook of ["createItem", "updateItem", "deleteItem"]) this.#hooks.push([hook, Hooks.on(hook, item => { if (mine(item)) this.#refresh(); })]);
-      this.#hooks.push(["updateActor", Hooks.on("updateActor", actor => { if (actor.id === this.view.actorId) this.#refresh(); })]);
-      const watched = ["discoveredItems", "recipeLearned", "recipeEdits", "customRecipes"].map(key => `${MODULE_ID}.${key}`);
-      this.#hooks.push(["updateSetting", Hooks.on("updateSetting", setting => { if (watched.includes(setting.key)) this.#refresh(); })]);
-      this.#hooks.push(["updateWorldTime", Hooks.on("updateWorldTime", () => this.#refresh())]);
+      for (const hook of ["createItem", "updateItem", "deleteItem"]) this.#hooks.push([hook, Hooks.on(hook, item => { if (mine(item)) this.refresh(); })]);
+      this.#hooks.push(["updateActor", Hooks.on("updateActor", actor => { if (actor.id === this.view.actorId || game.user.isGM) this.refresh(); })]);
+      this.#hooks.push(["updateSetting", Hooks.on("updateSetting", setting => { if (String(setting.key).startsWith(`${MODULE_ID}.`) || String(setting.key).includes("crafting")) this.refresh(); })]);
+      this.#hooks.push(["updateWorldTime", Hooks.on("updateWorldTime", () => this.refresh())]);
+      this.#hooks.push(["gatheringProfessions.recipeProviders", Hooks.on("gatheringProfessions.recipeProviders", () => this.refresh())]);
     }
 
     _onClose(options) {
@@ -340,6 +381,16 @@ function defineClass() {
       return this.render();
     }
 
+    #expAdd(name) {
+      const experiment = this.view.experiment;
+      if (!this.actor) return ui.notifications.warn("Choose a character first.");
+      if (!experiment.names.includes(name) && experiment.names.length < 6) experiment.names.push(name);
+      experiment.picker = false;
+      experiment.search = "";
+      experiment.result = null;
+      return this.render();
+    }
+
     #onChange(target) {
       const draft = this.view.editing;
       const field = target.dataset?.draft;
@@ -349,25 +400,39 @@ function defineClass() {
         if (field === "minutes") draft.minutes = target.value;
         if (field === "tier") return this.render();
         if (field === "qty") draft.inputs[Number(target.dataset.index)][1] = Number(target.value);
-        if (field === "search") { draft.search = target.value; return this.#refresh(); }
+        if (field === "search") { draft.search = target.value; return this.refresh(); }
         return;
       }
+      if (target.dataset?.exp === "search") { this.view.experiment.search = target.value; return this.refresh(); }
       const act = target.dataset?.actChange;
       if (target.dataset?.batch) { this.view.batch[target.dataset.batch] = Number(target.value) || 1; return; }
-      if (target.dataset?.learn) { void api().setLearned(target.dataset.learn, target.value).catch(report); return; }
-      if (act === "actor") { this.view.actorId = target.value || null; return this.render(); }
+      if (target.dataset?.learn) { void Promise.resolve(this.provider?.setLearned(target.dataset.learn, target.value, this.actor)).catch(report).finally(() => this.refresh()); return; }
+      if (act === "actor") { this.view.actorId = target.value || null; this.view.experiment = freshExperiment(); return this.render(); }
       if (act === "craftable") { this.view.onlyCraftable = target.checked; return this.render(); }
-      if (act === "search") { this.view.search = target.value; return this.#refresh(); }
+      if (act === "search") { this.view.search = target.value; return this.refresh(); }
     }
 
     async #onAction(button) {
       const act = button.dataset.act;
-      if (act === "tab") { this.view.tab = button.dataset.tab; this.view.editing = null; return this.render(); }
+      const provider = this.provider;
+      if (act === "tab") { this.view.tab = button.dataset.tab; this.view.editing = null; this.view.experiment = freshExperiment(); return this.render(); }
       if (act === "collect") { await deliverDueJobs(this.actor); return this.render(); }
+      // Experiment panel.
+      const experiment = this.view.experiment;
+      if (act === "exp-pick") { experiment.picker = !experiment.picker; experiment.search = ""; return this.render(); }
+      if (act === "exp-add") return this.#expAdd(button.dataset.name);
+      if (act === "exp-remove") { experiment.names.splice(Number(button.dataset.index), 1); experiment.result = null; return this.render(); }
+      if (act === "exp-try") {
+        const outcome = await provider.experiment(this.actor, [...experiment.names]);
+        experiment.result = { kind: outcome.learned ? "learned" : outcome.warm ? "warm" : "cold", message: outcome.message };
+        if (outcome.learned) experiment.names = [];
+        return this.render();
+      }
       if (act === "new-recipe") { this.view.editing = editorDraft(null, this.view.tab); return this.render(); }
       if (act === "edit-recipe") {
         const id = button.dataset.recipe;
-        this.view.editing = this.view.editing?.id === id ? null : editorDraft(findRecipe(id, { includeDisabled: true }), this.view.tab);
+        const row = provider.recipes({ includeDisabled: true }).find(entry => entry.id === id);
+        this.view.editing = this.view.editing?.id === id ? null : editorDraft(row, this.view.tab);
         return this.render();
       }
       const draft = this.view.editing;
@@ -379,21 +444,26 @@ function defineClass() {
         if (act === "cancel-edit") { this.view.editing = null; return this.render(); }
         if (act === "save-edit") {
           const fields = draftFields(draft);
-          if (draft.id) await api().update(draft.id, fields); else await api().create(fields);
+          if (draft.id) await provider.gm.update(draft.id, fields); else await provider.gm.create(fields);
           this.view.editing = null;
           ui.notifications.info(`Recipe for ${fields.output} saved.`);
           return this.render();
         }
       }
       if (act === "toggle-recipe") {
-        const row = findRecipe(button.dataset.recipe, { includeDisabled: true });
-        return api().disable(row.id, !row.disabled);
+        const row = provider.recipes({ includeDisabled: true }).find(entry => entry.id === button.dataset.recipe);
+        return provider.gm.disable(row.id, !row.disabled);
       }
-      if (act === "reset-recipe") return api().reset(button.dataset.recipe);
+      if (act === "reset-recipe") return provider.gm.reset(button.dataset.recipe);
+      if (act === "make-scroll") {
+        const item = await provider.gm.scroll(button.dataset.recipe);
+        if (item) ui.notifications.info(`Created ${item.name} in the Items sidebar.`);
+        return;
+      }
       if (act === "delete-recipe") {
-        const row = findRecipe(button.dataset.recipe, { includeDisabled: true });
+        const row = provider.recipes({ includeDisabled: true }).find(entry => entry.id === button.dataset.recipe);
         const ok = await gpDialog().confirm({ window: { title: "Delete recipe?" }, content: `<p>Delete your recipe for <strong>${escape(row?.output)}</strong>?</p>` });
-        if (ok) return api().delete(button.dataset.recipe);
+        if (ok) return provider.gm.delete(button.dataset.recipe);
       }
       if (act === "craft") {
         const id = button.dataset.recipe;
@@ -401,7 +471,7 @@ function defineClass() {
         const batch = Math.max(1, Math.trunc(Number(input?.value) || 1));
         this.view.busy = true;
         await this.render();
-        try { await game.modules.get(MODULE_ID).api.refining.craft(this.actor, id, batch); }
+        try { await provider.craft(this.actor, id, batch); }
         finally { this.view.busy = false; this.view.batch[id] = 1; await this.render(); }
       }
     }
