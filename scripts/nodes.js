@@ -180,7 +180,7 @@ function liveName(tool) {
 export function itemMatchesTool(item, tool) {
   if (!item || !tool) return false;
   if (tool.uuid) {
-    const sources = [item.uuid, item._stats?.compendiumSource, item._stats?.duplicateSource, item.flags?.core?.sourceId];
+    const sources = [item.uuid, item._stats?.compendiumSource, item._stats?.duplicateSource, item.flags?.core?.sourceId, item.flags?.[MODULE_ID]?.toolSource];
     if (sources.includes(tool.uuid)) return true;
   }
   const name = String(liveName(tool) ?? "").trim().toLowerCase();
@@ -392,7 +392,7 @@ export async function autoResetExpired(pages = allNodePages()) {
   let reset = 0;
   for (const page of pages) {
     const { time, used, firstDrawTime } = nodeUsage(page);
-    if (!time || !used || !firstDrawTime || now - firstDrawTime < time * 3600) continue;
+    if (!time || !used || now - firstDrawTime < time * 3600) continue;
     await page.setFlag("gatherer", "data", { drawsUsed: 0, firstDrawTime: now });
     reset++;
   }

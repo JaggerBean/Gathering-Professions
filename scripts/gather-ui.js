@@ -56,7 +56,7 @@ function xpOf(actor, profession) {
 
 function refillText(page, usage) {
   if (!usage.time) return usage.draws ? "Does not refill on its own" : "";
-  if (!usage.used || !usage.firstDrawTime) return `Refills ${usage.time} h after the first pull`;
+  if (!usage.used) return `Refills ${usage.time} h after the first pull`;
   const left = usage.firstDrawTime + usage.time * 3600 - (Number(game.time?.worldTime) || 0);
   return left > 0 ? `Refills in ${formatDuration(left)}` : "Refills on next visit";
 }
@@ -408,7 +408,7 @@ function defineClass() {
         const climb = event.target.closest?.("[data-gp-climb]");
         if (climb && !climb.disabled) {
           climb.disabled = true;
-          void game.modules.get(MODULE_ID).api.rareFinds.climb(climb.dataset.epActor, climb.dataset.epClimb)
+          void game.modules.get(MODULE_ID).api.rareFinds.climb(climb.dataset.gpActor, climb.dataset.gpClimb)
             .then(result => { if (result) climb.innerHTML = '<i class="fas fa-check"></i> Rolled — see chat'; else climb.disabled = false; })
             .catch(error => { climb.disabled = false; report(error); });
           return;

@@ -502,7 +502,9 @@ export function inventoryCount(actor, name) {
 
 /** How many batches the actor's inventory allows. */
 export function maxBatch(actor, entry) {
-  return Math.min(...entry.inputs.map(([name, quantity]) => Math.floor(inventoryCount(actor, name) / quantity)));
+  const totals = new Map();
+  for (const [name, quantity] of entry.inputs) totals.set(name, (totals.get(name) ?? 0) + quantity);
+  return Math.min(...[...totals].map(([name, quantity]) => Math.floor(inventoryCount(actor, name) / quantity)));
 }
 
 /** The refining check numbers for an actor and recipe (no roll). */
@@ -523,6 +525,7 @@ export async function removeFromInventory(actor, name, quantity) {
     if (have <= left) { deletes.push(item.id); left -= have; }
     else { updates.push({ _id: item.id, "system.quantity": have - left }); left = 0; }
   }
+  if (left > 0) throw new Error(`${actor.name} does not have enough ${name}.`);
   if (updates.length) await actor.updateEmbeddedDocuments("Item", updates);
   if (deletes.length) await actor.deleteEmbeddedDocuments("Item", deletes);
 }
@@ -537,7 +540,12 @@ export async function addGold(actor, amount) {
 
 /** Add an item (by data) to an inventory, stacking onto an item with the same name. */
 export async function addToInventory(actor, data, quantity) {
-  const existing = Array.from(actor.items).find(item => item.name === data.name);
+  const signature = source => {
+    const system = structuredClone(source.system ?? {});
+    delete system.quantity;
+    return JSON.stringify({ type: source.type, system, flags: source.flags ?? {} });
+  };
+  const existing = Array.from(actor.items).find(item => item.name === data.name && signature(item.toObject()) === signature(data));
   if (existing) return actor.updateEmbeddedDocuments("Item", [{ _id: existing.id, "system.quantity": itemQuantity(existing) + quantity }]);
   const copy = structuredClone(data);
   delete copy._id;
@@ -562,7 +570,11 @@ export function formatMinutes(minutes) {
  * on Excellent, +2 on Masterful or a natural 20) and Refining XP per unit;
  * with timed crafting they arrive after the recipe's time in world time.
  */
-export async function craftRecipe(actor, id, batch = 1, { addXp }) {
+export function craftRecipe(actor, id, batch = 1, options) {
+  return runActorAction(actor, () => craftRecipeUnlocked(actor, id, batch, options));
+}
+
+async function craftRecipeUnlocked(actor, id, batch = 1, { addXp }) {
   if (!actor || !(game.user.isGM || actor.isOwner)) throw new Error("Choose a character you own.");
   const entry = findRecipe(id);
   if (!entry) throw new Error("That recipe no longer exists.");
@@ -574,7 +586,7 @@ export async function craftRecipe(actor, id, batch = 1, { addXp }) {
   if (!product) throw new Error(`${entry.output} is not prepared in this world yet. Ask the GM (GM hub → Materials → Prepare refined items).`);
   const rules = activeRules();
   const check = refineCheckFor(actor, entry);
-  const roll = await new Roll(check.formula).evaluate();
+  const roll = await rollProfessionCheck(actor, check);
   const natural = roll.dice?.[0]?.total;
   let degree = getDegreeOfSuccess(roll.total, check.target);
   if (natural === 20) degree = naturalMasterful(degree);
@@ -625,16 +637,31 @@ export function actorJobs(actor) {
 }
 
 /** Deliver the actor's finished jobs. Returns the delivered jobs. */
-export async function deliverDueJobs(actor, now = game.time?.worldTime ?? 0) {
-  const due = actorJobs(actor).filter(job => job.ready <= now);
-  for (const job of due) {
-    // Remove first so a second client cannot deliver the same job twice.
-    await actor.update({ [`flags.${MODULE_ID}.refiningJobs.-=${job.id}`]: null });
-    if (job.gold) await addGold(actor, job.gold);
-    if (job.data) await addToInventory(actor, job.data, job.quantity);
-  }
-  if (due.length) ui.notifications.info(`${actor.name}: ${due.map(job => job.gold && !job.data ? `${job.gold} gp (${job.name})` : `${job.quantity} ${job.name}`).join(", ")} ready.`);
-  return due;
+export function deliverDueJobs(actor, now = game.time?.worldTime ?? 0) {
+  return runActorAction(actor, async () => {
+    const delivered = [];
+    for (const job of actorJobs(actor).filter(job => job.ready <= now)) {
+      const path = `flags.${MODULE_ID}.refiningJobs.${job.id}`;
+      // Gold and its receipt are stored in the same Actor update. A retry never
+      // pays twice even if item delivery or removing the job subsequently fails.
+      if (job.gold && !job.goldDelivered) await actor.update({
+        "system.currency.gp": (Number(actor.system?.currency?.gp) || 0) + Math.round(job.gold),
+        [`${path}.goldDelivered`]: true
+      });
+      if (job.data && !Array.from(actor.items).some(item => item.getFlag?.(MODULE_ID, "deliveryJob") === job.id)) {
+        const data = structuredClone(job.data);
+        delete data._id; delete data.folder; delete data.ownership;
+        foundry.utils.setProperty(data, "system.quantity", job.quantity);
+        foundry.utils.setProperty(data, `flags.${MODULE_ID}.deliveryJob`, job.id);
+        // Do not stack until settled: the embedded Item itself is the receipt.
+        await actor.createEmbeddedDocuments("Item", [data]);
+      }
+      await actor.update({ [`flags.${MODULE_ID}.refiningJobs.-=${job.id}`]: null });
+      delivered.push(job);
+    }
+    if (delivered.length) ui.notifications.info(`${actor.name}: ${delivered.map(job => job.gold && !job.data ? `${job.gold} gp (${job.name})` : `${job.quantity} ${job.name}`).join(", ")} ready.`);
+    return delivered;
+  });
 }
 
 /** Active GM: deliver every actor's finished jobs (on world time changes). */

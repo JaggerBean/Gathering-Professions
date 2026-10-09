@@ -60,7 +60,7 @@ export function buildRecipesModel(actor, { isGM = false, tab = "", onlyCraftable
       chance = Math.round(successChance(check.modifier, check.die ?? 0, check.target, check.extraDice ?? []) * 100);
     }
     const minutes = provider.minutes(row);
-    group.recipes.push({ id: row.id, tier: row.tier, quantity: row.quantity, inputs, max: row.noBatch ? Math.min(max, 1) : max, chance, target, known, blocked, done,
+    group.recipes.push({ id: row.id, output: row.output, tier: row.tier, quantity: row.quantity, inputs, max: row.noBatch ? Math.min(max, 1) : max, chance, target, known, blocked, done,
       title: row.title ?? "", brief: row.brief ?? "", rewardText: row.rewardText ?? "", actionLabel: row.actionLabel ?? "", noBatch: Boolean(row.noBatch),
       learn: provider.learnState(row, actor), disabled: Boolean(row.disabled), edited: Boolean(row.edited), custom: Boolean(row.custom),
       minutes, time: formatMinutes(minutes), ownTime: row.minutes !== undefined && row.minutes !== null });
@@ -68,7 +68,8 @@ export function buildRecipesModel(actor, { isGM = false, tab = "", onlyCraftable
   let products = [...groups.values()].filter(group => group.recipes.length)
     .sort((a, b) => a.tier - b.tier || a.name.localeCompare(b.name));
   if (query) products = products.filter(group => group.name.toLowerCase().includes(query)
-    || group.recipes.some(row => row.inputs.some(input => input.name.toLowerCase().includes(query))));
+    || group.recipes.some(row => [row.title, row.output, row.brief].some(value => String(value ?? "").toLowerCase().includes(query))
+      || row.inputs.some(input => input.name.toLowerCase().includes(query))));
   if (onlyCraftable) products = products.map(group => ({ ...group, recipes: group.recipes.filter(row => row.max > 0 && !row.blocked) })).filter(group => group.recipes.length);
   const jobs = actor ? actorJobs(actor).map(job => ({ ...job, img: job.img || imgFor(job.name), done: job.ready <= now, left: formatDuration(Math.max(0, job.ready - now)) })) : [];
   return {
@@ -490,12 +491,14 @@ function defineClass() {
         if (ok) return provider.gm.delete(button.dataset.recipe);
       }
       if (act === "craft") {
+        if (this.view.busy) return;
+        const actor = this.actor;
         const id = button.dataset.recipe;
         const input = this.element.querySelector(`[data-batch="${CSS.escape(id)}"]`);
         const batch = Math.max(1, Math.trunc(Number(input?.value) || 1));
         this.view.busy = true;
         await this.render();
-        try { await provider.craft(this.actor, id, batch); }
+        try { await provider.craft(actor, id, batch); }
         finally { this.view.busy = false; this.view.batch[id] = 1; await this.render(); }
       }
     }
