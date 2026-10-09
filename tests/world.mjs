@@ -870,23 +870,29 @@ const noTreeSetup = await api.content.ensure({ force: true });
 assert.equal(noTreeSetup.tree, "Skill Tree inactive", "Other world setup runs without Skill Tree");
 assert.equal(settings.worldContentVersion, 0, "Tree setup remains due when Skill Tree becomes active");
 game.modules.get("skill-tree").active = true;
-// Material presets (Kris's Trade Goods): herbalism and mining, 5 per tier, 3 rare per tier (fake pack).
+// Material presets (Kris's Trade Goods, Heliana for skinning): 5 per tier, 3 rare per tier (fake packs).
 {
   const presetLib = await import("../scripts/presets.js");
   const materialsLib = await import("../scripts/materials.js");
   assert.deepEqual(presetLib.availablePresets(), [], "Needs Kris's Trade Goods");
   game.modules.set("kctg-5e", { active: true });
   const all = key => { const preset = presetLib.MATERIAL_PRESETS[key]; return [...Object.values(preset.materials), ...Object.values(preset.rare)].flat().map(entry => Array.isArray(entry) ? entry[0] : entry); };
-  for (const key of ["herbalism", "mining"]) {
+  for (const key of ["herbalism", "mining", "logging", "skinning"]) {
     const preset = presetLib.MATERIAL_PRESETS[key];
     assert.ok(Object.values(preset.materials).every(tier => tier.length === 5), `${key}: 5 materials per tier`);
     assert.ok(Object.values(preset.rare).every(tier => tier.length === 3), `${key}: 3 rare finds per tier`);
     assert.equal(new Set(all(key)).size, 40, `${key}: no item listed twice`);
   }
-  const packNames = [...all("herbalism"), ...all("mining")];
-  game.packs = new Map([["kctg-5e.kctg-dnd5e", { title: "Trade Goods", async getIndex() { return packNames.map(name => ({ _id: `id-${name}`, name })); },
-    async getDocument(entryId) { const name = entryId.slice(3); return { uuid: `Compendium.kctg-5e.kctg-dnd5e.Item.${entryId}`, toObject: () => ({ _id: entryId, name, type: "loot", img: "kctg.webp", system: {}, flags: {} }) }; } }]]);
-  assert.deepEqual(presetLib.availablePresets().map(entry => entry.key).sort(), ["herbalism", "mining"]);
+  const heliana = name => /^(Beast|Monstrosity|Dragon) (?!Bones|Scales|Talons)/.test(name);
+  const fakePack = (id, packNames) => [id, { title: id, async getIndex() { return packNames.map(name => ({ _id: `id-${name}`, name })); },
+    async getDocument(entryId) { const name = entryId.slice(3); return { uuid: `Compendium.${id}.Item.${entryId}`, toObject: () => ({ _id: entryId, name, type: "loot", img: "pack.webp", system: {}, flags: {} }) }; } }];
+  const kctgNames = ["herbalism", "mining", "logging", "skinning"].flatMap(all).filter(name => !heliana(name));
+  const helianaNames = type => all("skinning").filter(name => name.startsWith(`${type} `) && heliana(name));
+  game.packs = new Map([fakePack("kctg-5e.kctg-dnd5e", kctgNames),
+    ...["Beast", "Monstrosity", "Dragon"].map(type => fakePack(`helianas-harvest-compendium.${type.toLowerCase()}`, helianaNames(type)))]);
+  assert.deepEqual(presetLib.availablePresets().map(entry => entry.key).sort(), ["herbalism", "logging", "mining"], "Skinning also needs Heliana's Harvest");
+  game.modules.set("helianas-harvest-compendium", { active: true });
+  assert.deepEqual(presetLib.availablePresets().map(entry => entry.key).sort(), ["herbalism", "logging", "mining", "skinning"]);
   // Reuse an existing herb; an old herbalism material not in the preset gets unassigned.
   const [existingClover] = await globalThis.Item.implementation.create([{ name: "Clover", type: "loot", img: "clover.webp", system: {}, flags: {} }]);
   const [oldHerb] = await globalThis.Item.implementation.create([{ name: "Marjoram", type: "loot", img: "m.webp", system: {}, flags: { "gathering-professions": { material: { enabled: true, profession: "herbalism", tier: 1, baseYield: "1" } } } }]);
@@ -909,6 +915,13 @@ game.modules.get("skill-tree").active = true;
   assert.equal(items.filter(item => item.name === "Mithral").length, 0);
   assert.deepEqual(materialsLib.materialsModel("mining").gathering.map(group => group.materials.length), [5, 5, 5, 5, 5], "Only the preset's mining materials remain assigned");
   assert.equal((await presetLib.applyMaterialPreset("mining")).imported, 0, "Second run reuses everything");
+  // Logging and skinning; skinning imports from Kris's and three Heliana packs.
+  assert.deepEqual([(await presetLib.applyMaterialPreset("logging")).materials, materialsLib.materialsModel("logging").gathering.map(group => group.materials.length)], [25, [5, 5, 5, 5, 5]]);
+  const skinning = await presetLib.applyMaterialPreset("skinning");
+  assert.deepEqual([skinning.materials, skinning.rare], [25, 15]);
+  assert.match(items.find(item => item.name === "Dragon Breath Sac")._stats.compendiumSource, /^Compendium\.helianas-harvest-compendium\.dragon\./, "Found in the later Heliana pack");
+  assert.ok(items.some(item => item.name === "Beast Pelt" && item.flags["gathering-professions"].material.tier === 2), "Heliana beast part imported and assigned");
+  game.modules.delete("helianas-harvest-compendium");
   game.modules.delete("kctg-5e");
 }
 console.log("PASS: sample world, gathering content setup, gathering window, Node Manager view, Node Builder, visibility and sense, pins, tint, timers, edit, duplicate, delete.");
