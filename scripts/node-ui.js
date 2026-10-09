@@ -504,6 +504,14 @@ function defineClass() {
       if (!this.element) return;
       this._onClose();
       this.element = null;
+      this.view.dirty = false;
+    }
+
+    /** Before the hub leaves the Nodes tab: confirm discarding unsaved node edits. */
+    async confirmLeave() {
+      if (!await this.#confirmDiscard()) return false;
+      this.view.dirty = false;
+      return true;
     }
 
     async render({ parts = ["list", "detail"] } = {}) {

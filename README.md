@@ -72,7 +72,7 @@ Gatherer roll table results should point to actual Item documents. Plain text re
 
 ## Custom professions (0.5.0)
 
-As GM, open **Gathering Professions → Professions** (from Module Settings or the Profession Materials toolbar). Each row sets a profession's name, check ability (any of the six), and rare-find table. Click **Add profession** to add one. A blank key is built from the name, such as `fishing` for Fishing. Keys cannot change after saving, because character XP is stored under them.
+As GM, open **Gathering Professions → Professions** (from Module Settings or the Profession Materials toolbar). Each row sets a profession's name, check ability (any of the six), and rare-find table. Click **Add a profession** to add one. A blank key is built from the name, such as `fishing` for Fishing. Keys cannot change after saving, because character XP is stored under them.
 
 Removing a profession keeps all character XP. Materials assigned to it fall back to Gatherer's normal awards. A character who chose it shows no profession until the GM picks one. Mining, Herbalism, Logging, and Skinning stay the defaults until the list is first saved. Existing Harvesting selections, XP, ranks, materials, nodes, perks, and condition modifiers are read as Skinning. New changes save the Skinning key.
 

@@ -452,6 +452,7 @@ function defineClass() {
           return this.render();
         }
         case "section":
+          if (view.section === "nodes" && button.dataset.section !== "nodes" && !await nodeManagerCore().confirmLeave()) return;
           capture(view, form);
           view.section = button.dataset.section;
           return this.render();
