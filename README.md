@@ -145,7 +145,9 @@ When a GM views a character's linked Gathering Skill Tree, **Reset Skills** appe
 Gold is worth twice the standard here (a skilled hireling earns 1 gp a day), matched to bounty pay:
 
 - **Book items** (weapons, armour, gear, tools, magic items from any compendium) cost **half** their book price. This happens automatically when an item enters the world, a character or an Item Piles merchant, once (flag `campaignPrice`, which also keeps the book price).
-- **Gathered materials**, per unit: T1 5 cp–1.5 sp · T2 1.5–4.5 sp · T3 5 sp–1.5 gp · T4 2–6 gp · T5 7.5–22.5 gp.
+- **Silver and gold only** (0.32.1): nothing costs less than 1 sp; copper, electrum and platinum prices are converted.
+- **Standard gear by type** (0.32.1): common weapons, armour, instruments, tools and gear have set campaign prices (e.g. Fiddle 12 gp, Chain Mail 40 gp, Hand Crossbow 35 gp, Backpack 1 gp), applied to inventories and to any item with that name, even without a compendium source (starting equipment).
+- **Gathered materials**, per unit: T1 1–2 sp · T2 1.5–4.5 sp · T3 5 sp–1.5 gp · T4 2–6 gp · T5 7.5–22.5 gp.
 - **Rare finds**: T1 1–3 gp · T2 3–8 · T3 8–20 · T4 20–50 · T5 50–100 gp (bounty rare finds use the band of the job's tier).
 - **Refined goods**: ingredients + 25%. **Crafted gear**: half book price, never below ingredients + 25%. **Dishes**: ingredients + 50% per serving. **Recipe scrolls**: 2 / 5 / 15 / 40 / 100 gp. **Basic gathering tools**: priced like the gear they're smithed from.
 - Within a band, items keep the order of their original prices. Skill-tree items and the **Unused** folder are not priced.
