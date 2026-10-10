@@ -11,6 +11,8 @@ const gathered = [];
 const errors = [];
 const rolls = [];
 const delay = () => new Promise(resolve => setImmediate(resolve));
+const gatheringDocuments = new Map();
+let gatheringDocumentId = 0;
 let dialogValues;
 const confirmAnswers = [];
 const confirmPrompts = [];
@@ -640,7 +642,7 @@ const tables = {
     return { results: [{ documentUuid: "Item.starSapphire" }, { name: "A glittering vein" }] };
   } }
 };
-globalThis.fromUuid = async uuid => uuid === "Item.starSapphire" ? rareGem : tables[uuid] ?? null;
+globalThis.fromUuid = async uuid => gatheringDocuments.get(uuid) ?? (uuid === "Item.starSapphire" ? rareGem : tables[uuid] ?? null);
 function perkItem(name, perk) {
   return { name, system: {}, flags: { "gathering-professions": { perk } } };
 }
@@ -724,7 +726,18 @@ assert.equal(perkSource.material.enabled, false);
 // ---------------------------------------------------------------------------
 savedRules.masterfulRareFind = false;
 function nodePage(node) {
-  return { type: "gatherer.gatherer", name: "Test Node", flags: { "gathering-professions": { node }, gatherer: { draws: "5" } } };
+  const page = { uuid: `JournalEntry.test.JournalEntryPage.node${++gatheringDocumentId}`,
+    type: "gatherer.gatherer", name: "Test Node", flags: { "gathering-professions": { node }, gatherer: { draws: "0" } },
+    getFlag(scope, key) { return foundry.utils.getProperty(this.flags[scope], key); },
+    async update(changes) {
+      await delay();
+      for (const [path, value] of Object.entries(changes)) foundry.utils.setProperty(this, path, value);
+      return this;
+    },
+    async setFlag(scope, key, value) { return this.update({ [`flags.${scope}.${key}`]: value }); }
+  };
+  gatheringDocuments.set(page.uuid, page);
+  return page;
 }
 function nodeSheet(node) {
   const sheet = new GathererSheet();
