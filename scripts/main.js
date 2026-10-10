@@ -688,10 +688,9 @@ function integrateGatherer() {
   // Node gates run before Gatherer uses a pull, so a refused attempt costs nothing.
   const originalGather = Sheet.prototype._onGather;
   if (typeof originalGather === "function") {
-    Sheet.prototype._onGather = async function (...args) {
+    const gatherLocked = async function (args, actor, actionLease) {
       const node = readNode(this.document);
-      // Same actor Gatherer will use: (consumeDraw, harvestActor, gatheringActor, event).
-      const actor = args[2] ?? globalThis.canvas?.tokens?.controlled?.[0]?.actor ?? game.user.character;
+      const context = gatherContexts.get(this);
       // Node gates and the required tool apply to every gather, node or plain Gatherer page.
       const gateProfessions = pageProfessions(this.document, node);
       if (node || gateProfessions.length) {
@@ -714,17 +713,56 @@ function integrateGatherer() {
       let refundTicket = null;
       const runGather = async () => {
         if (actor?.type === "character" && gathererCanStart(this, actor)) {
-          try { if (!await reserveGatherAttempt(actor, { pageUuid: this.document?.uuid, onReserved: ticket => { refundTicket = ticket; } })) return; }
+          try { if (!await withActorActionLease(actor, actionLease, () => reserveGatherAttempt(actor,
+            { pageUuid: this.document?.uuid, onReserved: ticket => { refundTicket = ticket; } }))) return; }
           catch (error) {
             console.error(`${MODULE_ID}: could not reserve a gathering attempt`, error);
             ui.notifications.error(error.message || "Could not start gathering.");
             return;
           }
         }
+        if (!gathererCanStart(this, actor)) return originalGather.apply(this, args);
         started = true;
-        return originalGather.apply(this, args);
+        context.receiptId = actionLease.id || foundry.utils.randomID();
+        const chosenAuto = Boolean(peekIntent(actor).masterful) && masterfulLeft(actor, actorPerks(actor, node?.profession || selectedProfession(actor))) > 0;
+        context.receipt = await requestGm(actor, "gatherStart", { pageUuid: this.document.uuid, receiptId: context.receiptId,
+          assist: !chosenAuto }, { wait: true });
+        if (!context.receipt) throw new Error("The GM did not authorize this gathering action.");
+        // Gatherer's expression-failure branch sends a pull even with consumeDraw=false.
+        // Stop that branch before it sends; the authenticated commit below owns every pull.
+        const ownExpression = Object.hasOwn(this, "evaluateExpression");
+        const evaluateExpression = this.evaluateExpression;
+        const expressionFailed = Symbol("gather-expression-failed");
+        if (typeof evaluateExpression === "function") this.evaluateExpression = async (...values) => {
+          const result = await evaluateExpression.apply(this, values);
+          if (result === false) throw expressionFailed;
+          return result;
+        };
+        let outcome;
+        try {
+          outcome = await originalGather.apply(this, [false, args[1], actor, args[3]]);
+        } catch (error) {
+          if (error !== expressionFailed) throw error;
+          ui.notifications.warn(game.i18n?.localize?.("gatherer.sheet.err.noExp") || "This node's gathering condition was not met.");
+        } finally {
+          if (typeof evaluateExpression === "function") {
+            if (ownExpression) this.evaluateExpression = evaluateExpression;
+            else delete this.evaluateExpression;
+          }
+        }
+        const committed = await requestGm(actor, "gatherPull", { pageUuid: this.document.uuid, receiptId: context.receiptId,
+          consume: args[0] !== false }, { wait: true });
+        if (!committed?.ok) throw new Error("Could not commit the gathering pull.");
+        context.releaseRewards(true);
+        if (context.completion) await context.completion;
+        return outcome;
       };
-      if (!table?.results) return runGather();
+      if (!table?.results) {
+        const outcome = await runGather();
+        if (context.receiptId) await requestGm(actor, "gatherFinish", { pageUuid: this.document.uuid,
+          receiptId: context.receiptId, ticket: refundTicket, consume: args[0] !== false, gathered: Boolean(context.completion) }, { wait: true });
+        return outcome;
+      }
       const conditions = currentConditions({ node, scene: nodeScene(this.document, pinsFor) });
       const perks = actor ? actorPerks(actor, node?.profession || selectedProfession(actor)) : null;
       const adjusted = adjustedResults(table, node, conditions, { relief: perks?.scarcityRelief ?? 0 });
@@ -751,28 +789,69 @@ function integrateGatherer() {
       // Conservationist / Steward: chance the pull is refunded.
       const lucky = actor && luckyStrikes.get(actor.id) === this.document?.uuid;
       if (actor) luckyStrikes.delete(actor.id);
-      if (actor && gathered && nodeUsage(this.document).draws > 0 && (lucky || perks?.conserveChance > 0)) {
+      if (!context && actor && gathered && nodeUsage(this.document).draws > 0 && (lucky || perks?.conserveChance > 0)) {
         void requestPullRefund(this.document, pullsBefore, actor, refundTicket, { lucky }).catch(logFailure("pull refund failed"));
       }
       // Timekeeper: if this gather exhausted the node, it refills sooner.
-      if (actor && gathered && !lucky && perks?.refillCut > 0 && nodeUsage(this.document).draws > 0) {
+      if (!context && actor && gathered && !lucky && perks?.refillCut > 0 && nodeUsage(this.document).draws > 0) {
         void markRefillCut(actor, this.document).catch(logFailure("Timekeeper failed"));
+      }
+      if (context.receiptId) await requestGm(actor, "gatherFinish", { pageUuid: this.document.uuid,
+        receiptId: context.receiptId, ticket: refundTicket, consume: args[0] !== false, gathered }, { wait: true });
+      return outcome;
+    };
+    Sheet.prototype._onGather = async function (...args) {
+      const actor = args[2] ?? globalThis.canvas?.tokens?.controlled?.[0]?.actor ?? game.user.character;
+      if (!actor) return originalGather.apply(this, args);
+      const context = { shared: [] };
+      context.rewardsReady = new Promise(resolve => { context.releaseRewards = resolve; });
+      let outcome;
+      try {
+        outcome = await runActorAction(actor, async lease => {
+          gatherContexts.set(this, context);
+          try { return await gatherLocked.call(this, args, actor, lease); }
+          finally {
+            context.releaseRewards(false);
+            if (context.completion) await context.completion;
+            gatherContexts.delete(this);
+          }
+        }, { resource: `gather-node:${this.document.uuid}` });
+      } catch (error) {
+        console.error(`${MODULE_ID}: gathering action failed`, error);
+        ui.notifications.error(error.message || "Gathering action failed.");
+        return;
+      }
+      // Helper inventory leases are acquired only after releasing the gatherer.
+      // Reciprocal assists on different nodes must not deadlock two actor leases.
+      for (const shared of context.shared) {
+        try { await shareHaul(shared.helper, shared.item, this.document, actor, shared.profession, context.receiptId); }
+        catch (error) { logFailure("Shared Haul failed")(error); ui.notifications.error(error.message || "Shared Haul failed."); }
       }
       return outcome;
     };
   }
   const originalToChat = Sheet.prototype.toChat;
   Sheet.prototype.toChat = async function (things, actor) {
+    const context = gatherContexts.get(this);
     const result = things?.[RESULT];
-    if (!result) return originalToChat.call(this, things, actor);
+    if (!result) {
+      const completion = context ? context.rewardsReady.then(ready => ready ? originalToChat.call(this, things, actor) : undefined)
+        : originalToChat.call(this, things, actor);
+      if (context) context.completion = completion;
+      return completion;
+    }
     if (!result.pending.length) {
-      if (things.length) await originalToChat.call(this, things, actor);
-      announceComplete(this, actor, plainResults(things));
-      return;
+      const finish = async () => {
+        if (things.length) await originalToChat.call(this, things, actor);
+        announceComplete(this, actor, plainResults(things));
+      };
+      const completion = context ? context.rewardsReady.then(ready => ready ? finish() : undefined) : finish();
+      if (context) context.completion = completion;
+      return completion;
     }
     if (result.completion) return result.completion;
     // Rapid clicks must not read the same old quantity or XP and lose an award.
-    const completion = queueActorTask(actor, async () => {
+    const finish = async () => {
       if (things.length) await originalToChat.call(this, things, actor);
       const results = plainResults(things);
       for (const pending of result.pending) {
@@ -783,8 +862,10 @@ function integrateGatherer() {
         }
       }
       announceComplete(this, actor, results);
-    });
+    };
+    const completion = context ? context.rewardsReady.then(ready => ready ? finish() : undefined) : runActorAction(actor, () => queueActorTask(actor, finish));
     result.completion = completion;
+    if (context) context.completion = completion;
     return completion;
   };
 }
