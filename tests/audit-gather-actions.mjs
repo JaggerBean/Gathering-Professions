@@ -241,6 +241,15 @@ const receiptId = Object.keys(haulNode.flags[GP].gatherReceipts)[0];
 const request = { type: "sharedHaul", data: { pageUuid: haulNode.uuid, receiptId, helperUuid: helper.uuid, itemUuid: ore.uuid } };
 await effects.handleGmRequest(authority.document(gatherer.uuid), request, player);
 assert.equal(quantity(helper), 1, "Replay cannot mint a second helper reward");
+await Promise.all([effects.handleGmRequest(authority.document(gatherer.uuid), request, player),
+  effects.handleGmRequest(authority.document(gatherer.uuid), request, player)]);
+assert.equal(quantity(helper), 1, "Concurrent replay cannot mint a helper reward");
+assert.equal(await effects.handleGmRequest(authority.document(gatherer.uuid), request,
+  { id: "unrelated", isGM: false }), null, "Non-owner sender cannot use another actor's receipt");
+await assert.rejects(effects.handleGmRequest(authority.document(gatherer.uuid),
+  { type: "gatherStart", data: { pageUuid: haulNode.uuid, receiptId: "unleased" } }, player), /lease is no longer held/);
+await assert.rejects(effects.handleGmRequest(authority.document(gatherer.uuid),
+  { ...request, data: { ...request.data, receiptId: undefined } }, player), /Invalid gathering receipt/);
 await assert.rejects(effects.handleGmRequest(authority.document(gatherer.uuid), { ...request, data: { ...request.data, receiptId: "forged" } }, player), /missing or expired/);
 const impostor = actor("impostor");
 await assert.rejects(effects.handleGmRequest(authority.document(impostor.uuid), request, player), /missing or expired/);
