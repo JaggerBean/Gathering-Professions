@@ -140,9 +140,9 @@ async function createClient(user) {
   async function load(url) {
     const key = String(url);
     if (cache.has(key)) return cache.get(key);
-    const module = new vm.SourceTextModule(await fs.readFile(url, "utf8"), { context, identifier: key });
-    cache.set(key, module);
-    return module;
+    const pending = fs.readFile(url, "utf8").then(source => new vm.SourceTextModule(source, { context, identifier: key }));
+    cache.set(key, pending);
+    return pending;
   }
   const main = await load(new URL("main.js", root));
   await main.link((specifier, reference) => load(new URL(specifier, reference.identifier)));

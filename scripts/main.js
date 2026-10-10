@@ -689,7 +689,6 @@ function integrateGatherer() {
   const originalGather = Sheet.prototype._onGather;
   if (typeof originalGather === "function") {
     const gatherLocked = async function (args, actor, actionLease) {
-      console.log('DEBUG LOCKED', actor.uuid);
       const node = readNode(this.document);
       const context = gatherContexts.get(this);
       // Node gates and the required tool apply to every gather, node or plain Gatherer page.
@@ -713,7 +712,6 @@ function integrateGatherer() {
       let started = false;
       let refundTicket = null;
       const runGather = async () => {
-        console.log('DEBUG RUN', actor.uuid);
         if (actor?.type === "character" && gathererCanStart(this, actor)) {
           try { if (!await withActorActionLease(actor, actionLease, () => reserveGatherAttempt(actor,
             { pageUuid: this.document?.uuid, onReserved: ticket => { refundTicket = ticket; } }))) return; }
@@ -732,7 +730,6 @@ function integrateGatherer() {
           return outcome;
         }
         context.receiptId = actionLease.id || foundry.utils.randomID();
-        console.log('DEBUG START', actor.uuid);
         const chosenAuto = Boolean(peekIntent(actor).masterful) && masterfulLeft(actor, actorPerks(actor, node?.profession || selectedProfession(actor))) > 0;
         context.receipt = await requestGm(actor, "gatherStart", { pageUuid: this.document.uuid, receiptId: context.receiptId,
           assist: !chosenAuto }, { wait: true });
