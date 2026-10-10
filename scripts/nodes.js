@@ -566,7 +566,7 @@ export async function duplicateNode(page) {
     const sceneKey = page.parent?.getFlag?.(MODULE_ID, "nodeJournal");
     const usage = nodeUsage(page);
     return buildNode({ ...node, linkGroup: "", name: `${page.name} (copy)`, sceneId: sceneKey === "none" ? "" : sceneKey ?? "",
-      materials: tableMaterials(table), draws: usage.draws, time: usage.time });
+      materials: tableMaterials(table), draws: usage.draws, time: usage.baseTime });
   }
   // Hand-made Gatherer page: copy it as-is, sharing its table.
   const data = page.toObject();
@@ -575,6 +575,10 @@ export async function duplicateNode(page) {
   if (data.flags?.gatherer) delete data.flags.gatherer.data;
   if (data.flags?.[MODULE_ID]?.node) data.flags[MODULE_ID].node.linkGroup = "";
   if (data.flags?.[MODULE_ID]) delete data.flags[MODULE_ID].nodeLinkGroup;
+  if (data.flags?.[MODULE_ID]) {
+    delete data.flags[MODULE_ID].lastPull;
+    delete data.flags[MODULE_ID].refillCut;
+  }
   const [copy] = await page.parent.createEmbeddedDocuments("JournalEntryPage", [data]);
   return copy;
 }
@@ -594,6 +598,8 @@ export async function placeLinkedNode(page, scene, x, y) {
   delete data.flags.gatherer.data;
   data.flags[MODULE_ID] ??= {};
   delete data.flags[MODULE_ID].discovered;
+  delete data.flags[MODULE_ID].lastPull;
+  delete data.flags[MODULE_ID].refillCut;
   if (source) {
     data.flags[MODULE_ID].node = normalizeNode({ ...source, linkGroup });
     if (source.linkGroup !== linkGroup) await page.setFlag(MODULE_ID, "node", normalizeNode({ ...source, linkGroup }));
@@ -601,7 +607,9 @@ export async function placeLinkedNode(page, scene, x, y) {
     data.flags[MODULE_ID].nodeLinkGroup = linkGroup;
     if (linkGroupFor(page) !== linkGroup) await page.setFlag(MODULE_ID, "nodeLinkGroup", linkGroup);
   }
-  const [copy] = await page.parent.createEmbeddedDocuments("JournalEntryPage", [data]);
+  // Scene ownership comes from the journal, which both checks and UI resolve.
+  const entry = await sceneJournal(scene.id);
+  const [copy] = await entry.createEmbeddedDocuments("JournalEntryPage", [data]);
   try {
     await placePin(copy, scene, x, y);
   } catch (error) {
