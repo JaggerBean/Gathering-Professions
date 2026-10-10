@@ -1469,12 +1469,25 @@ assert.equal(await nodeSheet(undefined)._onGather(true, null, makeActor()), "gat
   // Shared Haul: the GM gives the helper the material when the gatherer cannot.
   const helper = makeActor();
   helper.uuid = "Actor.helper"; helper.id = "helper"; helper.isOwner = false; helper.documentName = "Actor";
-  helper.inventory.push(perkItem("Shared Haul", { enabled: true, profession: "any", sharedHaul: 1 }));
+  helper.inventory.push(perkItem("Shared Haul", { enabled: true, profession: "any", sharedHaul: 1, assistBonus: 1 }));
   globalThis.fromUuid = async uuid => uuid === helper.uuid ? helper : uuid === plainStone.uuid ? plainStone : uuid === node.uuid ? node : uuid === "RollTable.skillNode" ? { results: [{ documentUuid: plainStone.uuid }] } : previousResolver(uuid);
   plainStone.uuid ??= "Item.plainStone";
-  await effects.handleGmRequest(finder, { type: "sharedHaul", data: { helperUuid: helper.uuid, itemUuid: plainStone.uuid, pageUuid: node.uuid, profession: "mining" } }, gmUser);
+  const previousActors = game.actors;
+  game.actors = [finder, helper];
+  game.time ??= { worldTime: 0 };
+  await helper.setFlag("gathering-professions", "assist", { pageUuid: node.uuid, at: game.time.worldTime });
+  const receiptId = "sharedHaulFixture";
+  await effects.handleGmRequest(finder, { type: "gatherStart", data: { pageUuid: node.uuid, receiptId } }, gmUser);
+  await effects.handleGmRequest(finder, { type: "gatherPull", data: { pageUuid: node.uuid, receiptId } }, gmUser);
+  await effects.handleGmRequest(finder, { type: "gatherResult", data: { pageUuid: node.uuid, receiptId,
+    itemUuid: plainStone.uuid, degree: "excellent", quantity: 2 } }, gmUser);
+  const shareData = { helperUuid: helper.uuid, itemUuid: plainStone.uuid, pageUuid: node.uuid, receiptId };
+  await effects.handleGmRequest(finder, { type: "sharedHaul", data: shareData }, gmUser);
   assert.equal(helper.inventory.find(item => item.name === "Stone")?.system.quantity, 1, "Helper gets 1 Stone");
-  await assert.rejects(effects.handleGmRequest(finder, { type: "sharedHaul", data: { helperUuid: helper.uuid, itemUuid: "Item.elsewhere", pageUuid: node.uuid } }, gmUser), /unknown helper or material/);
+  await effects.handleGmRequest(finder, { type: "sharedHaul", data: shareData }, gmUser);
+  assert.equal(helper.inventory.find(item => item.name === "Stone")?.system.quantity, 1, "Receipt replay gives nothing");
+  await assert.rejects(effects.handleGmRequest(finder, { type: "sharedHaul", data: { ...shareData, itemUuid: "Item.elsewhere" } }, gmUser), /completed great gather/);
+  game.actors = previousActors;
   globalThis.fromUuid = previousResolver;
 }
 
