@@ -300,25 +300,32 @@
 /* 0.9.1: radial universal skill tree (Skill Tree module, group "gatheringProfessions").
    Small grid cells, larger skill icons, and no group box or title. The border
    stays (transparent) because Skill Tree offsets its link lines by 4px. */
+/* 0.31.0: Skill Tree's own rules sit in the same "modules" cascade layer, load
+   later, and had equal specificity, so they won (48px cells + 24px gaps, ~1800px
+   tree). Every selector below starts with .skill-groups .skill-group[...] for
+   higher specificity. Cells are sized from the viewport so the whole 25×25 tree
+   fits the screen; the size does not depend on the window, so link lines stay
+   aligned when toggling fullscreen (ui.js re-renders on browser resize). */
 :is(.skill-tree-actor, .skill-tree-application) .skill-groups .skill-group[data-group-id="gatheringProfessions"] {
+  --gp-tree-cell: clamp(12px, calc(min(76vw, 100vh - 12rem) / 26), 44px);
   border-color: transparent;
   box-shadow: none;
   background: none;
   min-height: 0;
-  padding: 1.5rem;
+  padding: calc(var(--gp-tree-cell) * .75);
 }
-:is(.skill-tree-actor, .skill-tree-application) .skill-group[data-group-id="gatheringProfessions"] .h1-container { display: none; }
-:is(.skill-tree-actor, .skill-tree-application) .skill-group[data-group-id="gatheringProfessions"] .skill-grid { gap: 0; }
-:is(.skill-tree-actor, .skill-tree-application) .skill-group[data-group-id="gatheringProfessions"] .skill-grid .skill-container {
-  width: 1.6rem;
-  height: 1.6rem;
+:is(.skill-tree-actor, .skill-tree-application) .skill-groups .skill-group[data-group-id="gatheringProfessions"] .h1-container { display: none; }
+:is(.skill-tree-actor, .skill-tree-application) .skill-groups .skill-group[data-group-id="gatheringProfessions"] .skill-grid { gap: 0; }
+:is(.skill-tree-actor, .skill-tree-application) .skill-groups .skill-group[data-group-id="gatheringProfessions"] .skill-grid .skill-container {
+  width: var(--gp-tree-cell);
+  height: var(--gp-tree-cell);
 }
-:is(.skill-tree-actor, .skill-tree-application) .skill-group[data-group-id="gatheringProfessions"] .skill-grid .skill-container:not(.empty) {
+:is(.skill-tree-actor, .skill-tree-application) .skill-groups .skill-group[data-group-id="gatheringProfessions"] .skill-grid .skill-container:not(.empty) {
   transform: scale(1.5);
   z-index: 2;
 }
-:is(.skill-tree-actor, .skill-tree-application) .skill-group[data-group-id="gatheringProfessions"] .skill-grid .skill-container span {
-  font-size: .5rem;
+:is(.skill-tree-actor, .skill-tree-application) .skill-groups .skill-group[data-group-id="gatheringProfessions"] .skill-grid .skill-container span {
+  font-size: max(7px, calc(var(--gp-tree-cell) * .3));
   padding: 0 .1rem;
 }
 .skill-tree-actor nav .gp-reset-skills {

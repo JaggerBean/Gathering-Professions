@@ -450,6 +450,12 @@ export function registerUIHooks() {
     button.addEventListener("click", openMaterialManager);
     header.appendChild(button);
   }
+  // The gathering tree sizes its cells from the viewport (module.css). Skill
+  // Tree draws link lines once per render, so redraw after the window resizes.
+  const treeApps = () => Array.from(foundry.applications.instances?.values?.() ?? [])
+    .filter(app => app.rendered && app.element?.querySelector?.('.skill-group[data-group-id="gatheringProfessions"]'));
+  const redrawTrees = foundry.utils.debounce(() => { for (const app of treeApps()) void app.render().catch(report); }, 300);
+  window.addEventListener("resize", redrawTrees);
   Hooks.on("renderItemDirectory", addManagerButton);
   Hooks.on("renderApplicationV2", (app, html) => {
     if (app instanceof foundry.applications.sidebar.tabs.ItemDirectory) addManagerButton(app, html);
