@@ -140,6 +140,17 @@ When a GM views a character's linked Gathering Skill Tree, **Reset Skills** appe
 - **Sense** bonuses add to the profession rank when checking a hidden node's sense rank. Wayfarer senses every node with a sense rank above 0. Nodes with sense rank 0 stay GM-only.
 - **Assist**: open a node's gathering window with a character who has Field Hand, Reliable Partner, or Mentor, then click **Assist others here**. The next gather at that node by another character, within one in-game hour, gets the bonus. Then the offer is used up. The strongest offer applies, and offers do not stack.
 
+### Campaign pricing (0.32.0)
+
+Gold is worth twice the standard here (a skilled hireling earns 1 gp a day), matched to bounty pay:
+
+- **Book items** (weapons, armour, gear, tools, magic items from any compendium) cost **half** their book price. This happens automatically when an item enters the world, a character or an Item Piles merchant, once (flag `campaignPrice`, which also keeps the book price).
+- **Gathered materials**, per unit: T1 5 cp–1.5 sp · T2 1.5–4.5 sp · T3 5 sp–1.5 gp · T4 2–6 gp · T5 7.5–22.5 gp.
+- **Rare finds**: T1 1–3 gp · T2 3–8 · T3 8–20 · T4 20–50 · T5 50–100 gp (bounty rare finds use the band of the job's tier).
+- **Refined goods**: ingredients + 25%. **Crafted gear**: half book price, never below ingredients + 25%. **Dishes**: ingredients + 50% per serving. **Recipe scrolls**: 2 / 5 / 15 / 40 / 100 gp. **Basic gathering tools**: priced like the gear they're smithed from.
+- Within a band, items keep the order of their original prices. Skill-tree items and the **Unused** folder are not priced.
+- The active GM applies this once per pricing version (world items and every inventory; carried copies keep Masterwork/Exquisite/perk multipliers). Preparing items or applying presets prices new items too. Macro: `game.modules.get("gathering-professions").api.pricing.reprice({ dryRun: true })`.
+
 ### Locked-out skills, Recipes categories, Items layout (0.31.1)
 
 - **Locked-out skills** show a red X. Clicking one makes the skill that locks it out pulse red, draws a red dashed line between them for about 3 seconds, and shows a notification (works for either/or pairs and capstones).

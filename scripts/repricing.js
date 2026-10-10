@@ -17,9 +17,11 @@ export function registerPriceContributor(fn) { if (typeof fn === "function" && !
 
 const folderPath = folder => { const parts = []; for (let entry = folder; entry; entry = entry.folder) parts.unshift(entry.name); return parts.join(" / "); };
 const skipped = item => Boolean(item.getFlag?.(MODULE_ID, "universalSkill")) || folderPath(item.folder) === "Unused";
-const oldGp = item => priceInGp(item.system?.price);
+// Rank by the price an item had before campaign pricing (kept in the flag), so reruns are stable.
+const oldGp = item => { const basis = Number(item.getFlag?.(MODULE_ID, PRICED_FLAG)?.basis); return Number.isFinite(basis) ? basis : priceInGp(item.system?.price); };
 
 /** gp for every gathering item, by name. */
+export { oldGp as basisGp };
 export function gatheringPrices(items = Array.from(game.items ?? [])) {
   const prices = new Map();
   const material = item => { const rule = item.getFlag?.(MODULE_ID, "material"); return rule?.enabled !== false && rule?.profession ? rule : null; };
@@ -91,7 +93,8 @@ export async function repriceWorld({ dryRun = false } = {}) {
     if (!target) continue;
     const from = priceInGp(before), to = priceInGp(target);
     if (from !== to || !item.getFlag(MODULE_ID, PRICED_FLAG)) {
-      world.push({ item, name: item.name, from, to, changes: { "system.price": target, [`flags.${MODULE_ID}.${PRICED_FLAG}`]: { book: item.getFlag(MODULE_ID, PRICED_FLAG)?.book ?? await bookPrice(item) ?? null } } });
+      const saved = item.getFlag(MODULE_ID, PRICED_FLAG) ?? {};
+      world.push({ item, name: item.name, from, to, changes: { "system.price": target, [`flags.${MODULE_ID}.${PRICED_FLAG}`]: { book: saved.book ?? await bookPrice(item) ?? null, basis: Number.isFinite(Number(saved.basis)) ? Number(saved.basis) : from } } });
     }
     if (from !== to) ratioByName.set(item.name, { from, to });
   }
