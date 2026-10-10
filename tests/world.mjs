@@ -1047,6 +1047,24 @@ game.modules.get("skill-tree").active = true;
   rolls.push([10, 12]);
   result = await api.refining.craft(smith, copperId, 1);
   assert.equal(result.xp, 7, "Refining uses its own XP");
+  // Efficient Refiner: every 4 units save one of the first ingredient. Field Processing: 25% faster.
+  {
+    const entry = refiningLib.findRecipe(copperId);
+    const [[firstName, firstQuantity], [secondName, secondQuantity]] = entry.inputs;
+    await smith.createEmbeddedDocuments("Item", [{ name: firstName, type: "loot", system: { quantity: firstQuantity * 8 } }, { name: secondName, type: "loot", system: { quantity: secondQuantity * 8 } },
+      { name: "Thrifty Kit", type: "feat", system: {}, flags: { "gathering-professions": { perk: { enabled: true, profession: "any", refineSaver: true, refineTimeCut: 25 } } } }]);
+    const before = [count(firstName), count(secondName)];
+    settings.rules = { ...(settings.rules ?? {}), craftingTimed: true };
+    rolls.push([10, 12]);
+    result = await api.refining.craft(smith, copperId, 4);
+    assert.equal(result.saved, 1, "Batch of 4 saves one");
+    assert.deepEqual([before[0] - count(firstName), before[1] - count(secondName)], [firstQuantity * 4 - 1, secondQuantity * 4], "Only the first ingredient is saved");
+    assert.equal(result.job.minutes, Math.round(refiningLib.recipeMinutes(entry) * 4 * 0.75), "Field Processing: 25% less time");
+    assert.match(rolls.length ? "" : "ok", /ok/);
+    smith.items.find(item => item.name === "Thrifty Kit").flags["gathering-professions"].perk.enabled = false;
+    delete settings.rules.craftingTimed;
+    await refiningLib.deliverDueJobs(smith, game.time.worldTime + 100000);
+  }
   delete settings.rules.refineDc; delete settings.rules.refineXp; delete settings.rules.refineXpPercent;
   settings.discoveredItems = [];
   smith.isOwner = true;

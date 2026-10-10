@@ -131,6 +131,12 @@ rolls.push({ formula: "1d1100", total: 1 });
 await conditions.withAdjustedDraw(inherited, conditions.adjustedResults(inherited, null, springRainNight), () => inherited.draw());
 assert.equal(Object.hasOwn(inherited, "draw"), false);
 assert.equal(await conditions.withAdjustedDraw(table, { changed: false }, () => "untouched"), "untouched");
+// Careful Selection: the first draw picks twice and keeps the chosen result.
+rolls.push({ formula: "1d1100", total: 50 }, { formula: "1d1100", total: 1100 });
+const offered = [];
+const careful = await conditions.withAdjustedDraw(table, adjusted, () => table.draw(), { choose: async (first, second) => { offered.push(first.result.id, second.result.id); return second; } });
+assert.deepEqual([offered, careful.results[0].id], [["r1", "r3"], "r3"], "Careful Selection keeps the chosen draw");
+assert.equal(await table.draw(), "original", "Original draw restored after a careful draw");
 let releaseFirst;
 const firstWait = new Promise(resolve => { releaseFirst = resolve; });
 let firstStarted;

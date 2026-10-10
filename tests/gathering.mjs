@@ -1333,6 +1333,131 @@ assert.equal(await nodeSheet(undefined)._onGather(true, null, makeActor()), "gat
   globalThis.fromUuid = previousResolver; game.user = previousUser; game.users = previousUsers;
 }
 
+// 0.31.0 skill tree expansion in the real gather flow.
+{
+  const limitsLib = await import("../scripts/gather-limits.js");
+  const effects = await import("../scripts/skill-effects.js");
+  // Momentum: an Excellent gather adds +1 to the next check, which spends it.
+  const swift = makeActor();
+  swift.inventory.push(perkItem("Momentum", { enabled: true, profession: "any", momentumBonus: 1 }));
+  queueGather(swift, stone, 15, 3);
+  await sheet.toChat(gathererLast(), swift);
+  assert.equal(swift.flags.momentum?.bonus, 1, "Excellent gather stores Momentum");
+  const stoneRule = materialRule(stone);
+  const swiftBase = checkFormula(swift, "mining", swift.xp.mining ?? 0, stoneRule.dc, stoneRule).formula;
+  rolls.push({ formula: `${swiftBase} + 1`, total: 12 }, { formula: stoneRule.baseYield, total: 2, options: {} });
+  const swiftData = { actor: swift, things: [{ item: stone, quantity: 1 }] };
+  gather(swiftData);
+  await sheet.toChat(swiftData.things, swift);
+  assert.equal(swift.flags.momentum, undefined, "Momentum is spent on the next check");
+  assert.match(posted.at(-1).flavor, /Momentum: \+1/);
+  assert.ok(completions.at(-1).results[0].notes.includes("Momentum +1"));
+
+  // Tool Steward: the first natural 1 each long rest leaves the tool alone.
+  const makeTool = (name, durability) => ({ name, system: { proficient: 1 }, flags: { "gathering-professions": durability ? { durability } : {} },
+    getFlag(_module, key) { return this.flags["gathering-professions"][key]; },
+    async setFlag(_module, key, value) { this.flags["gathering-professions"][key] = { ...(this.flags["gathering-professions"][key] ?? {}), ...value }; } });
+  const keeper = nodeActor();
+  const keeperPick = makeTool("Miner's Pick", { value: 4, max: 4 });
+  keeper.inventory.push(keeperPick, perkItem("Tool Steward", { enabled: true, profession: "any", toolSteward: 1 }));
+  const pickNode = { toolName: "Miner's Pick" };
+  await gatherOnNode(keeper, plainStone, nodeSheet(pickNode), 2, undefined, "1d20 + 1 + 2 + 1d4");
+  assert.equal(keeperPick.flags["gathering-professions"].durability.value, 4, "Tool Steward saves the first natural 1");
+  assert.equal(keeper.flags.restUses?.toolSteward, 1);
+  assert.match(posted.at(-1).flavor, /did not wear the tool/);
+  await gatherOnNode(keeper, plainStone, nodeSheet(pickNode), 2, undefined, "1d20 + 1 + 2 + 1d4");
+  assert.equal(keeperPick.flags["gathering-professions"].durability.value, 3, "The next natural 1 wears it");
+
+  // Field Repair: 1d4 back on a worn tool, once per long rest.
+  keeper.inventory.push(perkItem("Field Repair", { enabled: true, profession: "any", fieldRepairs: 1 }));
+  keeperPick.parent = keeper;
+  rolls.push({ formula: "1d4", total: 3 });
+  assert.deepEqual(await effects.fieldRepair(keeper, keeperPick), { before: 3, after: 4, max: 4 }, "Capped at the maximum");
+  keeperPick.flags["gathering-professions"].durability.value = 1;
+  await assert.rejects(effects.fieldRepair(keeper, keeperPick), /no Field Repair left/);
+
+  // Deep Reserves adds a free attempt; Second Wind makes one extra attempt exhaustion-free.
+  const previousUsers = game.users;
+  game.users = [{ active: true, isGM: true }];
+  savedRules.gatherAttemptsPerRest = 2;
+  const reserve = makeActor();
+  reserve.system.attributes = { exhaustion: 0 };
+  reserve.inventory.push(perkItem("Deep Reserves", { enabled: true, profession: "any", extraAttempts: 1 }),
+    perkItem("Second Wind", { enabled: true, profession: "any", secondWind: 1 }));
+  assert.equal(limitsLib.gatheringAllowance(reserve).limit, 3, "Deep Reserves: +1 free attempt");
+  await reserve.setFlag("gathering-professions", "gatherAttemptsUsed", 3);
+  confirmAnswers.push(true);
+  assert.equal(await limitsLib.reserveGatherAttempt(reserve), true);
+  assert.match(confirmPrompts.at(-1).window.title, /Second Wind/);
+  assert.deepEqual([limitsLib.gatheringAllowance(reserve).used, reserve.system.attributes.exhaustion, limitsLib.gatheringAllowance(reserve).secondWind], [4, 0, 0],
+    "Second Wind: no exhaustion, use spent");
+  confirmAnswers.push(true);
+  assert.equal(await limitsLib.reserveGatherAttempt(reserve), true);
+  assert.equal(reserve.system.attributes.exhaustion, 1, "Without Second Wind the next attempt adds exhaustion");
+  savedRules.gatherAttemptsPerRest = 0;
+  game.users = previousUsers;
+
+  // Familiar Ground: the owner chooses once; the GM may change it.
+  const local = makeActor();
+  local.inventory.push(perkItem("Familiar Ground", { enabled: true, profession: "any", familiarDc: 2 }));
+  local.unsetFlag = async (_scope, key) => { delete local.flags[key]; };
+  const previousUser = game.user;
+  game.user = { id: "player1", isGM: false };
+  await effects.setFamiliarBiome(local, "forest");
+  assert.equal(local.flags.familiarBiome, "forest");
+  await assert.rejects(effects.setFamiliarBiome(local, "swamp"), /Only the GM/);
+  await assert.rejects(effects.setFamiliarBiome(makeActor(), "forest"), /does not have Familiar Ground/);
+  game.user = { id: "gm", isGM: true };
+  await effects.setFamiliarBiome(local, "swamp");
+  assert.equal(local.flags.familiarBiome, "swamp");
+  await assert.rejects(effects.setFamiliarBiome(local, "moon"), /biome from the list/);
+  game.user = previousUser;
+
+  // GM requests: Last Pull reopens one pull for the asker; Timekeeper marks an exhausted node.
+  const nodesLib = await import("../scripts/nodes.js");
+  const node = { uuid: "JournalEntry.skills.JournalEntryPage.node", type: "gatherer.gatherer", name: "Old Vein",
+    flags: { gatherer: { draws: "2", time: "8", table: "RollTable.skillNode", data: { drawsUsed: 2, firstDrawTime: 0 } }, "gathering-professions": {} },
+    getFlag(scope, key) { return foundry.utils.getProperty(this.flags[scope] ?? {}, key); },
+    async setFlag(scope, key, value) { foundry.utils.setProperty(this.flags[scope] ??= {}, key, value); },
+    testUserPermission: () => true,
+    async update(changes) {
+      for (const [path, value] of Object.entries(changes)) {
+        const parts = path.split("."); const leaf = parts.at(-1);
+        if (leaf.startsWith("-=")) delete foundry.utils.getProperty(this, parts.slice(0, -1).join("."))?.[leaf.slice(2)];
+        else if (value && typeof value === "object" && !Array.isArray(value)) foundry.utils.setProperty(this, path, { ...(foundry.utils.getProperty(this, path) ?? {}), ...value });
+        else foundry.utils.setProperty(this, path, value);
+      }
+    } };
+  const finder = nodeActor();
+  finder.uuid = "Actor.finder";
+  finder.testUserPermission = () => true;
+  finder.inventory.push(perkItem("Last Pull", { enabled: true, profession: "any", lastPulls: 1 }), perkItem("Timekeeper", { enabled: true, profession: "any", refillCut: 25 }));
+  const previousResolver = globalThis.fromUuid;
+  globalThis.fromUuid = async uuid => uuid === node.uuid ? node : uuid === "RollTable.skillNode" ? { results: [{ documentUuid: plainStone.uuid }] } : uuid === finder.uuid ? finder : previousResolver(uuid);
+  const gmUser = { id: "gm", isGM: true };
+  await effects.handleGmRequest(finder, { type: "lastPull", data: { pageUuid: node.uuid } }, gmUser);
+  assert.equal(node.flags.gatherer.data.drawsUsed, 1, "Last Pull reopens one pull");
+  assert.equal(nodesLib.lastPullHolder(node), finder.uuid, "Reserved for the asker");
+  assert.equal(finder.flags.restUses?.lastPulls, 1);
+  await assert.rejects(effects.handleGmRequest(finder, { type: "lastPull", data: { pageUuid: node.uuid } }, gmUser), /no Last Pull left/);
+  node.flags.gatherer.data.drawsUsed = 2;
+  assert.deepEqual(await effects.handleGmRequest(finder, { type: "refillCut", data: { pageUuid: node.uuid } }, gmUser), { cut: 25 });
+  assert.equal(nodesLib.nodeUsage(node).time, 6, "Timekeeper: 8 h becomes 6 h");
+  await nodesLib.resetNodes([node]);
+  assert.deepEqual([node.flags.gatherer.data.drawsUsed, node.flags["gathering-professions"].refillCut, nodesLib.lastPullHolder(node)], [0, undefined, ""], "A refill clears Timekeeper and Last Pull");
+
+  // Shared Haul: the GM gives the helper the material when the gatherer cannot.
+  const helper = makeActor();
+  helper.uuid = "Actor.helper"; helper.id = "helper"; helper.isOwner = false;
+  helper.inventory.push(perkItem("Shared Haul", { enabled: true, profession: "any", sharedHaul: 1 }));
+  globalThis.fromUuid = async uuid => uuid === helper.uuid ? helper : uuid === plainStone.uuid ? plainStone : uuid === node.uuid ? node : uuid === "RollTable.skillNode" ? { results: [{ documentUuid: plainStone.uuid }] } : previousResolver(uuid);
+  plainStone.uuid ??= "Item.plainStone";
+  await effects.handleGmRequest(finder, { type: "sharedHaul", data: { helperUuid: helper.uuid, itemUuid: plainStone.uuid, pageUuid: node.uuid, profession: "mining" } }, gmUser);
+  assert.equal(helper.inventory.find(item => item.name === "Stone")?.system.quantity, 1, "Helper gets 1 Stone");
+  await assert.rejects(effects.handleGmRequest(finder, { type: "sharedHaul", data: { helperUuid: helper.uuid, itemUuid: "Item.elsewhere", pageUuid: node.uuid } }, gmUser), /unknown helper or material/);
+  globalThis.fromUuid = previousResolver;
+}
+
 assert.deepEqual(errors, [], "No hidden integration errors");
 assert.equal(rolls.length, 0, "All expected dice rolls were awaited");
 console.log("PASS: yields, extraction degrees, banked XP, stacking, editor saves, milestones, single-profession selection, ownership, GM changes, untrained penalties, sidebar routing, custom professions, Skill Tree points, perks, rare finds, node overrides and gates, condition DC and empty nodes, universal skill perks, tool durability, and gathering limits.");

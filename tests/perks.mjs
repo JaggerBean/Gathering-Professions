@@ -199,4 +199,40 @@ game.time.worldTime -= 3601;
 await assist.consumeAssist(helper, page);
 assert.equal(assist.findAssist(gatherer, page), null, "Used up");
 
-console.log("PASS: perks — validation, totals, caps, check math, rest uses, degrees, odds, tree layout, sensing, assist.");
+// --- 0.31.0 skills: rest uses, Momentum, Familiar Ground, Timekeeper timers ------
+{
+  const steward = actor("Steward", { perkItems: [skillItem("toolSteward"), skillItem("carefulSelection")] });
+  const totals = perks.actorPerks(steward, "mining");
+  assert.equal(perks.restUsesLeft(steward, totals, "toolSteward"), 1);
+  assert.deepEqual(perks.restUseChanges(steward, "toolSteward"), { "flags.gathering-professions.restUses.toolSteward": 1 });
+  await steward.setFlag("gathering-professions", "restUses", { toolSteward: 1 });
+  assert.equal(perks.restUsesLeft(steward, totals, "toolSteward"), 0);
+  assert.equal(perks.restUsesLeft(steward, totals, "carefulUses"), 1, "Each skill counts its own uses");
+  await perks.resetRestUses(steward);
+  assert.equal(perks.restUsesLeft(steward, totals, "toolSteward"), 1, "A long rest restores them");
+  // Momentum lasts an hour of world time and adds to the flat check bonus.
+  const swift = actor("Swift", { perkItems: [skillItem("momentum")], flags: { momentum: { at: 10000 - 600, bonus: 1 } } });
+  const swiftPerks = perks.actorPerks(swift, "mining");
+  assert.equal(perks.momentumBonus(swift), 1);
+  assert.deepEqual([perks.withMomentum(swift, swiftPerks).checkBonus, perks.withMomentum(swift, swiftPerks).momentumApplied], [1, 1]);
+  await swift.setFlag("gathering-professions", "momentum", { at: 10000 - 3601, bonus: 1 });
+  assert.equal(perks.momentumBonus(swift), 0, "Momentum fades after an hour");
+  assert.equal(perks.withMomentum(swift, swiftPerks), swiftPerks);
+  // Familiar Ground: only in the chosen biome.
+  const local = actor("Local", { perkItems: [skillItem("familiarGround")], flags: { familiarBiome: "forest" } });
+  const localPerks = perks.actorPerks(local, "mining");
+  assert.equal(perks.familiarReduction(local, localPerks, { biome: { key: "forest" } }), 2);
+  assert.equal(perks.familiarReduction(local, localPerks, { biome: { key: "swamp" } }), 0);
+  assert.equal(perks.familiarReduction(local, localPerks, { biome: null }), 0);
+  assert.equal(perks.familiarReduction(actor("Stranger", { perkItems: [skillItem("familiarGround")] }), localPerks, { biome: { key: "forest" } }), 0, "No biome chosen yet");
+  // Timekeeper shortens a used node's timer; an unused node keeps its own.
+  const { nodeUsage } = await import("../scripts/nodes.js");
+  const page = (used, cut) => ({ flags: { gatherer: { draws: "3", time: "8", data: { drawsUsed: used, firstDrawTime: 5 } }, "gathering-professions": cut ? { refillCut: cut } : {} } });
+  assert.deepEqual([nodeUsage(page(3, 25)).time, nodeUsage(page(3, 25)).baseTime, nodeUsage(page(3, 25)).refillCut], [6, 8, 25]);
+  assert.equal(nodeUsage(page(0, 25)).time, 8, "Refilled nodes are back to normal");
+  assert.equal(nodeUsage(page(3, 0)).time, 8);
+  // Deep Reserves and Second Wind perks validate; Lucky Strike is a flag.
+  assert.deepEqual([skillPerk("deepReserves").extraAttempts, skillPerk("secondWind").secondWind, skillPerk("luckyStrike").naturalRefund], [1, 1, true]);
+}
+
+console.log("PASS: perks — validation, totals, caps, check math, rest uses, degrees, odds, tree layout, sensing, assist, 0.31.0 skills.");
