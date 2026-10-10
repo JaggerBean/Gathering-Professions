@@ -337,6 +337,7 @@ export async function setRecipeDisabled(id, disabled = true) {
   requireGM();
   const current = findRecipe(id, { includeDisabled: true });
   if (!current || current.custom) throw new Error("Only built-in recipes can be disabled; delete your own recipes instead.");
+  if (!disabled) assertRecipeSnapshot([{ ...current, disabled: false }]);
   const edits = { ...recipeEdits() };
   const edit = { ...(edits[id] ?? {}) };
   if (disabled) edit.disabled = true; else delete edit.disabled;
@@ -347,6 +348,10 @@ export async function setRecipeDisabled(id, disabled = true) {
 /** GM: undo every change to a built-in recipe. */
 export async function resetRecipe(id) {
   requireGM();
+  const profession = String(id).split(":")[0];
+  const entry = REFINING[profession];
+  const base = (entry ? (entry.dried ? driedRecipes() : entry.recipes) : []).map(row => withId(profession, row)).find(row => row.id === id);
+  if (base) assertRecipeSnapshot([base]);
   const edits = { ...recipeEdits() };
   delete edits[id];
   await game.settings.set(MODULE_ID, "recipeEdits", edits);
