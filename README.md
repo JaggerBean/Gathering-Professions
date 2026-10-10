@@ -2,6 +2,10 @@
 
 Foundry 14 + dnd5e + Gatherer 5.0.3. Enable this module alongside Gatherer. After updating module files while Foundry is running, restart the Foundry server and reopen the world so the new manifest, script, and stylesheet load.
 
+## Cooking ingredients (0.30.1)
+
+For Crafting Professions' Cook: the presets add **Rock Salt** (Mining T1), **Beast Flesh** (Skinning T1) and **Beast Fat** (Skinning T2). New refining recipes: **Kala Namak** (2 Rock Salt + 1 Charcoal, smelting T1), **Dried Meat** ×2 (2 Beast Flesh + 1 Rock Salt, tanning T1), **Lard** ×2 (1 Beast Fat, tanning T2). Existing worlds: mark the three items as materials (Materials browser or `api.setMaterial`) and add them to nodes; re-running full presets is not needed.
+
 ## Reliability update (0.30.0)
 
 Update both modules together: Crafting Professions 0.4.1 requires Gathering Professions 0.30.0. Restart Foundry and reconnect every player client after updating.
