@@ -29,7 +29,18 @@
 //   panel(actor, isGM) / onPanel(act, button, actor)   a provider's own panel above the list (optional)
 // Optional row fields: group / groupLabel / groupImg (cards group by these instead of the output),
 //   title, brief, rewardText (instead of "N×"), actionLabel, noBatch, inputMeta: [{ mode: "used"|"kept"|"risk", reason }]
+import { assertAcyclicRecipes } from "./pricing.js";
 const providers = new Map();
+
+/** Check a proposed module snapshot against all registered recipe providers. */
+export function assertRecipeSnapshot(rows) {
+  const combined = new Map();
+  for (const provider of providers.values()) {
+    for (const row of provider.recipes({ includeDisabled: true })) combined.set(row.id, row);
+  }
+  for (const row of rows) combined.set(row.id, row);
+  assertAcyclicRecipes([...combined.values()].filter(row => typeof row.output === "string" && Array.isArray(row.inputs)));
+}
 
 export function registerRecipeProvider(provider) {
   if (!provider?.key || typeof provider.recipes !== "function") throw new Error("A recipe provider needs a key and recipes().");
