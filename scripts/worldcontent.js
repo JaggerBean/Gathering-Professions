@@ -10,6 +10,7 @@
 //      values (moderate, penalties only).
 // Nothing the GM made is deleted.
 import { MODULE_ID, PROFESSIONS } from "./rules.js";
+import { SKILL_TREE_PATH, itemFolderPath } from "./folders.js";
 import { skillTreeConfig, configuredSkillTree, availableSkillTrees } from "./integrations.js";
 import { buildUniversalTree } from "./skilltree.js";
 import { buildRareFinds } from "./rareitems.js";
@@ -40,7 +41,7 @@ export async function ensureWorldContent({ force = false } = {}) {
     if (!isUniversal(tree)) tree = availableSkillTrees().find(isUniversal) ?? null;
     if (!tree) {
       const journalFolder = await folderFor("JournalEntry");
-      const itemFolder = await folderFor("Item");
+      const itemFolder = await itemFolderPath(SKILL_TREE_PATH);
       tree = (await buildUniversalTree({ itemFolder: itemFolder.id, journalFolder: journalFolder.id })).tree;
       report.built = true;
     }

@@ -4,8 +4,9 @@
 // wear on a natural 1 (durability.js). Better tools are added by the GM to a
 // profession's list (Gathering Tools dialog) or to a single node's list.
 import { MODULE_ID, PROFESSIONS } from "./rules.js";
+import { TOOLS_PATH, itemFolderPath } from "./folders.js";
 
-export const TOOLS_FOLDER = "Gathering Tools";
+export const TOOLS_FOLDER = TOOLS_PATH.at(-1);
 
 const tool = (name, img, text) => Object.freeze({ name, img: `icons/${img}`, text });
 
@@ -28,8 +29,7 @@ export async function buildDefaultTools() {
   const professions = Object.values(PROFESSIONS);
   const missing = professions.filter(profession => DEFAULT_TOOLS[profession.key] && !(profession.tools ?? []).length);
   if (!missing.length) return 0;
-  const folder = Array.from(game.folders ?? []).find(entry => entry.type === "Item" && entry.name === TOOLS_FOLDER && !entry.folder)
-    ?? await Folder.implementation.create({ name: TOOLS_FOLDER, type: "Item" });
+  const folder = await itemFolderPath(TOOLS_PATH);
   const observer = { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER };
   const created = await Item.implementation.create(missing.map(profession => {
     const entry = DEFAULT_TOOLS[profession.key];

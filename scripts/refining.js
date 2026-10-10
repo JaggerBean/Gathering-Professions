@@ -6,6 +6,7 @@ import { MODULE_ID, PROFESSIONS, MAX_REFINE_MINUTES, activeRules, checkFormula, 
 import { actorPerks } from "./perks.js";
 import { getDegreeOfSuccess, naturalMasterful } from "./gathering.js";
 import { MATERIAL_PRESETS, folderPath, worldItem } from "./presets.js";
+import { ITEM_FOLDERS, professionFolder } from "./folders.js";
 import { runActorAction } from "./actions.js";
 import { rollProfessionCheck } from "./checks.js";
 
@@ -36,7 +37,7 @@ const recipe = (tier, output, quantity, inputs) => Object.freeze({ tier, output,
 export const REFINING = Object.freeze({
   mining: Object.freeze({
     verb: "Smelting", action: "Smelt", icon: "fa-fire-burner", requires: ["kctg-5e"], packs: [KCTG],
-    folder: ["Professions", "Mining", "Refined"],
+    folder: ITEM_FOLDERS.mining.refined,
     recipes: Object.freeze([
       recipe(1, "Stone Brick", 1, [["Stone", 3]]),
       recipe(1, "Stone Brick", 1, [["Cobblestones", 2]]),
@@ -71,7 +72,7 @@ export const REFINING = Object.freeze({
   }),
   logging: Object.freeze({
     verb: "Milling", action: "Mill", icon: "fa-tree", requires: ["kctg-5e"], packs: [KCTG],
-    folder: ["Professions", "Timber", "Timber"],
+    folder: ITEM_FOLDERS.logging.refined,
     recipes: Object.freeze([
       recipe(1, "Charcoal", 1, [["Brushwood Bundle", 2]]),
       recipe(1, "Split Bamboo", 3, [["Bamboo", 1]]),
@@ -101,7 +102,7 @@ export const REFINING = Object.freeze({
   skinning: Object.freeze({
     verb: "Tanning", action: "Tan", icon: "fa-scroll", requires: ["kctg-5e", HELIANA],
     packs: [KCTG, `${HELIANA}.beast`, `${HELIANA}.monstrosity`, `${HELIANA}.dragon`],
-    folder: ["Professions", "Skinning", "Refined"],
+    folder: ITEM_FOLDERS.skinning.refined,
     recipes: Object.freeze([
       recipe(1, "Bone Meal", 1, [["Chicken Bones", 2]]),
       recipe(1, "Cured Hide", 1, [["Mole Rat Hide", 2]]),
@@ -136,7 +137,7 @@ export const REFINING = Object.freeze({
   // 2 of a herb make 1 "Dried <herb>".
   herbalism: Object.freeze({
     verb: "Preparation", action: "Prepare", icon: "fa-mortar-pestle", requires: [], packs: [],
-    folder: ["Professions", "Herbalism", "Prepared"], dried: true, recipes: Object.freeze([])
+    folder: ITEM_FOLDERS.herbalism.refined, dried: true, recipes: Object.freeze([])
   })
 });
 
@@ -455,7 +456,7 @@ export async function prepareRefinedItems(professions = refiningProfessions().ma
     const entry = REFINING[profession];
     if (!entry || !PROFESSIONS[profession]) continue;
     const folder = await folderPath(entry.folder);
-    const inputFolder = await folderPath(MATERIAL_PRESETS[profession]?.folder ?? ["Professions", PROFESSIONS[profession].label]);
+    const inputFolder = await folderPath(MATERIAL_PRESETS[profession]?.folder ?? professionFolder(profession, "materials", PROFESSIONS[profession].label));
     const recipes = refiningRecipes(profession);
     const products = new Map(recipes.map(row => [row.output, row]));
     // Inputs that are themselves products (Copper Ingot, Coke) are made below.

@@ -7,6 +7,7 @@
 import { MODULE_ID, PROFESSIONS, materialRule } from "./rules.js";
 import { ensureTierTable, normalizeTable } from "./materials.js";
 import { customItemData } from "./customitems.js";
+import { ITEM_FOLDERS, itemFolderPath } from "./folders.js";
 
 const KCTG = "kctg-5e.kctg-dnd5e";
 const HELIANA = "helianas-harvest-compendium";
@@ -19,8 +20,8 @@ export const MATERIAL_PRESETS = Object.freeze({
     label: "Herbalism: Kris's Trade Goods",
     requires: ["kctg-5e"],
     packs: [KCTG],
-    folder: ["Professions", "Herbalism", "Wild"],
-    rareFolder: ["Rare Finds", "Herbalism"],
+    folder: ITEM_FOLDERS.herbalism.materials,
+    rareFolder: ITEM_FOLDERS.herbalism.rare,
     // Wild herbs, flowers, and mushrooms (crops, seeds, and non-plants excluded).
     materials: Object.freeze({
       1: list("Clover, Dandelion, Chamomile, Wild Mint, Nettle"),
@@ -43,8 +44,8 @@ export const MATERIAL_PRESETS = Object.freeze({
     label: "Mining: Kris's Trade Goods",
     requires: ["kctg-5e"],
     packs: [KCTG],
-    folder: ["Professions", "Mining", "Ores"],
-    rareFolder: ["Rare Finds", "Mining"],
+    folder: ITEM_FOLDERS.mining.materials,
+    rareFolder: ITEM_FOLDERS.mining.rare,
     // Ores and stone as gathering materials; gemstones as rare finds.
     materials: Object.freeze({
       // Rock Salt: a cooking staple (Crafting Professions' Cook).
@@ -68,8 +69,8 @@ export const MATERIAL_PRESETS = Object.freeze({
     label: "Logging: Kris's Trade Goods + forest finds",
     requires: ["kctg-5e"],
     packs: [KCTG],
-    folder: ["Professions", "Timber", "Logs"],
-    rareFolder: ["Rare Finds", "Logging"],
+    folder: ITEM_FOLDERS.logging.materials,
+    rareFolder: ITEM_FOLDERS.logging.rare,
     // Raw wood only (4 per tier): planks, lumber, Charcoal, Pine Tar, and
     // Sandalwood Oil come from refining (milling). Rare finds are tree
     // products, topped up with this module's own forest finds.
@@ -94,8 +95,8 @@ export const MATERIAL_PRESETS = Object.freeze({
     label: "Skinning: Kris's Trade Goods + Heliana's Beasts",
     requires: ["kctg-5e", HELIANA],
     packs: [KCTG, `${HELIANA}.beast`, `${HELIANA}.monstrosity`, `${HELIANA}.dragon`],
-    folder: ["Professions", "Skinning"],
-    rareFolder: ["Rare Finds", "Skinning"],
+    folder: ITEM_FOLDERS.skinning.materials,
+    rareFolder: ITEM_FOLDERS.skinning.rare,
     // Tiers follow creature toughness: small game, livestock and deer, big
     // predators, monsters and giant vermin, dragons. Heliana's type-named parts
     // appear only at the tier of that creature type.
@@ -127,16 +128,8 @@ export function availablePresets() {
     .map(([key, preset]) => ({ key, label: preset.label, profession: preset.profession }));
 }
 
-/** Find or create a nested Item folder path like ["Professions", "Herbalism", "Wild"]. */
-export async function folderPath(names) {
-  let parent = null;
-  for (const name of names) {
-    let folder = Array.from(game.folders ?? []).find(entry => entry.type === "Item" && entry.name === name && (entry.folder?.id ?? entry.folder ?? null) === (parent?.id ?? null));
-    folder ??= await Folder.implementation.create({ name, type: "Item", folder: parent?.id ?? null });
-    parent = folder;
-  }
-  return parent;
-}
+/** Find or create a nested Item folder path like ["Gathering", "Herbalism", "Wild"]. */
+export const folderPath = itemFolderPath;
 
 /**
  * A world Item with this name (preferring one in the target folder), else one

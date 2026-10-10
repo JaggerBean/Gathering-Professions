@@ -2,6 +2,7 @@
 // obtainable from that tier's rare-find table. The GM can rename, re-art, or
 // replace them freely after building; the tables are ordinary RollTables.
 import { MODULE_ID, PROFESSIONS } from "./rules.js";
+import { professionFolder, itemFolderPath } from "./folders.js";
 
 export const RARE_TIERS = 5;
 // dnd5e rarity per tier (display only).
@@ -94,8 +95,7 @@ export function rareFindProfessions() {
 export async function buildRareFinds({ professions = rareFindProfessions(), replace = false } = {}) {
   if (!game.user.isGM) throw new Error("Only the GM may build rare-find tables.");
   const observer = { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER };
-  const [itemRoot, tableRoot] = await Folder.implementation.create([
-    { name: "Rare Finds", type: "Item", color: "#7a4fb0" }, { name: "Rare Finds", type: "RollTable", color: "#7a4fb0" }]);
+  const [tableRoot] = await Folder.implementation.create([{ name: "Rare Finds", type: "RollTable", color: "#7a4fb0" }]);
   const list = Object.values(PROFESSIONS).map(profession => ({ ...profession, rareTables: [...(profession.rareTables ?? [])] }));
   let tableCount = 0, itemCount = 0;
   for (const key of professions) {
@@ -104,7 +104,7 @@ export async function buildRareFinds({ professions = rareFindProfessions(), repl
     const tiers = Array.from({ length: RARE_TIERS }, (_, index) => index)
       .filter(index => replace || !profession.rareTables[index]);
     if (!tiers.length) continue;
-    const [itemFolder] = await Folder.implementation.create([{ name: profession.label, type: "Item", folder: itemRoot.id }]);
+    const itemFolder = await itemFolderPath(professionFolder(key, "rare", profession.label));
     for (const index of tiers) {
       const tier = index + 1;
       const items = await Item.implementation.create(RARE_FINDS[key][index].map(entry => ({
