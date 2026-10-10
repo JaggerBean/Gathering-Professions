@@ -26,14 +26,18 @@ export async function handleActionRequest(actor, request, sender) {
   // Lease mutations are brief. One GM queue prevents competing acquisitions
   // from racing across actor locks and shared party-completion resources.
   return enqueue(authority, "leases", async () => {
-    const lease = actor.getFlag(MODULE_ID, "actionLease");
-    const owns = lease?.id === request.id && lease.user === sender.id;
+    if (!isAuthority()) return;
     let resource = request.resource === "party-bounty" ? request.resource : null;
     if (typeof request.resource === "string" && request.resource.startsWith("gather-node:")) {
       const page = await fromUuid(request.resource.slice("gather-node:".length));
       if (page?.type !== "gatherer.gatherer" || (!sender.isGM && !page.testUserPermission?.(sender, "OBSERVER"))) return;
       resource = request.resource;
     }
+    // UUID resolution and queue waits may outlive this GM's authority. Read
+    // lease state only after those awaits, immediately before its mutation.
+    if (!isAuthority()) return;
+    const lease = actor.getFlag(MODULE_ID, "actionLease");
+    const owns = lease?.id === request.id && lease.user === sender.id;
     const resourceBusy = resource && Array.from(game.actors ?? []).some(other => {
       const held = other.getFlag?.(MODULE_ID, "actionLease");
       return held?.resource === resource && held.expires > Date.now() && !(other.uuid === actor.uuid && owns);

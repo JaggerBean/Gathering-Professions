@@ -38,6 +38,7 @@ const RESULT = Symbol("gatheringProfessionResult");
 const actorQueues = new WeakMap();
 const refundQueues = new WeakMap();
 const gatherContexts = new WeakMap();
+const gatherActorContexts = new WeakMap();
 
 function queueActorTask(actor, task) {
   const previous = actorQueues.get(actor) ?? Promise.resolve();
@@ -372,8 +373,11 @@ function gathererCheck(data) {
       ui.notifications.error(`Profession check failed for ${thing?.item?.name || "a material"}; no item was awarded. Check the browser console.`);
     }
   }
-  data.things = passthrough;
-  Object.defineProperty(data.things, RESULT, { value: { pending } });
+  const context = gatherActorContexts.get(data.actor);
+  // Native Gatherer awards passthrough items before toChat. Hold those too
+  // during leased gathers: no inventory reward may precede the pull commit.
+  data.things = context ? [] : passthrough;
+  Object.defineProperty(data.things, RESULT, { value: { pending, plain: context ? passthrough : undefined } });
 }
 
 async function awardItem(thing, actor) {
@@ -815,11 +819,13 @@ function integrateGatherer() {
       try {
         outcome = await runActorAction(actor, async lease => {
           gatherContexts.set(this, context);
+          gatherActorContexts.set(actor, context);
           try { return await gatherLocked.call(this, args, actor, lease); }
           finally {
             context.releaseRewards(false);
             if (context.completion) await context.completion;
             gatherContexts.delete(this);
+            gatherActorContexts.delete(actor);
           }
         }, { resource: isGathererPage(this.document) ? `gather-node:${this.document.uuid}` : null });
       } catch (error) {
@@ -846,20 +852,28 @@ function integrateGatherer() {
       if (context) context.completion = completion;
       return completion;
     }
+    if (result.completion) return result.completion;
+    const plain = result.plain ?? things;
+    const finishPlain = async () => {
+      if (context) for (const thing of plain) {
+        if (thing.item instanceof CONFIG.Item.documentClass.implementation) await awardItem(thing, actor);
+      }
+      if (plain.length) await originalToChat.call(this, plain, actor);
+    };
     if (!result.pending.length) {
       const finish = async () => {
-        if (things.length) await originalToChat.call(this, things, actor);
-        announceComplete(this, actor, plainResults(things));
+        await finishPlain();
+        announceComplete(this, actor, plainResults(plain));
       };
       const completion = context ? context.rewardsReady.then(ready => ready ? finish() : undefined) : finish();
+      result.completion = completion;
       if (context) context.completion = completion;
       return completion;
     }
-    if (result.completion) return result.completion;
     // Rapid clicks must not read the same old quantity or XP and lose an award.
     const finish = async () => {
-      if (things.length) await originalToChat.call(this, things, actor);
-      const results = plainResults(things);
+      await finishPlain();
+      const results = plainResults(plain);
       for (const pending of result.pending) {
         try { results.push(...await resolveCheck(pending, actor, this, originalToChat)); }
         catch (error) {

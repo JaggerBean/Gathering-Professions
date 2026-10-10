@@ -46,6 +46,25 @@ const documents = new Map([node, otherNode, hiddenNode, textPage].map(page => [p
 globalThis.fromUuid = async uuid => documents.get(uuid) ?? null;
 game.actors = [actor, otherActor];
 const nodeResource = `gather-node:${node.uuid}`;
+// Handover while one request resolves its node also invalidates requests
+// queued behind it on the former GM. Neither may write a stale grant.
+const resolver = globalThis.fromUuid;
+let resumeNode, enteredNode;
+const entered = new Promise(resolve => { enteredNode = resolve; });
+globalThis.fromUuid = uuid => uuid === node.uuid ? new Promise(resolve => {
+  resumeNode = () => resolve(node); enteredNode();
+}) : resolver(uuid);
+const pausedGrant = actions.handleActionRequest(actor, { id: "pausedAuthority", operation: "acquire", resource: nodeResource }, player);
+await entered;
+const queuedGrant = actions.handleActionRequest(otherActor, { id: "queuedAuthority", operation: "acquire", resource: `gather-node:${otherNode.uuid}` }, second);
+const previousGM = game.users.activeGM;
+game.users.activeGM = { id: "newAuthority", isGM: true };
+resumeNode();
+await Promise.all([pausedGrant, queuedGrant]);
+assert.equal(flags.actionLease, undefined, "Former GM cannot grant after asynchronous node resolution");
+assert.equal(otherFlags.actionLease, undefined, "Former GM cannot execute a queued grant after handover");
+game.users.activeGM = previousGM;
+globalThis.fromUuid = resolver;
 await Promise.all([
   actions.handleActionRequest(actor, { id: "nodeFirst", operation: "acquire", resource: nodeResource }, player),
   actions.handleActionRequest(otherActor, { id: "nodeSecond", operation: "acquire", resource: nodeResource }, second)

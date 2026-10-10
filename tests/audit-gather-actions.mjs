@@ -211,6 +211,39 @@ assert.equal(expressionNode.flags.gatherer.data.drawsUsed, 1);
 assert.equal(quantity(expressionActor), 0);
 assert.equal(socketWrites, 0);
 
+// Native unconfigured rewards must be held alongside configured rewards.
+// A rejected GM pull write awards neither; a retry then awards and stacks once.
+const plain = addRecord("Item.plain", { documentName: "Item", name: "Plain Material", type: "loot",
+  system: { quantity: 1 }, flags: {} });
+addRecord("RollTable.mixed", { documentName: "RollTable", replacement: true,
+  results: [result, { documentUuid: plain.uuid, type: "document", weight: 1, getFlag() { return 1; } }] });
+const rejectedActor = actor("rejectedPlain"), rejectedNode = node("rejectedPlain", 3);
+rejectedNode.flags.gatherer.table = "RollTable.mixed";
+const rejectedPage = authority.document(rejectedNode.uuid);
+const updatePage = rejectedPage.update.bind(rejectedPage);
+rejectedPage.update = async changes => {
+  if (Object.hasOwn(changes, "flags.gatherer.data")) throw new Error("Injected pull write rejection");
+  return updatePage(changes);
+};
+const errorsBefore = authority.errors.length;
+await authority.gather(rejectedNode.uuid, rejectedActor.uuid);
+assert.equal(rejectedNode.flags.gatherer.data.drawsUsed, 0);
+assert.equal(rejectedActor.itemUuids.length, 0, "Rejected commit grants no native or configured items");
+assert.match(authority.errors[errorsBefore], /Injected pull write rejection/);
+assert.equal(rejectedActor.flags[GP].actionLease, undefined, "Rejected commit releases its lease");
+assert.equal(Object.values(rejectedNode.flags[GP].gatherReceipts)[0].pulled, false);
+rejectedPage.update = updatePage;
+await authority.gather(rejectedNode.uuid, rejectedActor.uuid);
+assert.equal(rejectedNode.flags.gatherer.data.drawsUsed, 1);
+assert.equal(quantity(rejectedActor), 2);
+assert.equal(records.get(rejectedActor.itemUuids.find(uuid => records.get(uuid).name === plain.name)).system.quantity, 1);
+await authority.gather(rejectedNode.uuid, rejectedActor.uuid);
+assert.equal(rejectedNode.flags.gatherer.data.drawsUsed, 2);
+assert.equal(quantity(rejectedActor), 4);
+assert.equal(records.get(rejectedActor.itemUuids.find(uuid => records.get(uuid).name === plain.name)).system.quantity, 2,
+  "Committed passthrough rewards stack exactly once");
+assert.equal(socketWrites, 0);
+
 // Field Repair shares the same GM-granted actor lease on separate clients.
 const repairer = actor("repairer");
 perk(repairer, { fieldRepairs: 1 });
