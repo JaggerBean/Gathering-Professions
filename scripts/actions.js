@@ -4,6 +4,9 @@ import { MODULE_ID } from "./rules.js";
 
 const local = new Map();
 const authority = new Map();
+const activeActions = new WeakSet();
+const invocations = new Map();
+const localResources = new Map();
 const LEASE_MS = 120000;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const activeGM = () => game.users?.activeGM;
@@ -25,7 +28,12 @@ export async function handleActionRequest(actor, request, sender) {
   return enqueue(authority, "leases", async () => {
     const lease = actor.getFlag(MODULE_ID, "actionLease");
     const owns = lease?.id === request.id && lease.user === sender.id;
-    const resource = request.resource === "party-bounty" ? request.resource : null;
+    let resource = request.resource === "party-bounty" ? request.resource : null;
+    if (typeof request.resource === "string" && request.resource.startsWith("gather-node:")) {
+      const page = await fromUuid(request.resource.slice("gather-node:".length));
+      if (page?.type !== "gatherer.gatherer" || (!sender.isGM && !page.testUserPermission?.(sender, "OBSERVER"))) return;
+      resource = request.resource;
+    }
     const resourceBusy = resource && Array.from(game.actors ?? []).some(other => {
       const held = other.getFlag?.(MODULE_ID, "actionLease");
       return held?.resource === resource && held.expires > Date.now() && !(other.uuid === actor.uuid && owns);
@@ -54,11 +62,18 @@ export function registerActionHooks() {
 /** Serialize an entire action, including its prerequisites, costs and rewards. */
 export function runActorAction(actor, task, { resource = null } = {}) {
   if (!actor || !(game.user.isGM || actor.isOwner)) return Promise.reject(new Error("Choose a character you own."));
+  const invocation = invocations.get(actor);
+  if (invocation && activeActions.has(invocation)) return Promise.resolve().then(() => task(invocation));
   return enqueue(local, actor.uuid ?? actor, async () => {
     // Isolated/offline GM operations need no remote lease. Players fail closed.
     if (!activeGM()) {
       if (!game.user.isGM) throw new Error("An active GM is required for profession actions.");
-      return task();
+      const execute = async () => {
+        const context = { actor, id: null, resource };
+        activeActions.add(context);
+        try { return await task(context); } finally { activeActions.delete(context); }
+      };
+      return resource ? enqueue(localResources, resource, execute) : execute();
     }
     const id = foundry.utils.randomID();
     const send = async operation => {
@@ -76,7 +91,19 @@ export function runActorAction(actor, task, { resource = null } = {}) {
       await sleep(400);
     }
     const heartbeat = setInterval(() => void send("renew").catch(error => console.error(`${MODULE_ID}: could not renew action lock`, error)), 20000);
-    try { return await task(); }
-    finally { clearInterval(heartbeat); await send("release"); }
+    const context = { actor, id, resource };
+    activeActions.add(context);
+    try { return await task(context); }
+    finally { activeActions.delete(context); clearInterval(heartbeat); await send("release"); }
   });
+}
+
+/** Reuse a held lease for one synchronous entry into an existing action helper.
+ * The scope ends before its promise runs, so unrelated queued actions cannot bypass it. */
+export function withActorActionLease(actor, context, callback) {
+  if (context?.actor !== actor || !activeActions.has(context)) throw new Error("The profession action lease is no longer held.");
+  const previous = invocations.get(actor);
+  invocations.set(actor, context);
+  try { return callback(); }
+  finally { if (previous) invocations.set(actor, previous); else invocations.delete(actor); }
 }

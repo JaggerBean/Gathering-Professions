@@ -653,10 +653,14 @@ async function craftRecipeUnlocked(actor, id, batch = 1, { addXp }) {
 /* ---------------------------------------------------------------------- */
 
 /** Queue finished goods for later delivery (shared with crafting modules). */
-export async function queueJob(actor, job) {
+export async function queueJob(actor, job, { updates = null, deliver = false } = {}) {
   const id = foundry.utils.randomID();
   const record = { ...job, id };
-  await actor.setFlag(MODULE_ID, `refiningJobs.${id}`, record);
+  // Callers holding the actor lease can commit eligibility/progression with
+  // the reward record. A failed commit leaves neither half of the action saved.
+  if (updates) await actor.update({ ...updates, [`flags.${MODULE_ID}.refiningJobs.${id}`]: record });
+  else await actor.setFlag(MODULE_ID, `refiningJobs.${id}`, record);
+  if (deliver) await deliverJob(actor, record);
   return record;
 }
 
@@ -665,27 +669,35 @@ export function actorJobs(actor) {
     .sort((a, b) => a.ready - b.ready);
 }
 
+/** Settle one persisted job while the caller holds the actor lease. */
+async function deliverJob(actor, job) {
+  const path = `flags.${MODULE_ID}.refiningJobs.${job.id}`;
+  if (job.gold && !job.goldDelivered) await actor.update({
+    "system.currency.gp": (Number(actor.system?.currency?.gp) || 0) + Math.round(job.gold),
+    [`${path}.goldDelivered`]: true
+  });
+  if (job.data && !job.itemDelivered) {
+    // Retain compatibility with jobs delivered before persistent receipts.
+    const existing = Array.from(actor.items).some(item => item.getFlag?.(MODULE_ID, "deliveryJob") === job.id);
+    if (!existing) {
+      const data = structuredClone(job.data);
+      delete data._id; delete data.folder; delete data.ownership;
+      foundry.utils.setProperty(data, "system.quantity", job.quantity);
+      foundry.utils.setProperty(data, `flags.${MODULE_ID}.deliveryJob`, job.id);
+      await actor.createEmbeddedDocuments("Item", [data]);
+    }
+    // The actor receipt survives consumption, transfer, and failed job removal.
+    await actor.update({ [`${path}.itemDelivered`]: true });
+  }
+  await actor.update({ [`flags.${MODULE_ID}.refiningJobs.-=${job.id}`]: null });
+}
+
 /** Deliver the actor's finished jobs. Returns the delivered jobs. */
 export function deliverDueJobs(actor, now = game.time?.worldTime ?? 0) {
   return runActorAction(actor, async () => {
     const delivered = [];
     for (const job of actorJobs(actor).filter(job => job.ready <= now)) {
-      const path = `flags.${MODULE_ID}.refiningJobs.${job.id}`;
-      // Gold and its receipt are stored in the same Actor update. A retry never
-      // pays twice even if item delivery or removing the job subsequently fails.
-      if (job.gold && !job.goldDelivered) await actor.update({
-        "system.currency.gp": (Number(actor.system?.currency?.gp) || 0) + Math.round(job.gold),
-        [`${path}.goldDelivered`]: true
-      });
-      if (job.data && !Array.from(actor.items).some(item => item.getFlag?.(MODULE_ID, "deliveryJob") === job.id)) {
-        const data = structuredClone(job.data);
-        delete data._id; delete data.folder; delete data.ownership;
-        foundry.utils.setProperty(data, "system.quantity", job.quantity);
-        foundry.utils.setProperty(data, `flags.${MODULE_ID}.deliveryJob`, job.id);
-        // Do not stack until settled: the embedded Item itself is the receipt.
-        await actor.createEmbeddedDocuments("Item", [data]);
-      }
-      await actor.update({ [`flags.${MODULE_ID}.refiningJobs.-=${job.id}`]: null });
+      await deliverJob(actor, job);
       delivered.push(job);
     }
     if (delivered.length) ui.notifications.info(`${actor.name}: ${delivered.map(job => job.gold && !job.data ? `${job.gold} gp (${job.name})` : `${job.quantity} ${job.name}`).join(", ")} ready.`);
