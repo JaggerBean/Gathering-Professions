@@ -678,13 +678,25 @@ async function deliverJob(actor, job) {
   });
   if (job.data && !job.itemDelivered) {
     // Retain compatibility with jobs delivered before persistent receipts.
-    const existing = Array.from(actor.items).some(item => item.getFlag?.(MODULE_ID, "deliveryJob") === job.id);
+    const owners = new Set([actor, ...Array.from(game.actors ?? [])]);
+    const wasCreated = () => [...owners].some(owner => Array.from(owner.items ?? []).some(item => item.getFlag?.(MODULE_ID, "deliveryJob") === job.id));
+    const existing = wasCreated();
     if (!existing) {
+      // A failed receipt write followed by consumption is ambiguous. Keep the
+      // job for GM reconciliation rather than manufacturing a second reward.
+      if (job.itemDeliveryStarted) throw new Error(`${actor.name}: delivery of ${job.name} needs GM reconciliation; its item receipt was interrupted.`);
+      await actor.update({ [`${path}.itemDeliveryStarted`]: true });
       const data = structuredClone(job.data);
       delete data._id; delete data.folder; delete data.ownership;
       foundry.utils.setProperty(data, "system.quantity", job.quantity);
       foundry.utils.setProperty(data, `flags.${MODULE_ID}.deliveryJob`, job.id);
-      await actor.createEmbeddedDocuments("Item", [data]);
+      try { await actor.createEmbeddedDocuments("Item", [data]); }
+      catch (error) {
+        // A rejected creation with no document can retry. If a document did
+        // arrive despite the rejection, preserve evidence of that delivery.
+        if (!wasCreated()) await actor.update({ [`${path}.itemDeliveryStarted`]: false });
+        throw error;
+      }
     }
     // The actor receipt survives consumption, transfer, and failed job removal.
     await actor.update({ [`${path}.itemDelivered`]: true });
