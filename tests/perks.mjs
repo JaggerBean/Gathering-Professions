@@ -235,4 +235,22 @@ assert.equal(assist.findAssist(gatherer, page), null, "Used up");
   assert.deepEqual([skillPerk("deepReserves").extraAttempts, skillPerk("secondWind").secondWind, skillPerk("luckyStrike").naturalRefund], [1, 1, true]);
 }
 
+// --- Locked-out skills: who locks them out ---------------------------------------
+{
+  const lock = await import("../scripts/tree-lockouts.js");
+  const page = (uuid, name, lockoutSkills = [], points = 1) => ({ uuid, name, flags: { "skill-tree": { lockoutSkills, points } } });
+  const abundance = page("P.abundance", "Abundance", ["P.careful"]);
+  const careful = page("P.careful", "Careful Selection", ["P.abundance"]);
+  const harvester = page("P.harvester", "Master Harvester", ["P.favour", "P.artisan"], 2);
+  const favour = page("P.favour", "Fortune's Favour", ["P.harvester"], 2);
+  const artisan = page("P.artisan", "Master Artisan", [], 2);
+  const treeDoc = { pages: [abundance, careful, harvester, favour, artisan] };
+  const learner = { flags: { "skill-tree": { skills: [{ uuid: "P.careful", points: 1 }, { uuid: "P.favour", points: 2 }, { uuid: "P.artisan", points: 1 }] } } };
+  assert.deepEqual(lock.lockersFor(abundance, treeDoc, learner).map(entry => entry.name), ["Careful Selection"]);
+  assert.deepEqual(lock.lockersFor(harvester, treeDoc, learner).map(entry => entry.name), ["Fortune's Favour"], "Half-learned capstones do not lock");
+  assert.deepEqual(lock.lockersFor(artisan, treeDoc, learner).map(entry => entry.name), [], "A one-way lockout listed on the other page does not count until learned");
+  assert.equal(lock.lockoutMessage(abundance, [careful]), "Abundance is locked out by Careful Selection.");
+  assert.equal(lock.lockoutMessage(harvester, [favour, artisan]), "Master Harvester is locked out by Fortune's Favour and Master Artisan.");
+}
+
 console.log("PASS: perks — validation, totals, caps, check math, rest uses, degrees, odds, tree layout, sensing, assist, 0.31.0 skills.");

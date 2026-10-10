@@ -9,6 +9,7 @@ import { PERK_EFFECTS, readPerk } from "./perks.js";
 import { toolDurability } from "./durability.js";
 import { getToolLibrary } from "./nodes.js";
 import { gpDialog } from "./dialogs.js";
+import { addLockoutHints } from "./tree-lockouts.js";
 
 const Dialog = () => gpDialog();
 const escape = value => String(value ?? "").replace(/[&<>"']/g, character => ({
@@ -460,6 +461,7 @@ export function registerUIHooks() {
   Hooks.on("renderApplicationV2", (app, html) => {
     if (app instanceof foundry.applications.sidebar.tabs.ItemDirectory) addManagerButton(app, html);
     addSkillResetButton(app, html);
+    addLockoutHints(app, globalThis.HTMLElement && html instanceof HTMLElement ? html : html?.[0]);
   });
   const directory = ui.items;
   if (directory) {
