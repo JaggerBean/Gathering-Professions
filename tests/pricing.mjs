@@ -6,7 +6,7 @@ globalThis.Hooks = { on() {}, once() {}, callAll() {} };
 globalThis.game = { settings: { get() { return undefined; } }, modules: new Map() };
 const pricing = await import("../scripts/pricing.js");
 
-// Tidy prices: cp under 1 sp, sp under 1 gp, ½ gp steps under 10 gp, whole gp above.
+// Tidy prices: upward whole-silver rounding at all price levels.
 assert.deepEqual(pricing.tidyPrice(0.034), { value: 1, denomination: "sp" }, "Silver and gold only: at least 1 sp");
 assert.deepEqual(pricing.tidyPrice(0.004), { value: 1, denomination: "sp" }, "Never rounds a priced item to nothing");
 assert.deepEqual(pricing.tidyPrice(0.46), { value: 5, denomination: "sp" });
@@ -16,7 +16,7 @@ assert.deepEqual(pricing.tidyPrice(38.71), { value: 38.8, denomination: "gp" });
 assert.deepEqual(pricing.tidyPrice(0.1 + 0.2), { value: 3, denomination: "sp" }, "Floating point noise does not add a silver");
 assert.deepEqual(pricing.tidyPrice(0), { value: 0, denomination: "gp" });
 assert.equal(pricing.priceInGp({ value: 5, denomination: "sp" }), 0.5);
-// Book prices halved: longsword 15 gp → 7 gp 5 sp, plate 1,500 → 750, rope 1 gp → 5 sp, 1 cp stays 1 cp.
+// Book prices halved: longsword 15 gp → 7 gp 5 sp, plate 1,500 → 750, rope 1 gp → 5 sp; minimum 1 sp.
 assert.deepEqual(pricing.campaignPrice({ value: 15, denomination: "gp" }), { value: 7.5, denomination: "gp" });
 assert.deepEqual(pricing.campaignPrice({ value: 1500, denomination: "gp" }), { value: 750, denomination: "gp" });
 assert.deepEqual(pricing.campaignPrice({ value: 1, denomination: "gp" }), { value: 5, denomination: "sp" });
@@ -32,7 +32,7 @@ assert.deepEqual([spread.get("b"), spread.get("a")], [1, 3]);
 assert.equal(spread.get("c"), spread.get("d"));
 assert.ok(spread.get("c") > 1 && spread.get("c") < 3);
 assert.ok(Math.abs(pricing.spreadInBand([{ key: "x", old: 9 }], [1, 4]).get("x") - 2) < 1e-9, "Geometric middle");
-// Refined goods: ingredients + 25%, chained (ore → ingot → tool), cheapest recipe wins.
+// Refined goods: ingredients + 25%, rounded/chained; highest-cost recipe establishes the minimum.
 const costs = pricing.recipeCosts([
   { output: "Copper Ingot", quantity: 1, inputs: [["Copper Ore", 2], ["Coal", 1]] },
   { output: "Pick", quantity: 1, inputs: [["Copper Ingot", 2]] },
