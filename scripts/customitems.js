@@ -7,6 +7,12 @@ const item = (img, price, rarity, description) => Object.freeze({ img, price, ra
 
 export const CUSTOM_ITEMS = Object.freeze({
   // Logging rare finds.
+  "Knotted Luckwood": item("icons/commodities/wood/log-cut-cherry-brown.webp", 2, "uncommon",
+    "A palm-sized twist of wood grown around itself in a perfect knot. Woodcutters keep one in a pocket for luck and swear the axe never slips while they do."),
+  "Amberdrop Resin": item("icons/commodities/gems/gem-rough-cushion-orange.webp", 1.5, "uncommon",
+    "A bead of fresh, honey-coloured resin that hardened on the bark overnight. It smells of pine and summer, and burns with a clean, sweet smoke."),
+  "Ironbark Strip": item("icons/commodities/wood/bark-brown.webp", 5, "uncommon",
+    "A strip of bark so dense it dulls a knife. Shield-makers rivet it over a boss, and it turns arrows better than boiled leather."),
   "Birch Bark Roll": item("icons/commodities/wood/bark-beige.webp", 0.5, "common",
     "A long curl of papery birch bark peeled in one piece. Woodsfolk write on it, roof shelters with it, and light fires with it even when it is wet."),
   "Knotwood Burl": item("icons/commodities/wood/log-cut-cherry-brown.webp", 5, "uncommon",

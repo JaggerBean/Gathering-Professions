@@ -6,7 +6,7 @@
 // other compendium items are halved once. Skill items and the Unused folder
 // are left alone. Idempotent: running it again changes nothing.
 import { MODULE_ID, PROFESSIONS } from "./rules.js";
-import { MATERIAL_BANDS, RARE_BANDS, PRICED_FLAG, priceInGp, tidyPrice, campaignPrice, spreadInBand, recipeCosts } from "./pricing.js";
+import { MATERIAL_BANDS, RARE_BANDS, PRICED_FLAG, STANDARD_PRICES, priceInGp, tidyPrice, campaignPrice, oddCoin, spreadInBand, recipeCosts } from "./pricing.js";
 import { allRecipes } from "./refining.js";
 
 export const TOOL_PRICE = 1;
@@ -78,6 +78,9 @@ export async function repriceWorld({ dryRun = false } = {}) {
     const extra = await contribute(new Map(prices), helpers);
     for (const [name, gp] of extra ?? []) prices.set(name, gp);
   }
+  // Standard gear priced by type; crafted goods keep their recipe price.
+  const crafted = new Set(prices.keys());
+  for (const [name, gp] of Object.entries(STANDARD_PRICES)) if (!crafted.has(name)) prices.set(name, gp);
   // World items: named prices, else halve unpriced compendium items once.
   const world = [];
   const ratioByName = new Map();
@@ -90,6 +93,8 @@ export async function repriceWorld({ dryRun = false } = {}) {
       const book = await bookPrice(item);
       if (book) target = campaignPrice(book);
     }
+    // Silver and gold only.
+    if (!target && oddCoin(before)) target = tidyPrice(priceInGp(before));
     if (!target) continue;
     const from = priceInGp(before), to = priceInGp(target);
     if (from !== to || !item.getFlag(MODULE_ID, PRICED_FLAG)) {
@@ -108,14 +113,16 @@ export async function repriceWorld({ dryRun = false } = {}) {
       const current = priceInGp(item.system?.price);
       let to = null;
       if (ratio) to = ratio.from ? current * (ratio.to / ratio.from) : ratio.to;
+      else if (current && STANDARD_PRICES[item.name] !== undefined && !crafted.has(item.name)) to = STANDARD_PRICES[item.name];
       else if (!item.getFlag(MODULE_ID, PRICED_FLAG) && current && prices.has(base)) to = prices.get(base);
       else if (!item.getFlag(MODULE_ID, PRICED_FLAG) && current) {
         const book = await bookPrice(item);
         if (book) to = priceInGp(campaignPrice(book));
       }
+      if (to === null && oddCoin(item.system?.price)) to = current;
       if (to === null) continue;
       const target = tidyPrice(to);
-      if (priceInGp(target) === current && item.getFlag(MODULE_ID, PRICED_FLAG)) continue;
+      if (priceInGp(target) === current && item.getFlag(MODULE_ID, PRICED_FLAG) && !oddCoin(item.system?.price)) continue;
       actorPlan.push({ actor, item, name: `${actor.name}: ${item.name}`, from: current, to: priceInGp(target), changes: { "system.price": target, [`flags.${MODULE_ID}.${PRICED_FLAG}`]: { book: item.getFlag(MODULE_ID, PRICED_FLAG)?.book ?? null } } });
     }
   }

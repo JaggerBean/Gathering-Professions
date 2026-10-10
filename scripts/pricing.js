@@ -1,7 +1,8 @@
 // Campaign pricing (0.32.0, user-approved): gold is worth twice the standard
 // (a skilled hireling earns 1 gp a day), so book prices are halved, and the
 // module's own goods follow tier bands matched to bounty pay.
-//   Materials (per unit):  T1 5 cp–1.5 sp · T2 1.5–4.5 sp · T3 5 sp–1.5 gp · T4 2–6 gp · T5 7.5–22.5 gp
+// Only silver and gold are used (0.32.1): nothing costs less than 1 sp.
+//   Materials (per unit):  T1 1–2 sp · T2 1.5–4.5 sp · T3 5 sp–1.5 gp · T4 2–6 gp · T5 7.5–22.5 gp
 //   Rare finds:            T1 1–3 gp · T2 3–8 · T3 8–20 · T4 20–50 · T5 50–100 gp
 //   Refined goods:         ingredients + 25% (per unit made)
 // Within a band, items keep their old order (cheapest old price at the bottom).
@@ -10,7 +11,7 @@
 import { MODULE_ID } from "./rules.js";
 
 export const PRICE_FACTOR = 0.5;
-export const MATERIAL_BANDS = Object.freeze([[0.05, 0.15], [0.15, 0.45], [0.5, 1.5], [2, 6], [7.5, 22.5]]);
+export const MATERIAL_BANDS = Object.freeze([[0.1, 0.2], [0.15, 0.45], [0.5, 1.5], [2, 6], [7.5, 22.5]]);
 export const RARE_BANDS = Object.freeze([[1, 3], [3, 8], [8, 20], [20, 50], [50, 100]]);
 export const REFINED_MARGIN = 1.25;
 export const PRICED_FLAG = "campaignPrice";
@@ -23,15 +24,42 @@ export function priceInGp(price) {
   return Number.isFinite(value) && value > 0 ? value * (RATE[price?.denomination ?? "gp"] ?? 1) : 0;
 }
 
-/** A gp amount as a tidy dnd5e price: cp under 1 sp, sp under 1 gp, then gp (½ gp steps under 10, whole above). */
+/** A gp amount as a tidy dnd5e price in silver or gold only: sp under 1 gp (at least 1 sp), then gp (½ gp steps under 10, whole above). */
 export function tidyPrice(gp) {
   const amount = Math.max(0, Number(gp) || 0);
   if (!amount) return { value: 0, denomination: "gp" };
-  if (amount < 0.1) return { value: Math.max(1, Math.round(amount * 100)), denomination: "cp" };
   if (amount < 1) return { value: Math.max(1, Math.round(amount * 10)), denomination: "sp" };
   if (amount < 10) return { value: Math.round(amount * 2) / 2, denomination: "gp" };
   return { value: Math.round(amount), denomination: "gp" };
 }
+
+/** True when a price uses a coin the campaign doesn't (cp, ep, pp). */
+export const oddCoin = price => Boolean(Number(price?.value)) && !["gp", "sp"].includes(price?.denomination ?? "gp");
+
+/**
+ * Campaign prices (gp) for standard gear by name, set by type rather than a flat
+ * half (user, 0.32.1). Used for items in inventories and any future item with
+ * the name. Crafted goods (daggers, arrows, spears…) are priced from recipes.
+ */
+export const STANDARD_PRICES = Object.freeze({
+  // Weapons
+  "Crossbow, Hand": 35, "Hand Crossbow": 35, "Crossbow, Light": 12, "Light Crossbow": 12, "Crossbow, Heavy": 25, "Heavy Crossbow": 25,
+  "Longbow": 25, "Shortbow": 12, "Rapier": 12, "Scimitar": 12, "Shortsword": 5, "Longsword": 7.5, "Battleaxe": 5, "Greataxe": 15, "Greatsword": 25,
+  "Warhammer": 7.5, "Mace": 2.5, "Quarterstaff": 0.2, "Club": 0.1, "Whip": 1, "Javelin": 0.3, "Sling": 0.1,
+  // Armour
+  "Padded": 2.5, "Padded Armor": 2.5, "Leather": 5, "Leather Armor": 5, "Studded Leather": 22, "Studded Leather Armor": 22, "Hide": 5, "Hide Armor": 5,
+  "Chain Shirt": 25, "Scale Mail": 25, "Breastplate": 200, "Half Plate": 375, "Half Plate Armor": 375, "Ring Mail": 15, "Chain Mail": 40, "Splint": 100, "Splint Armor": 100,
+  "Plate": 750, "Plate Armor": 750, "Shield": 5,
+  // Instruments and tools
+  "Fiddle": 12, "Viol": 15, "Lute": 17, "Flute": 1, "Pan Flute": 6, "Drum": 3, "Horn": 1.5, "Lyre": 15, "Bagpipes": 15,
+  "Thieves' Tools": 12, "Herbalism Kit": 2.5, "Healer's Kit": 2.5, "Disguise Kit": 12, "Navigator's Tools": 12,
+  // Adventuring gear and clothing
+  "Backpack": 1, "Bedroll": 0.5, "Blanket": 0.3, "Tinderbox": 0.3, "Waterskin": 0.1, "Oil": 0.1, "Flask of Oil": 0.1, "Lamp": 0.3, "Bullseye Lantern": 5,
+  "Hooded Lantern": 2.5, "Crowbar": 1, "Hammer": 0.5, "Piton": 0.1, "Pouch": 0.3, "Quiver": 0.5, "Bell": 0.5, "Mirror": 3, "Steel Mirror": 3, "Signet Ring": 3,
+  "Sprig of Mistletoe": 0.5, "Traveler's Clothes": 1, "Clothes, Traveler's": 1, "Common Clothes": 0.3, "Clothes, Common": 0.3, "Fine Clothes": 8, "Clothes, Fine": 8,
+  "Costume": 2, "Costume Clothes": 2, "Robe": 0.5, "Robes": 0.5, "Candle": 0.1, "Chalk": 0.1, "Ink": 5, "Paper": 0.1, "Parchment": 0.1, "Soap": 0.1,
+  "Torch": 0.1, "Rations": 0.3, "Burger": 0.1
+});
 
 /** Half (PRICE_FACTOR) of a book price, tidied; free stays free. */
 export const campaignPrice = (price, factor = PRICE_FACTOR) => tidyPrice(priceInGp(price) * factor);
@@ -92,12 +120,17 @@ const compendiumSource = data => data?._stats?.compendiumSource || data?.flags?.
  * once. Items already flagged keep their price (copies between actors).
  */
 export function priceOnCreate(item, data) {
-  if (data?.flags?.[MODULE_ID]?.[PRICED_FLAG]) return;
-  const source = compendiumSource(data);
-  if (!source.startsWith("Compendium.")) return;
   const price = foundry.utils.getProperty(data, "system.price");
+  if (data?.flags?.[MODULE_ID]?.[PRICED_FLAG]) {
+    if (oddCoin(price)) item.updateSource({ "system.price": tidyPrice(priceInGp(price)) });
+    return;
+  }
   if (!price || !priceInGp(price)) return;
-  item.updateSource({ "system.price": campaignPrice(price), [`flags.${MODULE_ID}.${PRICED_FLAG}`]: { book: { value: price.value, denomination: price.denomination ?? "gp" } } });
+  const book = { value: price.value, denomination: price.denomination ?? "gp" };
+  const standard = STANDARD_PRICES[data?.name];
+  if (standard !== undefined) return item.updateSource({ "system.price": tidyPrice(standard), [`flags.${MODULE_ID}.${PRICED_FLAG}`]: { book } });
+  if (compendiumSource(data).startsWith("Compendium.")) return item.updateSource({ "system.price": campaignPrice(price), [`flags.${MODULE_ID}.${PRICED_FLAG}`]: { book } });
+  if (oddCoin(price)) item.updateSource({ "system.price": tidyPrice(priceInGp(price)) });
 }
 
 export function registerPricingHooks() {

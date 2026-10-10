@@ -75,16 +75,17 @@ export const MATERIAL_PRESETS = Object.freeze({
     // Sandalwood Oil come from refining (milling). Rare finds are tree
     // products, topped up with this module's own forest finds.
     materials: Object.freeze({
-      1: list("Brushwood Bundle, Bamboo, Cedar Log, Pine Log"),
-      2: list("Hickory Log, Birch Log, Maple Log, Fir Log"),
+      // Nuts are gathered too (0.32.1; Acorns feed the Cook's Acorn Bread).
+      1: list("Brushwood Bundle, Bamboo, Cedar Log, Pine Log, Acorns, Cobnut"),
+      2: list("Hickory Log, Birch Log, Maple Log, Fir Log, Hazelnut"),
       3: list("Oak Log, Teak Log, Redwood Log, Retama"),
       4: list("Poplar Log, Aspen Log, Palo Verde, Ironwood Log"),
       5: list("Walnut Log, Sandalwood Log, Mahogany Log, Darkwood")
     }),
     baseYield: Object.freeze({ 1: "1d3", 2: "1d2", 3: "1d2", 4: "1", 5: "1" }),
     rare: Object.freeze({
-      1: list("Acorns, Cobnut, Maple Seeds"),
-      2: list("Hazelnut, Mistletoe, Birch Bark Roll"),
+      1: list("Maple Seeds, Knotted Luckwood, Amberdrop Resin"),
+      2: list("Ironbark Strip, Mistletoe, Birch Bark Roll"),
       3: list("Vertugal, Honey, Knotwood Burl"),
       4: list("Maple Sap, Petrified Heartwood, Golden Resin Tear"),
       5: list("Elderwood Heartcore, Lightning-Struck Ironbark, Seed of the Old Grove")
