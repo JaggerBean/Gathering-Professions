@@ -31,7 +31,7 @@ import { registerPricingHooks, MATERIAL_BANDS, RARE_BANDS, PRICE_FACTOR, campaig
 import { repriceWorld, registerPriceContributor } from "./repricing.js";
 
 // Bump when campaign pricing changes: the active GM reprices the world once.
-const PRICING_VERSION = 1;
+const PRICING_VERSION = 2;
 
 const RESULT = Symbol("gatheringProfessionResult");
 const actorQueues = new WeakMap();

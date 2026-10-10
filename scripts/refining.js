@@ -13,7 +13,7 @@ import { rollProfessionCheck } from "./checks.js";
 const KCTG = "kctg-5e.kctg-dnd5e";
 const HELIANA = "helianas-harvest-compendium";
 // Bump when recipes or generated items change: the GM prepares items again.
-export const REFINING_VERSION = 2;
+export const REFINING_VERSION = 3;
 export { REFINE_MINUTES } from "./rules.js";
 
 /** Minutes per unit: the recipe's own time, else the tier default (Rules). */
@@ -80,6 +80,10 @@ export const REFINING = Object.freeze({
       recipe(1, "Pine Plank", 2, [["Pine Log", 1]]),
       recipe(1, "Pine Tar", 1, [["Pine Log", 2]]),
       recipe(1, "Charcoal", 2, [["Pine Log", 1]]),
+      // Gathered nuts (0.32.1).
+      recipe(1, "Acorn Meal", 1, [["Acorns", 3]]),
+      recipe(1, "Roasted Cobnuts", 2, [["Cobnut", 2]]),
+      recipe(2, "Hazelnut Oil", 1, [["Hazelnut", 3]]),
       recipe(2, "Hickory Plank", 2, [["Hickory Log", 1]]),
       recipe(2, "Birch Plank", 2, [["Birch Log", 1]]),
       recipe(2, "Maple Lumber", 2, [["Maple Log", 1]]),
@@ -145,6 +149,9 @@ const gen = (from, factor, text) => Object.freeze({ from, factor, text });
 // Refined goods no compendium has: created from their source Item (icon,
 // type) with a new name, price = source price × factor, and this text.
 export const GENERATED = Object.freeze({
+  "Acorn Meal": gen("Acorns", 2, "Acorns shelled, leached of their bitterness in running water, dried and ground into a coarse, nutty meal for bread and porridge."),
+  "Roasted Cobnuts": gen("Cobnut", 2, "Cobnuts roasted in their shells over embers until they split. They keep for weeks and make a filling handful on the road."),
+  "Hazelnut Oil": gen("Hazelnut", 3, "A small flask of golden oil pressed from roasted hazelnuts. Cooks prize its flavour; leatherworkers use it to keep straps supple."),
   "Coke": gen("Coal", 4, "Coal baked in a closed kiln until only hard, grey, porous lumps remain. It burns hotter and cleaner than coal; smiths need it for steel and rare metals."),
   "Tin Ingot": gen("Tin", 3, "A soft, silvery bar of smelted tin, ready to alloy with copper into bronze."),
   "Marble Slab": gen("Marble", 2, "Marble cut square and rubbed smooth, ready for a mason's chisel."),
