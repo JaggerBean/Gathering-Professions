@@ -188,6 +188,7 @@ const last = node("last", 1);
 const watchdog = setTimeout(() => { console.error("Gather timeout", first.flags, second.flags, last.flags, authority.errors, playerClient.errors); process.exit(1); }, 15000);
 await Promise.all([authority.gather(last.uuid, first.uuid), playerClient.gather(last.uuid, second.uuid)]);
 clearTimeout(watchdog);
+await delay(); // The owner request resolves before the GM's release update broadcasts.
 assert.equal(last.flags.gatherer.data.drawsUsed, 1);
 assert.equal(quantity(first) + quantity(second), 2);
 assert.equal(socketWrites, 0, "Gatherer's unawaited socket writes are suppressed");
