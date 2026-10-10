@@ -2,7 +2,7 @@
   "id": "gathering-professions",
   "title": "Gathering Professions",
   "description": "Profession progression, material checks, Skill Tree perks, rare finds, and a gathering node builder for Gatherer 5.",
-  "version": "0.30.1",
+  "version": "0.31.0",
   "authors": [
     {
       "name": "JaggerBean"
