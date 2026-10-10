@@ -1,11 +1,11 @@
 // Player-facing gathering window: node banner and flavor, discovered yields,
 // character readiness with success chance, and an animated result reveal.
 import { MODULE_ID, PROFESSIONS, ABILITY_LABELS, RANK_DIE, materialRule, checkFormula, rankForActor, activeRules, selectedProfession, professionFlag } from "./rules.js";
-import { actorPerks, applyPerksToCheck, relievedMultiplier, masterfulLeft } from "./perks.js";
+import { actorPerks, applyPerksToCheck, relievedMultiplier, masterfulLeft, restUsesLeft, withMomentum, momentumBonus, familiarReduction, familiarBiome } from "./perks.js";
 import { assistPower, assistLabel, activeOffer, findAssist, offerAssist, withdrawAssist } from "./assist.js";
-import { durabilityLabel } from "./durability.js";
-import { NODE_DEFAULTS, readNode, pageProfessions, nodeUsage, isDepleted, nodeGate, applyNodeCheck, bestTool, matchingTools, nodeTools, requiredTools, toolNames, resetNodes, setNodeHidden, pinsFor } from "./nodes.js";
-import { currentConditions, nodeScene, conditionChips, weightMultiplier, rulesFor, abundance, conditionDcModifier, missShare } from "./conditions.js";
+import { durabilityLabel, toolDurability } from "./durability.js";
+import { NODE_DEFAULTS, readNode, pageProfessions, nodeUsage, isDepleted, lastPullHolder, nodeGate, applyNodeCheck, bestTool, matchingTools, nodeTools, requiredTools, toolNames, resetNodes, setNodeHidden, pinsFor } from "./nodes.js";
+import { currentConditions, nodeScene, conditionChips, weightMultiplier, rulesFor, abundance, conditionDcModifier, missShare, getBiomes } from "./conditions.js";
 import { gatheringAllowance } from "./gather-limits.js";
 import { escape, nodeMaterials, openNodeManager } from "./node-ui.js";
 
@@ -113,13 +113,14 @@ export function buildGatherModel(page, actor, { isGM = false } = {}) {
   const rank = professionKey ? rankForActor(actor, professionKey) : 0;
   const assist = findAssist(actor, page);
   const base = profession ? checkFormula(actor, professionKey, xpOf(actor, professionKey), 0, {}) : null;
-  const check = base ? applyPerksToCheck(applyNodeCheck(base, actor, node, professionKey), perks, assist) : null;
+  const check = base ? applyPerksToCheck(applyNodeCheck(base, actor, node, professionKey), withMomentum(actor, perks), assist) : null;
   const chances = materials.filter(material => material.rule && material.multiplier > 0).map(material => {
     const rule = material.rule;
     const materialPerks = actorPerks(actor, rule.profession);
     const nodeCheck = applyNodeCheck(checkFormula(actor, rule.profession, xpOf(actor, rule.profession), rule.dc, rule), actor, node, rule.profession);
     nodeCheck.target += conditionDcModifier(conditions, rule.profession, { ignorePenalties: materialPerks.ignoreConditionDc }).total;
-    const result = applyPerksToCheck(nodeCheck, materialPerks, assist);
+    nodeCheck.target -= familiarReduction(actor, materialPerks, conditions);
+    const result = applyPerksToCheck(nodeCheck, withMomentum(actor, materialPerks), assist);
     return successChance(result.modifier + (result.toolBonus || 0) + result.perkFlat + result.assistFlat, result.trained ? result.die : 0, result.target, result.extraDice);
   });
   const gateProfessions = pageProfessions(page, node);
@@ -153,7 +154,18 @@ export function buildGatherModel(page, actor, { isGM = false } = {}) {
     requirements, gate,
     assistedBy: assist ? { name: assist.helper.name, label: assistLabel(assist) } : null,
     canAssist: Boolean(assistPower(actor)), offering: Boolean(activeOffer(actor, page)), assistText: assistLabel(assistPower(actor)),
-    masterfulLeft: masterfulLeft(actor, perks), gatheringAllowance: gatheringAllowance(actor)
+    masterfulLeft: masterfulLeft(actor, perks), gatheringAllowance: gatheringAllowance(actor),
+    // 0.31.0 skills.
+    carefulLeft: restUsesLeft(actor, perks, "carefulUses"),
+    lastPullLeft: restUsesLeft(actor, perks, "lastPulls"),
+    lastPullHeld: lastPullHolder(page) === actor.uuid,
+    momentum: momentumBonus(actor) && perks?.momentumBonus ? momentumBonus(actor) : 0,
+    repairsLeft: restUsesLeft(actor, perks, "fieldRepairs"),
+    repairable: Array.from(actor.items ?? []).filter(item => {
+      const state = toolDurability(item);
+      return (item.type === "tool" || item.getFlag?.(MODULE_ID, "durability") !== undefined) && !state.unbreakable && state.value < state.max;
+    }).map(item => ({ id: item.id, name: item.name, label: durabilityLabel(item) })),
+    familiar: perks?.familiarDc ? { dc: perks.familiarDc, biome: familiarBiome(actor), biomes: getBiomes(), here: familiarReduction(actor, perks, conditions) > 0 } : null
   };
   return model;
 }
@@ -204,7 +216,8 @@ export function renderGatherWindow(model, state = {}) {
       ${actor.formula ? `<div class="gp-gw-check"><i class="fas fa-dice-d20"></i> ${escape(actor.checkLabel)} check: <strong>${escape(actor.formula)}</strong></div>` : ""}
       <div class="gp-gw-check"><i class="fas fa-hourglass-half"></i> Gathering attempts: ${actor.gatheringAllowance.limit
         ? `${actor.gatheringAllowance.remaining} / ${actor.gatheringAllowance.limit} free before long rest${actor.gatheringAllowance.remaining ? "" : ` · next attempt adds 1 exhaustion (currently ${actor.gatheringAllowance.exhaustion})`}`
-        : "Unlimited"}</div>
+        : "Unlimited"}${actor.gatheringAllowance.secondWind && actor.gatheringAllowance.limit && !actor.gatheringAllowance.remaining ? ` · Second Wind ready (no exhaustion)` : ""}</div>
+      ${skillLines(actor, model)}
       ${actor.requirements.length ? `<div class="gp-gw-reqs">${actor.requirements.map(req => `<span class="gp-req ${req.ok ? "ok" : "missing"}" title="${escape(req.title)}"><i class="fas ${req.ok ? "fa-check" : "fa-xmark"}"></i> ${escape(req.label)}</span>`).join("")}</div>` : ""}
       ${actor.assistedBy ? `<div class="gp-gw-assisted"><i class="fas fa-handshake"></i> Assisted by <strong>${escape(actor.assistedBy.name)}</strong>: ${escape(actor.assistedBy.label)}</div>` : ""}
       ${chanceText(actor)}
@@ -212,7 +225,7 @@ export function renderGatherWindow(model, state = {}) {
     if (!actor.gate.ok) disabledReason = actor.gate.reason;
   }
   if (model.empty) disabledReason = `Nothing can be gathered here right now${model.conditions?.length ? ` (${model.conditions.map(chip => chip.label).join(", ")})` : ""}.`;
-  if (model.depleted) disabledReason = "This spot is exhausted.";
+  if (model.depleted) disabledReason = actor?.lastPullLeft ? "This spot is exhausted. Last Pull can reopen one pull for you." : "This spot is exhausted.";
   if (actor?.gatheringAllowance.limit && !actor.gatheringAllowance.remaining
       && actor.gatheringAllowance.exhaustion >= actor.gatheringAllowance.maxExhaustion) {
     disabledReason = `Exhaustion is already at its maximum (${actor.gatheringAllowance.maxExhaustion}).`;
@@ -255,12 +268,31 @@ export function renderGatherWindow(model, state = {}) {
       <button type="button" class="gp-gw-gather" data-act="gather" ${disabledReason || state.busy ? "disabled" : ""}>
         ${state.busy ? '<i class="fas fa-spinner fa-spin"></i> Gathering…' : '<i class="fas fa-hand-sparkles"></i> Gather'}
       </button>
+      ${model.depleted && actor?.lastPullLeft ? `<button type="button" class="gp-gw-lastpull" data-act="last-pull" ${state.busy ? "disabled" : ""} title="Once per long rest: the GM reopens one pull here for you."><i class="fas fa-seedling"></i> Last Pull (${actor.lastPullLeft} left)</button>` : ""}
+      ${actor?.carefulLeft && !model.depleted ? `<label class="gp-gw-masterful" title="Once per long rest: draw two results from this node and choose which to gather."><input type="checkbox" data-act-change="careful" ${state.careful ? "checked" : ""} ${state.busy ? "disabled" : ""}> Use Careful Selection (${actor.carefulLeft} left)</label>` : ""}
       ${actor?.masterfulLeft ? `<label class="gp-gw-masterful" title="Once per long rest: this gather is an automatic Masterful extraction (no check roll). Its rare find still needs the Fortune die to climb."><input type="checkbox" data-act-change="masterful" ${state.masterful ? "checked" : ""} ${state.busy ? "disabled" : ""}> Use Grandmaster's Touch (${actor.masterfulLeft} left)</label>` : ""}
       ${disabledReason ? `<div class="gp-gw-why">${escape(disabledReason)}</div>` : ""}
     </div>
     <section class="gp-gw-result ${state.animate ? "animate" : ""}" data-result>${state.resultHtml ?? ""}</section>
     ${gmBar}
   </div>`;
+}
+
+/** Momentum, Familiar Ground and Field Repair lines in the gatherer panel. */
+function skillLines(actor, model) {
+  const lines = [];
+  if (actor.momentum) lines.push(`<div class="gp-gw-check gp-gw-skill"><i class="fas fa-angles-up"></i> Momentum: +${actor.momentum} on your next check</div>`);
+  if (actor.familiar) {
+    const label = actor.familiar.biomes.find(biome => biome.key === actor.familiar.biome)?.label ?? actor.familiar.biome;
+    const options = actor.familiar.biomes.map(biome => `<option value="${escape(biome.key)}" ${biome.key === actor.familiar.biome ? "selected" : ""}>${escape(biome.label)}</option>`).join("");
+    lines.push(actor.familiar.biome && !model.isGM
+      ? `<div class="gp-gw-check gp-gw-skill"><i class="fas fa-mountain-sun"></i> Familiar ground: ${escape(label)}${actor.familiar.here ? ` <strong>(here: DC −${actor.familiar.dc})</strong>` : ""}</div>`
+      : `<div class="gp-gw-check gp-gw-skill"><i class="fas fa-mountain-sun"></i> Familiar ground: <select data-act-change="familiar" aria-label="Familiar biome">${actor.familiar.biome ? "" : '<option value="">Choose a biome…</option>'}${options}</select>${model.isGM ? "" : " <small>(choose once)</small>"}</div>`);
+  }
+  if (actor.repairsLeft && actor.repairable.length) {
+    lines.push(`<div class="gp-gw-check gp-gw-skill"><i class="fas fa-screwdriver-wrench"></i> Field Repair (${actor.repairsLeft} left): ${actor.repairable.map(tool => `<button type="button" class="gp-gw-repair" data-act="repair" data-item="${escape(tool.id)}" title="Restore 1d4 durability">${escape(tool.name)} ${escape(tool.label)}</button>`).join(" ")}</div>`);
+  }
+  return lines.join("");
 }
 
 /** Result panel for one gather (all items drawn). */
@@ -414,15 +446,27 @@ function defineClass() {
           return;
         }
         const button = event.target.closest?.("[data-act]");
-        if (button && !button.disabled) void this.#onAction(button.dataset.act).catch(report);
+        if (button && !button.disabled) void this.#onAction(button.dataset.act, button).catch(report);
       });
       this.element.addEventListener("change", event => {
         if (event.target.matches?.("[data-act-change='masterful']")) {
           this.view.masterful = event.target.checked;
           return;
         }
+        if (event.target.matches?.("[data-act-change='careful']")) {
+          this.view.careful = event.target.checked;
+          return;
+        }
+        if (event.target.matches?.("[data-act-change='familiar']")) {
+          const key = event.target.value;
+          if (!key || !this.actor) return;
+          void game.modules.get(MODULE_ID).api.gather.setFamiliarBiome(this.actor, key)
+            .then(() => ui.notifications.info(`${this.actor.name} knows this kind of ground well.`)).catch(report);
+          return;
+        }
         if (event.target.matches?.("[data-act-change='actor']")) {
           this.view.masterful = false;
+          this.view.careful = false;
           this.view.actorId = event.target.value || null;
           this.view.resultHtml = "";
           void this.render();
@@ -451,9 +495,23 @@ function defineClass() {
       windows.delete(this.page.uuid);
     }
 
-    async #onAction(act) {
+    async #onAction(act, button = null) {
+      const api = game.modules.get(MODULE_ID).api;
       switch (act) {
         case "gather": return this.#gather();
+        case "last-pull": {
+          if (!this.actor) return;
+          await api.gather.lastPull(this.actor, this.page);
+          ui.notifications.info(`Last Pull: one more pull at ${this.page.name} for ${this.actor.name}.`);
+          return this.#gather();
+        }
+        case "repair": {
+          const item = this.actor?.items.get(button?.dataset.item);
+          if (!item) return;
+          const result = await api.gather.fieldRepair(this.actor, item);
+          ui.notifications.info(`Field Repair: ${item.name} ${result.after}/${result.max}.`);
+          return this.render();
+        }
         case "assist": {
           const actor = this.actor;
           if (!actor) return;
@@ -494,7 +552,7 @@ function defineClass() {
         const sheet = new Sheet({ document: this.page });
         await sheet.getGathererData();
         const api = game.modules.get(MODULE_ID).api;
-        if (this.view.masterful) api.gather.setIntent(actor, { masterful: true });
+        if (this.view.masterful || this.view.careful) api.gather.setIntent(actor, { masterful: Boolean(this.view.masterful), careful: Boolean(this.view.careful) });
         await sheet._onGather(true, null, actor, null);
       } catch (error) {
         report(error);
@@ -502,6 +560,7 @@ function defineClass() {
         Hooks.off("gathererGather", startId);
         game.modules.get(MODULE_ID).api.gather.clearIntent(actor);
         this.view.masterful = false;
+        this.view.careful = false;
       }
       const payload = started ? await completed : null;
       Hooks.off("gatheringProfessionsGatherComplete", completeId);

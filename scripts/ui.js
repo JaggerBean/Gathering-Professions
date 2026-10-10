@@ -454,8 +454,8 @@ export function registerUIHooks() {
   // Tree draws link lines once per render, so redraw after the window resizes.
   const treeApps = () => Array.from(foundry.applications.instances?.values?.() ?? [])
     .filter(app => app.rendered && app.element?.querySelector?.('.skill-group[data-group-id="gatheringProfessions"]'));
-  const redrawTrees = foundry.utils.debounce(() => { for (const app of treeApps()) void app.render().catch(report); }, 300);
-  window.addEventListener("resize", redrawTrees);
+  const redraw = () => { for (const app of treeApps()) void app.render().catch(report); };
+  globalThis.window?.addEventListener?.("resize", foundry.utils.debounce?.(redraw, 300) ?? redraw);
   Hooks.on("renderItemDirectory", addManagerButton);
   Hooks.on("renderApplicationV2", (app, html) => {
     if (app instanceof foundry.applications.sidebar.tabs.ItemDirectory) addManagerButton(app, html);
