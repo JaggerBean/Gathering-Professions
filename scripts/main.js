@@ -10,7 +10,7 @@ import { successChance } from "./gather-ui.js";
 import { DEFAULT_TOOLS, buildDefaultTools } from "./gatheringtools.js";
 import { DEFAULT_SKILL_TREE, skillTreeConfig, normalizeSkillTreeConfig, syncProfessionState, resetUniversalTreeSkills, drawRareFind, availableSkillTrees, configuredSkillTree } from "./integrations.js";
 import { PERK_EFFECTS, actorPerks, normalizePerk, readPerk, rareChanceTotal, applyPerksToCheck, rerollsLeft, spendReroll, resetRestUses, masterfulLeft, spendMasterful, restUsesLeft, spendRestUse, withMomentum, familiarReduction } from "./perks.js";
-import { configureSkillEffects, chooseDraw, offerAppraisal, fieldRepair, repairableTools, setFamiliarBiome, requestLastPull, shareHaul, markRefillCut, handleGmRequest } from "./skill-effects.js";
+import { configureSkillEffects, chooseDraw, offerAppraisal, fieldRepair, repairableTools, setFamiliarBiome, requestLastPull, shareHaul, markRefillCut, handleGmRequest, requestGm } from "./skill-effects.js";
 import { UNIVERSAL_SKILLS, buildUniversalTree, relayoutUniversalTree, needsRelayout } from "./skilltree.js";
 import { assistPower, assistLabel, offerAssist, withdrawAssist, findAssist, consumeAssist, handleClearAssist } from "./assist.js";
 import { pinsFor, pageProfessions, requiredTools, nodeUsage, lastPullHolder, getToolLibrary, addToolToLibrary, removeToolFromLibrary, createRareTable, readNode, nodeGate, applyNodeCheck, isGathererPage, refreshNodeVisibility, refreshPinTint, autoResetExpired, allNodePages, buildNode, updateNode, duplicateNode, deleteNode, resetNodes, setNodeHidden, placePin, placeLinkedNode, normalizeNode } from "./nodes.js";
@@ -25,7 +25,8 @@ import { buildRareFinds, RARE_FINDS } from "./rareitems.js";
 import { gatheringAllowance, reserveGatherAttempt, resetGatherAttempts } from "./gather-limits.js";
 import { LEGACY_MODULE_ID, migrateLegacyNamespace } from "./migration.js";
 import { gpDialog } from "./dialogs.js";
-import { runActorAction, registerActionHooks } from "./actions.js";
+import { runActorAction, registerActionHooks, withActorActionLease } from "./actions.js";
+import { registerSkillPurchaseHooks } from "./skill-purchases.js";
 import { rollProfessionCheck } from "./checks.js";
 import { registerPricingHooks, MATERIAL_BANDS, RARE_BANDS, PRICE_FACTOR, campaignPrice, tidyPrice, priceInGp } from "./pricing.js";
 import { repriceWorld, registerPriceContributor } from "./repricing.js";
@@ -36,6 +37,7 @@ const PRICING_VERSION = 2;
 const RESULT = Symbol("gatheringProfessionResult");
 const actorQueues = new WeakMap();
 const refundQueues = new WeakMap();
+const gatherContexts = new WeakMap();
 
 function queueActorTask(actor, task) {
   const previous = actorQueues.get(actor) ?? Promise.resolve();
@@ -467,7 +469,9 @@ async function resolveCheck({ thing, rule }, actor, sheet, originalToChat) {
   const auto = Boolean(intent.masterful) && masterfulLeft(actor, perks) > 0;
   if (auto) await spendMasterful(actor);
   // An automatic Masterful has no roll, so an ally's Assist is kept for a later gather.
-  const assist = page && !auto ? findAssist(actor, page) : null;
+  const context = gatherContexts.get(sheet);
+  const savedAssist = context?.receipt?.assist;
+  const assist = page && !auto ? (context ? (savedAssist ? { ...savedAssist, helper: await fromUuid(savedAssist.helperUuid) } : null) : findAssist(actor, page)) : null;
   // Momentum from an earlier great gather is spent on this check.
   const checkPerks = auto ? perks : withMomentum(actor, perks);
   const check = applyPerksToCheck(base, checkPerks, assist);
@@ -479,7 +483,7 @@ async function resolveCheck({ thing, rule }, actor, sheet, originalToChat) {
   if (auto) check.auto = { label: perks.effectSources.masterfulUses.join(", ") || "Grandmaster's Touch" };
   if (assist) {
     check.assist = { name: assist.helper.name, label: assistLabel(assist) };
-    void consumeAssist(assist.helper, page, actor).catch(logFailure("could not clear assist"));
+    if (!context) void consumeAssist(assist.helper, page, actor).catch(logFailure("could not clear assist"));
   }
   let roll = auto ? null : await rollProfessionCheck(actor, check);
   let degree = auto ? autoMasterful() : getDegreeOfSuccess(roll.total, check.target);
@@ -527,11 +531,16 @@ async function resolveCheck({ thing, rule }, actor, sheet, originalToChat) {
   const xp = gatheringXp(rule, degree);
   thing.quantity = extraction.quantity;
   await awardGatheringResult(actor, thing.item, extraction.quantity, xp, rule.profession);
+  if (context?.receiptId) await requestGm(actor, "gatherResult", { pageUuid: page.uuid, receiptId: context.receiptId,
+    itemUuid: thing.item.uuid, degree: degree.id, quantity: extraction.quantity, natural20 }, { wait: true });
   // Shared Haul: the assisting helper gets some of a great gather too.
   if (assist && great && extraction.quantity > 0) {
     try {
-      const amount = await shareHaul(assist.helper, thing.item, page, actor, rule.profession);
-      if (amount) check.shared = { name: assist.helper.name, amount };
+       if (context) context.shared.push({ helper: assist.helper, item: thing.item, profession: rule.profession });
+       else {
+         const amount = await shareHaul(assist.helper, thing.item, page, actor, rule.profession);
+         if (amount) check.shared = { name: assist.helper.name, amount };
+       }
     } catch (error) { logFailure("Shared Haul failed")(error); }
   }
   check.extras = [];
@@ -1143,6 +1152,7 @@ Hooks.once("ready", async () => {
     if (setting?.key === `${MODULE_ID}.skillTree` && isActiveGM()) syncEveryCharacter();
   });
   registerActionHooks();
+  registerSkillPurchaseHooks();
   registerNodeHooks();
   registerGatheringHooks();
   console.info(`${MODULE_ID}: Gatherer profession checks active.`);

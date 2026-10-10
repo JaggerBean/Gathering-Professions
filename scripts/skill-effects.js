@@ -198,7 +198,7 @@ export async function requestGm(actor, type, data, { wait = false } = {}) {
 }
 
 const HANDLERS = { lastPull: handleLastPull, sharedHaul: handleSharedHaul, refillCut: handleRefillCut,
-  gatherStart: handleGatherStart, gatherPull: handleGatherPull, gatherResult: handleGatherResult };
+  gatherStart: handleGatherStart, gatherPull: handleGatherPull, gatherResult: handleGatherResult, gatherFinish: handleGatherFinish };
 
 /** Active GM: run an authenticated request from an actor update. */
 export async function handleGmRequest(actor, request, user) {
@@ -239,8 +239,7 @@ async function handleLastPull(actor, data, user) {
 }
 
 /* Shared Haul: the assisting helper also gets some of the material. */
-export async function shareHaul(helper, item, page, gatherer, profession) {
-  const receiptId = arguments[5];
+export async function shareHaul(helper, item, page, gatherer, profession, receiptId) {
   if (!receiptId || !helper || !item) return 0;
   const result = await requestGm(gatherer, "sharedHaul", { receiptId, helperUuid: helper.uuid,
     itemUuid: item.uuid, pageUuid: page?.uuid ?? "" }, { wait: true });
@@ -261,7 +260,8 @@ async function handleSharedHaul(gatherer, data, user) {
     const amount = Number(perksFor(helper, result.profession).sharedHaul) || 0;
     // Claim before any reward write. Failed awards remain marked for GM review;
     // replaying a request must never award a second copy.
-    await page.setFlag(MODULE_ID, `gatherReceipts.${data.receiptId}.results.${data.itemUuid}.shared`, true);
+    await page.setFlag(MODULE_ID, `gatherReceipts.${data.receiptId}.results`, { ...receipt.results,
+      [data.itemUuid]: { ...result, shared: true } });
     return { helper, item, amount };
   });
   if (!claim) return { amount: 0 };
@@ -333,7 +333,36 @@ async function handleGatherResult(actor, data, user) {
       || !Number.isInteger(data.quantity) || data.quantity < 0) throw new Error("Invalid completed gathering result.");
     if (receipt.results?.[item.uuid]) return { ok: true };
     await page.setFlag(MODULE_ID, `gatherReceipts.${data.receiptId}.results`, { ...receipt.results,
-      [item.uuid]: { profession: rule.profession, degree: data.degree, quantity: data.quantity, shared: false } });
+      [item.uuid]: { profession: rule.profession, degree: data.degree, quantity: data.quantity, natural20: data.natural20 === true, shared: false } });
+    return { ok: true };
+  });
+}
+
+async function handleGatherFinish(actor, data, user) {
+  return receiptAction(data.pageUuid, async () => {
+    const page = await gathererPage(data.pageUuid, user);
+    requireGatherLease(actor, page, data.receiptId, user);
+    const receipt = readGatherReceipt(page, actor, data, user);
+    if (!receipt.pulled || receipt.finished) return null;
+    const perks = perksFor(actor, readNode(page)?.profession);
+    const ticket = data.ticket && actor.getFlag(MODULE_ID, `gatherTickets.${data.ticket}`);
+    const changes = { [`flags.${MODULE_ID}.gatherReceipts.${data.receiptId}.finished`]: true };
+    if (ticket?.pageUuid === page.uuid && ticket.expires > Date.now()) {
+      await actor.unsetFlag(MODULE_ID, `gatherTickets.${data.ticket}`);
+      const usage = nodeUsage(page);
+      const lucky = perks.naturalRefund && Object.values(receipt.results).some(result => result.natural20);
+      let refund = lucky;
+      if (!refund && data.gathered && perks.conserveChance > 0) {
+        refund = (await new Roll("1d100").evaluate({ allowInteractive: false })).total <= perks.conserveChance;
+      }
+      if (data.consume !== false && usage.draws && usage.used > receipt.before && refund) {
+        changes["flags.gatherer.data.drawsUsed"] = usage.used - 1;
+        ui.notifications.info(lucky ? `Lucky Strike: ${actor.name} keeps the pull.` : `${actor.name} gathered with care: one pull refunded.`);
+      } else if (data.gathered && isDepleted(page) && perks.refillCut > 0) {
+        changes[`flags.${MODULE_ID}.refillCut`] = Math.max(Number(page.getFlag(MODULE_ID, "refillCut")) || 0, Math.min(75, perks.refillCut));
+      }
+    }
+    await page.update(changes);
     return { ok: true };
   });
 }
