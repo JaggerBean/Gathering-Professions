@@ -25,6 +25,7 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const isActiveGM = () => game.user.isGM && (!game.users?.activeGM || game.users.activeGM.id === game.user.id);
 const LAST_PULL_MS = 120000;
 const receiptQueues = new Map();
+const receiptResultKey = uuid => encodeURIComponent(uuid).replaceAll(".", "%2E");
 
 function receiptAction(uuid, task) {
   const completion = (receiptQueues.get(uuid) ?? Promise.resolve()).catch(() => {}).then(task);
@@ -250,7 +251,8 @@ async function handleSharedHaul(gatherer, data, user) {
   const claim = await receiptAction(data.pageUuid, async () => {
     const page = await gathererPage(data.pageUuid, user);
     const receipt = readGatherReceipt(page, gatherer, data, user);
-    const result = receipt.results?.[data.itemUuid];
+    const key = receiptResultKey(data.itemUuid);
+    const result = receipt.results?.[key];
     if (!receipt.pulled || !result || !["excellent", "masterful"].includes(result.degree)
       || result.quantity <= 0 || receipt.assist?.helperUuid !== data.helperUuid) throw new Error("Shared Haul requires a completed great gather with this Assist.");
     if (result.shared) return null;
@@ -261,7 +263,7 @@ async function handleSharedHaul(gatherer, data, user) {
     // Claim before any reward write. Failed awards remain marked for GM review;
     // replaying a request must never award a second copy.
     await page.setFlag(MODULE_ID, `gatherReceipts.${data.receiptId}.results`, { ...receipt.results,
-      [data.itemUuid]: { ...result, shared: true } });
+      [key]: { ...result, shared: true } });
     return { helper, item, amount };
   });
   if (!claim) return { amount: 0 };
@@ -331,9 +333,10 @@ async function handleGatherResult(actor, data, user) {
     if (!receipt.pulled || !rule || !Array.from(table?.results ?? []).some(result => result.documentUuid === item.uuid)
       || !["failed", "partial", "successful", "excellent", "masterful"].includes(data.degree)
       || !Number.isInteger(data.quantity) || data.quantity < 0) throw new Error("Invalid completed gathering result.");
-    if (receipt.results?.[item.uuid]) return { ok: true };
+    const key = receiptResultKey(item.uuid);
+    if (receipt.results?.[key]) return { ok: true };
     await page.setFlag(MODULE_ID, `gatherReceipts.${data.receiptId}.results`, { ...receipt.results,
-      [item.uuid]: { profession: rule.profession, degree: data.degree, quantity: data.quantity, natural20: data.natural20 === true, shared: false } });
+      [key]: { itemUuid: item.uuid, profession: rule.profession, degree: data.degree, quantity: data.quantity, natural20: data.natural20 === true, shared: false } });
     return { ok: true };
   });
 }

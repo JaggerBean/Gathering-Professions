@@ -723,6 +723,12 @@ function integrateGatherer() {
         }
         if (!gathererCanStart(this, actor)) return originalGather.apply(this, args);
         started = true;
+        if (!isGathererPage(this.document)) {
+          context.releaseRewards(true);
+          const outcome = await originalGather.apply(this, args);
+          if (context.completion) await context.completion;
+          return outcome;
+        }
         context.receiptId = actionLease.id || foundry.utils.randomID();
         const chosenAuto = Boolean(peekIntent(actor).masterful) && masterfulLeft(actor, actorPerks(actor, node?.profession || selectedProfession(actor))) > 0;
         context.receipt = await requestGm(actor, "gatherStart", { pageUuid: this.document.uuid, receiptId: context.receiptId,
@@ -815,7 +821,7 @@ function integrateGatherer() {
             if (context.completion) await context.completion;
             gatherContexts.delete(this);
           }
-        }, { resource: `gather-node:${this.document.uuid}` });
+        }, { resource: isGathererPage(this.document) ? `gather-node:${this.document.uuid}` : null });
       } catch (error) {
         console.error(`${MODULE_ID}: gathering action failed`, error);
         ui.notifications.error(error.message || "Gathering action failed.");
