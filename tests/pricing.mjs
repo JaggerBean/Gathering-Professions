@@ -10,8 +10,10 @@ const pricing = await import("../scripts/pricing.js");
 assert.deepEqual(pricing.tidyPrice(0.034), { value: 1, denomination: "sp" }, "Silver and gold only: at least 1 sp");
 assert.deepEqual(pricing.tidyPrice(0.004), { value: 1, denomination: "sp" }, "Never rounds a priced item to nothing");
 assert.deepEqual(pricing.tidyPrice(0.46), { value: 5, denomination: "sp" });
-assert.deepEqual(pricing.tidyPrice(7.4), { value: 7.5, denomination: "gp" });
-assert.deepEqual(pricing.tidyPrice(87.6), { value: 88, denomination: "gp" });
+assert.deepEqual(pricing.tidyPrice(7.4), { value: 7.4, denomination: "gp" });
+assert.deepEqual(pricing.tidyPrice(87.6), { value: 87.6, denomination: "gp" });
+assert.deepEqual(pricing.tidyPrice(38.71), { value: 38.8, denomination: "gp" });
+assert.deepEqual(pricing.tidyPrice(0.1 + 0.2), { value: 3, denomination: "sp" }, "Floating point noise does not add a silver");
 assert.deepEqual(pricing.tidyPrice(0), { value: 0, denomination: "gp" });
 assert.equal(pricing.priceInGp({ value: 5, denomination: "sp" }), 0.5);
 // Book prices halved: longsword 15 gp → 7 gp 5 sp, plate 1,500 → 750, rope 1 gp → 5 sp, 1 cp stays 1 cp.
@@ -37,9 +39,15 @@ const costs = pricing.recipeCosts([
   { output: "Glass", quantity: 1, inputs: [["Sand", 4]] },
   { output: "Glass", quantity: 2, inputs: [["Sand", 2]] }
 ], new Map([["Copper Ore", 0.1], ["Coal", 0.1], ["Sand", 0.05]]));
-assert.ok(Math.abs(costs.get("Copper Ingot") - 0.375) < 1e-9);
-assert.ok(Math.abs(costs.get("Pick") - 0.9375) < 1e-9, "Refined ingredients priced first");
-assert.ok(Math.abs(costs.get("Glass") - 0.0625) < 1e-9, "Cheapest recipe per unit");
+assert.ok(Math.abs(costs.get("Copper Ingot") - 0.4) < 1e-9);
+assert.ok(Math.abs(costs.get("Pick") - 1) < 1e-9, "Final rounded ingredient prices feed downstream products");
+assert.ok(Math.abs(costs.get("Glass") - 0.3) < 1e-9, "Most expensive recipe per unit");
+const reverse = pricing.recipeCosts([
+  { output: "Tool", quantity: 1, inputs: [["Ingot", 2]] },
+  { output: "Ingot", quantity: 1, inputs: [["Ore", 3]] }
+], new Map([["Ore", 0.1], ["Ingot", 0.1], ["Tool", 0.1]]));
+assert.equal(reverse.get("Ingot"), 0.4);
+assert.equal(reverse.get("Tool"), 1, "Existing products remain floors, not stale ingredient costs");
 // Entry rule: compendium items are halved once; flagged copies keep their price.
 const make = data => ({ data, updateSource(changes) { for (const [path, value] of Object.entries(changes)) { const keys = path.split("."); const last = keys.pop(); keys.reduce((o, k) => (o[k] ??= {}), this.data)[last] = value; } } });
 const sword = make({ name: "Longsword", system: { price: { value: 15, denomination: "gp" } }, _stats: { compendiumSource: "Compendium.dnd5e.equipment24.Item.x" } });
@@ -59,5 +67,9 @@ assert.deepEqual(fiddle.data.system.price, { value: 12, denomination: "gp" });
 const coppers = make({ name: "Odd Trinket", system: { price: { value: 7, denomination: "cp" } } });
 pricing.priceOnCreate(coppers, coppers.data);
 assert.deepEqual(coppers.data.system.price, { value: 1, denomination: "sp" }, "Copper prices become silver");
+const honey = make({ name: "Honey", system: { price: { value: 13, denomination: "gp" } }, flags: { "gathering-professions": { campaignPrice: { approved: 0.2, book: { value: 2, denomination: "gp" } } } } });
+pricing.priceOnCreate(honey, honey.data);
+assert.deepEqual(honey.data.system.price, { value: 2, denomination: "sp" });
+assert.equal(honey.data.flags["gathering-professions"].campaignPrice.book.value, 2, "Approved prices preserve provenance");
 
 console.log("PASS: pricing — tidy prices, half book, bands, spread, refined costs, compendium entry rule.");
