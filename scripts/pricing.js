@@ -185,7 +185,9 @@ export function priceOnCreate(item, data) {
   }
   const own = approvedPrice(data);
   const world = Array.from(game.items ?? []).find(entry => entry.name === data?.name);
-  const approved = own ?? approvedPrice(world);
+  const worldApproval = approvedPrice(world);
+  const approved = worldApproval !== null
+    ? Math.max(worldApproval, priceInGp(world?.system?.price)) : own;
   if (approved !== null) {
     const saved = data?.flags?.[MODULE_ID]?.[PRICED_FLAG] ?? {};
     return item.updateSource({ "system.price": tidyPrice(approved), [`flags.${MODULE_ID}.${PRICED_FLAG}`]: { ...saved, approved, book: saved.book ?? price ?? null } });
