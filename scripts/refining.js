@@ -698,13 +698,9 @@ async function deliverJob(actor, job) {
       delete data._id; delete data.folder; delete data.ownership;
       foundry.utils.setProperty(data, "system.quantity", job.quantity);
       foundry.utils.setProperty(data, `flags.${MODULE_ID}.deliveryJob`, job.id);
-      try { await actor.createEmbeddedDocuments("Item", [data]); }
-      catch (error) {
-        // A rejected creation with no document can retry. If a document did
-        // arrive despite the rejection, preserve evidence of that delivery.
-        if (!wasCreated()) await actor.update({ [`${path}.itemDeliveryStarted`]: false });
-        throw error;
-      }
+      // A rejected promise does not prove the server rejected creation. Keep
+      // the started marker even when no item remains visible on this client.
+      await actor.createEmbeddedDocuments("Item", [data]);
     }
     // The actor receipt survives consumption, transfer, and failed job removal.
     await actor.update({ [`${path}.itemDelivered`]: true });
