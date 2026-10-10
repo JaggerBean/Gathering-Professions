@@ -754,7 +754,11 @@ const basicPick = items.find(item => item.name === "Miner's Pick");
 assert.deepEqual([basicPick.type, basicPick.system.proficient, basicPick.flags["gathering-professions"].defaultTool], ["tool", 0, "mining"], "Basic tool: no proficiency bonus");
 assert.deepEqual(api.getProfessions().mining.tools, [{ uuid: basicPick.uuid, name: "Miner's Pick", img: basicPick.img }]);
 assert.deepEqual(api.getProfessions().skinning.tools.map(tool => tool.name), ["Skinning Knife"]);
-assert.ok(folders.some(folder => folder.name === "Gathering Tools" && folder.type === "Item"));
+{
+  const toolsFolder = folders.find(folder => folder.name === "Tools" && folder.type === "Item");
+  const parentId = toolsFolder?.folder?.id ?? toolsFolder?.folder;
+  assert.equal(folders.find(folder => folder.id === parentId)?.name, "Gathering", "Tools live in Gathering / Tools");
+}
 const copperNode = { ...toolLib.NODE_DEFAULTS, profession: "mining" };
 const barehanded = { name: "Barehanded", items: [] };
 const carrying = { name: "Carrying", items: [{ name: "Miner's Pick", uuid: "Actor.c.Item.p", _stats: { duplicateSource: basicPick.uuid }, system: { proficient: 0 } }] };
@@ -933,7 +937,11 @@ game.modules.get("skill-tree").active = true;
   const herbModel = materialsLib.materialsModel("herbalism");
   assert.deepEqual(herbModel.gathering.map(group => group.materials.length), [5, 5, 5, 5, 5]);
   assert.deepEqual(herbModel.rare.map(group => group.entries.map(entry => entry.name).sort()), Object.values(presetLib.MATERIAL_PRESETS.herbalism.rare).map(tier => [...tier].sort()));
-  assert.equal(folders.find(folder => folder.id === items.find(item => item.name === "Silphium").folder).name, "Herbalism", "Rare finds go to Rare Finds/Herbalism");
+  {
+    const rareFolder = folders.find(folder => folder.id === items.find(item => item.name === "Silphium").folder);
+    const parent = folders.find(folder => folder.id === (rareFolder.folder?.id ?? rareFolder.folder));
+    assert.deepEqual([rareFolder.name, parent?.name], ["Rare Finds", "Herbalism"], "Rare finds go to Gathering / Herbalism / Rare Finds");
+  }
   // Mining: the alias reuses a world "Mithril"; other mining materials are unassigned.
   const [mithril] = await globalThis.Item.implementation.create([{ name: "Mithril", type: "loot", img: "mi.webp", system: {}, flags: {} }]);
   const mining = await presetLib.applyMaterialPreset("mining");
