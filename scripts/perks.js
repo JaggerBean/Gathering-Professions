@@ -37,7 +37,22 @@ export const PERK_EFFECTS = Object.freeze({
   senseAll: { kind: "flag", label: "Sense every hidden node", hint: "Sense every node that can be sensed, of any profession and rank." },
   assistBonus: { kind: "int", max: 10, label: "Assist bonus", hint: "Flat bonus your Assist gives an ally's next gather at that node." },
   assistDie: { kind: "die", dice: [4, 6, 8], label: "Assist die", hint: "Extra die your Assist gives an ally's check." },
-  assistUntrainedRelief: { kind: "fraction", label: "Assist untrained relief", hint: "Share of an assisted ally's untrained penalties removed." }
+  assistUntrainedRelief: { kind: "fraction", label: "Assist untrained relief", hint: "Share of an assisted ally's untrained penalties removed." },
+  // 0.31.0 skill tree expansion.
+  naturalRefund: { kind: "flag", label: "Natural 20 keeps the pull", hint: "A natural 20 on a gathering check does not use a node pull." },
+  momentumBonus: { kind: "int", max: 5, label: "Momentum bonus", hint: "After an Excellent or Masterful gather, added to the next gathering check within an hour." },
+  toolSteward: { kind: "int", max: 5, label: "Tool-safe natural 1s per long rest", hint: "Natural 1s that do not wear the tool, per long rest." },
+  fieldRepairs: { kind: "int", max: 5, label: "Field repairs per long rest", hint: "Restore 1d4 durability to a gathering tool from the gathering window." },
+  refillCut: { kind: "int", max: 75, label: "Faster refill %", hint: "Nodes this character exhausts refill this much sooner." },
+  extraAttempts: { kind: "int", max: 5, label: "Extra free attempts", hint: "Free gathering attempts added to the long-rest allowance." },
+  secondWind: { kind: "int", max: 5, label: "Exhaustion-free attempts per long rest", hint: "Gathers beyond the free attempts that add no exhaustion, per long rest." },
+  refineSaver: { kind: "flag", label: "Thrifty refining", hint: "On a successful refine, every 4 units use one fewer of the recipe's first ingredient." },
+  refineTimeCut: { kind: "int", max: 90, label: "Faster refining %", hint: "Timed refining finishes this much sooner." },
+  familiarDc: { kind: "int", max: 10, label: "Familiar biome DC reduction", hint: "Gathering DCs are lower in the biome the character chose." },
+  sharedHaul: { kind: "int", max: 5, label: "Shared haul", hint: "When an ally this character assists gets an Excellent or Masterful extraction, the helper also gets this many of the material." },
+  carefulUses: { kind: "int", max: 5, label: "Careful selections per long rest", hint: "Draw two results from the node and choose one, per long rest." },
+  appraiseUses: { kind: "int", max: 5, label: "Appraisals per long rest", hint: "After a rare find, reroll it and keep either result, per long rest." },
+  lastPulls: { kind: "int", max: 5, label: "Last pulls per long rest", hint: "Gather from an exhausted node, per long rest." }
 });
 
 export const PERK_KEYS = Object.freeze(Object.keys(PERK_EFFECTS));
@@ -205,10 +220,62 @@ export async function spendMasterful(actor) {
   await actor.setFlag(MODULE_ID, "masterfulUsed", used + 1);
 }
 
+/**
+ * Other once-per-long-rest perks (0.31.0) count their uses in
+ * flags.gathering-professions.restUses.<perk key>.
+ */
+export const REST_USE_KEYS = Object.freeze(["toolSteward", "fieldRepairs", "secondWind", "carefulUses", "appraiseUses", "lastPulls"]);
+
+export function restUsesLeft(actor, perks, key) {
+  const used = Math.max(0, Number(actor?.getFlag?.(MODULE_ID, `restUses.${key}`)) || 0);
+  return Math.max(0, (Number(perks?.[key]) || 0) - used);
+}
+
+/** Changes that spend `count` uses of a rest perk (for one Actor update). */
+export function restUseChanges(actor, key, count = 1) {
+  const used = Math.max(0, Number(actor?.getFlag?.(MODULE_ID, `restUses.${key}`)) || 0);
+  return { [`flags.${MODULE_ID}.restUses.${key}`]: used + count };
+}
+
+export async function spendRestUse(actor, key, count = 1) {
+  await actor.update(restUseChanges(actor, key, count));
+}
+
 /** dnd5e long rest: refresh perk uses. */
 export async function resetRestUses(actor) {
   if (actor?.getFlag?.(MODULE_ID, "rerollsUsed")) await actor.unsetFlag(MODULE_ID, "rerollsUsed");
   if (actor?.getFlag?.(MODULE_ID, "masterfulUsed")) await actor.unsetFlag(MODULE_ID, "masterfulUsed");
+  if (actor?.getFlag?.(MODULE_ID, "restUses")) await actor.unsetFlag(MODULE_ID, "restUses");
+}
+
+/* ---------------------------------------------------------------------- */
+/* Momentum and Familiar Ground                                            */
+/* ---------------------------------------------------------------------- */
+
+export const MOMENTUM_SECONDS = 3600;
+
+/** Momentum waiting for this actor's next gather (0 when none or expired). */
+export function momentumBonus(actor) {
+  const saved = actor?.getFlag?.(MODULE_ID, "momentum");
+  if (!saved) return 0;
+  const now = Number(globalThis.game?.time?.worldTime) || 0;
+  return Math.abs(now - (Number(saved.at) || 0)) <= MOMENTUM_SECONDS ? Math.max(0, Number(saved.bonus) || 0) : 0;
+}
+
+/** The biome a Familiar Ground character chose ("" = none yet). */
+export const familiarBiome = actor => String(actor?.getFlag?.(MODULE_ID, "familiarBiome") ?? "");
+
+/** DC reduction from Familiar Ground at these conditions. */
+export function familiarReduction(actor, perks, conditions) {
+  const amount = Number(perks?.familiarDc) || 0;
+  const biome = familiarBiome(actor);
+  return amount && biome && conditions?.biome?.key === biome ? amount : 0;
+}
+
+/** Perks for one check, with any waiting Momentum added to the flat bonus. */
+export function withMomentum(actor, perks) {
+  const bonus = momentumBonus(actor);
+  return bonus ? { ...perks, checkBonus: (Number(perks?.checkBonus) || 0) + bonus, momentumApplied: bonus } : perks;
 }
 
 /* ---------------------------------------------------------------------- */
