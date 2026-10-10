@@ -2,6 +2,16 @@
 
 Foundry 14 + dnd5e + Gatherer 5.0.3. Enable this module alongside Gatherer. After updating module files while Foundry is running, restart the Foundry server and reopen the world so the new manifest, script, and stylesheet load.
 
+## Reliability update (0.33.0)
+
+Update together with Crafting Professions 0.8.0. Gathering holds both a character lease and a node lease until the GM confirms the pull and rewards. Assist rewards require an authenticated, single-use gathering receipt. Field Repair and linked-tree purchases also recheck current state inside the character lease.
+
+Linked placements belong to their destination scene and start without the source placement's temporary refill effects. The gathering window refreshes relevant inventory, table, scene, settings, and timer changes. Maximum exhaustion blocks gathering even when Second Wind is available; temporary exhaustion predictions expire rather than remaining stuck.
+
+Prices preserve Masterwork, Exquisite, and value-perk premiums. Repricing repairs carried copies even if the world product was already repriced. Circular enabled recipes are rejected before pricing or recipe edits, including cross-provider loops and re-enabling/resetting recipes. Queued deliveries retain persistent component receipts; uncertain item delivery is held for GM reconciliation rather than duplicated.
+
+Run `node modules/gathering-professions/tests/gatherer-check.mjs` from the Foundry data workspace for all eleven isolated suites. After restarting Foundry, reconnect every client. Test simultaneous gathers on one node, mutually exclusive skill purchases from two windows, cross-scene linked placements, and interrupted reward delivery. Local tests use in-memory documents; they do not prove live multi-client behavior.
+
 ## Cooking ingredients (0.30.1)
 
 For Crafting Professions' Cook: the presets add **Rock Salt** (Mining T1), **Beast Flesh** (Skinning T1) and **Beast Fat** (Skinning T2). New refining recipes: **Kala Namak** (2 Rock Salt + 1 Charcoal, smelting T1), **Dried Meat** ×2 (2 Beast Flesh + 1 Rock Salt, tanning T1), **Lard** ×2 (1 Beast Fat, tanning T2). Existing worlds: mark the three items as materials (Materials browser or `api.setMaterial`) and add them to nodes; re-running full presets is not needed.
