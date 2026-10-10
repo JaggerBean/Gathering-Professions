@@ -138,6 +138,10 @@ export function assertAcyclicRecipes(recipes) {
 /** Recover a crafted item's base identity and configured value premiums. */
 export function itemPriceProfile(item) {
   const flags = item?.flags?.["crafting-professions"] ?? {};
+  const saved = item?.getFlag?.(MODULE_ID, PRICED_FLAG) ?? item?.flags?.[MODULE_ID]?.[PRICED_FLAG];
+  if (typeof saved?.baseName === "string" && Number.isFinite(Number(saved.valueMultiplier)) && Number(saved.valueMultiplier) > 0) {
+    return { name: saved.baseName, multiplier: Number(saved.valueMultiplier), quality: true };
+  }
   let name = String(item?.name ?? "");
   let multiplier = 1;
   let rules = {}, perks = null;
