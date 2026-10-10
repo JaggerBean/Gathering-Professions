@@ -6,7 +6,7 @@
 // other compendium items are halved once. Skill items and the Unused folder
 // are left alone. Idempotent: running it again changes nothing.
 import { MODULE_ID, PROFESSIONS } from "./rules.js";
-import { MATERIAL_BANDS, RARE_BANDS, PRICED_FLAG, STANDARD_PRICES, priceInGp, tidyPrice, campaignPrice, oddCoin, spreadInBand, recipeCosts } from "./pricing.js";
+import { MATERIAL_BANDS, RARE_BANDS, PRICED_FLAG, STANDARD_PRICES, priceInGp, tidyPrice, campaignPrice, oddCoin, spreadInBand, recipeCosts, approvedPrice } from "./pricing.js";
 import { allRecipes } from "./refining.js";
 
 export const TOOL_PRICE = 1;
@@ -49,8 +49,21 @@ export function gatheringPrices(items = Array.from(game.items ?? [])) {
     });
   }
   for (const { tier, members } of rareGroups.values()) for (const [name, gp] of spreadInBand(members, RARE_BANDS[tier - 1])) if (!prices.has(name)) prices.set(name, gp);
-  // Refined goods: ingredients + margin.
-  for (const [name, gp] of recipeCosts(allRecipes().map(row => ({ output: row.output, quantity: row.quantity, inputs: row.inputs })), prices)) if (!prices.has(name)) prices.set(name, gp);
+  // Preserve established raw/rare prices and GM-approved values. Recipe products
+  // are floors, not fixed caps, so later ingredient increases remain safe.
+  const rows = allRecipes();
+  const outputs = new Set(rows.map(row => row.output));
+  for (const item of items) {
+    if (item.getFlag?.(MODULE_ID, "universalSkill")) continue;
+    const approved = approvedPrice(item);
+    const current = priceInGp(item.system?.price);
+    if (approved !== null) prices.set(item.name, approved);
+    else if (prices.has(item.name) && item.getFlag?.(MODULE_ID, PRICED_FLAG)) prices.set(item.name, current);
+    else if (outputs.has(item.name) && current) prices.set(item.name, current);
+  }
+  for (const [name, gp] of prices) prices.set(name, priceInGp(tidyPrice(gp)));
+  // Refined goods: every enabled recipe must cover ingredients + margin.
+  for (const [name, gp] of recipeCosts(rows, prices)) prices.set(name, gp);
   // Basic gathering tools.
   for (const item of items) if (item.getFlag?.(MODULE_ID, "defaultTool")) prices.set(item.name, TOOL_PRICE);
   return prices;
@@ -85,10 +98,16 @@ export async function repriceWorld({ dryRun = false } = {}) {
   const world = [];
   const ratioByName = new Map();
   for (const item of items) {
-    if (skipped(item)) continue;
+    if (item.getFlag?.(MODULE_ID, "universalSkill")) continue;
+    const unused = folderPath(item.folder) === "Unused";
     const before = item.system?.price;
     let target = null;
-    if (prices.has(item.name)) target = tidyPrice(prices.get(item.name));
+    if (unused) {
+      if (approvedPrice(item) !== null) target = tidyPrice(approvedPrice(item));
+      else if (oddCoin(before)) target = tidyPrice(priceInGp(before));
+      else continue;
+    }
+    else if (prices.has(item.name)) target = tidyPrice(prices.get(item.name));
     else if (!item.getFlag(MODULE_ID, PRICED_FLAG) && priceInGp(before)) {
       const book = await bookPrice(item);
       if (book) target = campaignPrice(book);
@@ -97,9 +116,9 @@ export async function repriceWorld({ dryRun = false } = {}) {
     if (!target && oddCoin(before)) target = tidyPrice(priceInGp(before));
     if (!target) continue;
     const from = priceInGp(before), to = priceInGp(target);
-    if (from !== to || !item.getFlag(MODULE_ID, PRICED_FLAG)) {
+    if (from !== to || oddCoin(before) || !item.getFlag(MODULE_ID, PRICED_FLAG)) {
       const saved = item.getFlag(MODULE_ID, PRICED_FLAG) ?? {};
-      world.push({ item, name: item.name, from, to, changes: { "system.price": target, [`flags.${MODULE_ID}.${PRICED_FLAG}`]: { book: saved.book ?? await bookPrice(item) ?? null, basis: Number.isFinite(Number(saved.basis)) ? Number(saved.basis) : from } } });
+      world.push({ item, name: item.name, from, to, changes: { "system.price": target, [`flags.${MODULE_ID}.${PRICED_FLAG}`]: { ...saved, book: saved.book ?? await bookPrice(item) ?? null, basis: Number.isFinite(Number(saved.basis)) ? Number(saved.basis) : from } } });
     }
     if (from !== to) ratioByName.set(item.name, { from, to });
   }
@@ -123,7 +142,7 @@ export async function repriceWorld({ dryRun = false } = {}) {
       if (to === null) continue;
       const target = tidyPrice(to);
       if (priceInGp(target) === current && item.getFlag(MODULE_ID, PRICED_FLAG) && !oddCoin(item.system?.price)) continue;
-      actorPlan.push({ actor, item, name: `${actor.name}: ${item.name}`, from: current, to: priceInGp(target), changes: { "system.price": target, [`flags.${MODULE_ID}.${PRICED_FLAG}`]: { book: item.getFlag(MODULE_ID, PRICED_FLAG)?.book ?? null } } });
+      actorPlan.push({ actor, item, name: `${actor.name}: ${item.name}`, from: current, to: priceInGp(target), changes: { "system.price": target, [`flags.${MODULE_ID}.${PRICED_FLAG}`]: { ...(item.getFlag(MODULE_ID, PRICED_FLAG) ?? {}), book: item.getFlag(MODULE_ID, PRICED_FLAG)?.book ?? null } } });
     }
   }
   const summary = { world: world.map(({ name, from, to }) => ({ name, from, to })), actors: actorPlan.map(({ name, from, to }) => ({ name, from, to })) };

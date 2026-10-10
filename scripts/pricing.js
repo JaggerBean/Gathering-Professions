@@ -24,13 +24,18 @@ export function priceInGp(price) {
   return Number.isFinite(value) && value > 0 ? value * (RATE[price?.denomination ?? "gp"] ?? 1) : 0;
 }
 
-/** A gp amount as a tidy dnd5e price in silver or gold only: sp under 1 gp (at least 1 sp), then gp (½ gp steps under 10, whole above). */
+/** Round upward to whole silver; fractional gold represents gold and silver only. */
 export function tidyPrice(gp) {
   const amount = Math.max(0, Number(gp) || 0);
   if (!amount) return { value: 0, denomination: "gp" };
-  if (amount < 1) return { value: Math.max(1, Math.round(amount * 10)), denomination: "sp" };
-  if (amount < 10) return { value: Math.round(amount * 2) / 2, denomination: "gp" };
-  return { value: Math.round(amount), denomination: "gp" };
+  const silver = Math.max(1, Math.ceil(amount * 10 - 1e-9));
+  return silver < 10 ? { value: silver, denomination: "sp" } : { value: silver / 10, denomination: "gp" };
+}
+
+/** Explicit campaign price approved by the GM, in gp; zero remains a valid override. */
+export function approvedPrice(item) {
+  const value = item?.getFlag?.(MODULE_ID, PRICED_FLAG)?.approved ?? item?.flags?.[MODULE_ID]?.[PRICED_FLAG]?.approved;
+  return value !== null && value !== undefined && Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : null;
 }
 
 /** True when a price uses a coin the campaign doesn't (cp, ep, pp). */
@@ -87,21 +92,22 @@ export function spreadInBand(members, band) {
 
 /**
  * Unit cost of each recipe output from its ingredients (+ margin), iterating so
- * refined ingredients (ingots, planks) are priced first. Cheapest recipe wins.
+ * refined ingredients (ingots, planks) are priced first. Most expensive enabled
+ * recipe establishes the minimum; final rounded ingredient prices are used.
  * @param {{output: string, quantity: number, inputs: [string, number][]}[]} recipes
  * @param {Map<string, number>} known  name → gp for ingredients already priced
  */
 export function recipeCosts(recipes, known, margin = REFINED_MARGIN) {
   const prices = new Map(known);
   const outputs = new Map();
-  for (let pass = 0; pass < 8; pass++) {
+  for (let pass = 0; pass < Math.max(8, recipes.length + 1); pass++) {
     let changed = false;
     for (const row of recipes) {
       if (!row.inputs.every(([name]) => prices.has(name))) continue;
       const unit = row.inputs.reduce((sum, [name, quantity]) => sum + prices.get(name) * quantity, 0) * margin / Math.max(1, row.quantity);
-      const best = outputs.has(row.output) ? Math.min(outputs.get(row.output), unit) : unit;
+      const best = priceInGp(tidyPrice(Math.max(outputs.get(row.output) ?? 0, known.get(row.output) ?? 0, unit)));
       if (outputs.get(row.output) !== best) { outputs.set(row.output, best); changed = true; }
-      if (!known.has(row.output)) prices.set(row.output, outputs.get(row.output));
+      prices.set(row.output, outputs.get(row.output));
     }
     if (!changed) break;
   }
@@ -121,6 +127,13 @@ const compendiumSource = data => data?._stats?.compendiumSource || data?.flags?.
  */
 export function priceOnCreate(item, data) {
   const price = foundry.utils.getProperty(data, "system.price");
+  const own = approvedPrice(data);
+  const world = Array.from(game.items ?? []).find(entry => entry.name === data?.name);
+  const approved = own ?? approvedPrice(world);
+  if (approved !== null) {
+    const saved = data?.flags?.[MODULE_ID]?.[PRICED_FLAG] ?? {};
+    return item.updateSource({ "system.price": tidyPrice(approved), [`flags.${MODULE_ID}.${PRICED_FLAG}`]: { ...saved, approved, book: saved.book ?? price ?? null } });
+  }
   if (data?.flags?.[MODULE_ID]?.[PRICED_FLAG]) {
     if (oddCoin(price)) item.updateSource({ "system.price": tidyPrice(priceInGp(price)) });
     return;
