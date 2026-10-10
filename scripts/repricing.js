@@ -6,7 +6,7 @@
 // other compendium items are halved once. Skill items and the Unused folder
 // are left alone. Idempotent: running it again changes nothing.
 import { MODULE_ID, PROFESSIONS } from "./rules.js";
-import { MATERIAL_BANDS, RARE_BANDS, PRICED_FLAG, STANDARD_PRICES, priceInGp, tidyPrice, campaignPrice, oddCoin, spreadInBand, recipeCosts, approvedPrice } from "./pricing.js";
+import { MATERIAL_BANDS, RARE_BANDS, PRICED_FLAG, STANDARD_PRICES, priceInGp, tidyPrice, campaignPrice, oddCoin, spreadInBand, recipeCosts, approvedPrice, itemPriceProfile } from "./pricing.js";
 import { allRecipes } from "./refining.js";
 
 export const TOOL_PRICE = 1;
@@ -128,11 +128,15 @@ export async function repriceWorld({ dryRun = false } = {}) {
   for (const actor of Array.from(game.actors ?? [])) {
     for (const item of Array.from(actor.items ?? [])) {
       if (item.getFlag?.(MODULE_ID, "universalSkill")) continue;
-      const base = item.name.replace(/^(Masterwork|Exquisite)\s+/, "");
+      const profile = itemPriceProfile(item);
+      const base = profile.name;
       const ratio = ratioByName.get(base) ?? ratioByName.get(item.name);
       const current = priceInGp(item.system?.price);
       let to = null;
-      if (ratio) to = ratio.from ? current * (ratio.to / ratio.from) : ratio.to;
+      // Absolute base prices make a partially completed migration recoverable:
+      // retries cannot depend on a world price changing again.
+      if (prices.has(base)) to = prices.get(base) * profile.multiplier;
+      else if (ratio) to = ratio.from ? current * (ratio.to / ratio.from) : ratio.to;
       else if (current && STANDARD_PRICES[item.name] !== undefined && !crafted.has(item.name)) to = STANDARD_PRICES[item.name];
       else if (!item.getFlag(MODULE_ID, PRICED_FLAG) && current && prices.has(base)) to = prices.get(base);
       else if (!item.getFlag(MODULE_ID, PRICED_FLAG) && current) {

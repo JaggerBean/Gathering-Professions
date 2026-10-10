@@ -24,8 +24,8 @@ export function gatheringAllowance(actor) {
   // changes made directly to the effect.
   const pending = pendingExhaustion.get(actor);
   if (pending !== undefined) {
-    if (exhaustion >= pending) pendingExhaustion.delete(actor);
-    else exhaustion = pending;
+    if (pending.expires <= Date.now() || exhaustion >= pending.value) pendingExhaustion.delete(actor);
+    else exhaustion = pending.value;
   }
   const sharedPending = actor?.getFlag?.(MODULE_ID, "gatherExhaustionPending");
   if (sharedPending?.used === used && sharedPending.expires > Date.now()) exhaustion = Math.max(exhaustion, sharedPending.value);
@@ -43,7 +43,7 @@ export function reserveGatherAttempt(actor, { pageUuid = null, onReserved = null
       if (!limit && !pageUuid) return true;
       const exhausted = limit > 0 && used >= limit;
       const winded = exhausted && secondWind > 0;
-      if (limit && exhaustion >= maxExhaustion && !winded) {
+      if (limit && exhaustion >= maxExhaustion) {
         ui.notifications.warn(`Cannot gather: exhaustion is already at its maximum (${maxExhaustion}).`);
         return false;
       }
@@ -85,7 +85,7 @@ export function reserveGatherAttempt(actor, { pageUuid = null, onReserved = null
         changes[`flags.${MODULE_ID}.gatherExhaustionPending`] = { used: used + 1, value: exhaustion + 1, expires: Date.now() + 5000 };
       }
       if (!await actor.update(changes)) throw new Error("Could not save the gathering attempt on this character.");
-      if (exhausted && !winded) pendingExhaustion.set(actor, exhaustion + 1);
+      if (exhausted && !winded) pendingExhaustion.set(actor, { value: exhaustion + 1, expires: Date.now() + 5000 });
       onReserved?.(ticket);
       return true;
     }

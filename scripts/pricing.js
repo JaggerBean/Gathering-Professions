@@ -98,6 +98,7 @@ export function spreadInBand(members, band) {
  * @param {Map<string, number>} known  name → gp for ingredients already priced
  */
 export function recipeCosts(recipes, known, margin = REFINED_MARGIN) {
+  assertAcyclicRecipes(recipes);
   const prices = new Map(known);
   const outputs = new Map();
   for (let pass = 0; pass < Math.max(8, recipes.length + 1); pass++) {
@@ -114,6 +115,50 @@ export function recipeCosts(recipes, known, margin = REFINED_MARGIN) {
   return outputs;
 }
 
+/** Reject indirect recipe loops before calculating or persisting prices. */
+export function assertAcyclicRecipes(recipes) {
+  const dependencies = new Map();
+  for (const row of recipes.filter(row => !row.disabled)) {
+    const inputs = dependencies.get(row.output) ?? new Set();
+    for (const [name] of row.inputs) inputs.add(name);
+    dependencies.set(row.output, inputs);
+  }
+  const visiting = new Set(), visited = new Set();
+  const visit = name => {
+    if (visiting.has(name)) throw new Error(`Recipe cycle includes "${name}". Remove the circular ingredients before repricing.`);
+    if (visited.has(name) || !dependencies.has(name)) return;
+    visiting.add(name);
+    for (const input of dependencies.get(name)) visit(input);
+    visiting.delete(name);
+    visited.add(name);
+  };
+  for (const name of dependencies.keys()) visit(name);
+}
+
+/** Recover a crafted item's base identity and configured value premiums. */
+export function itemPriceProfile(item) {
+  const flags = item?.flags?.["crafting-professions"] ?? {};
+  let name = String(item?.name ?? "");
+  let multiplier = 1;
+  let rules = {}, perks = null;
+  try { rules = game.settings.get("crafting-professions", "rules") ?? {}; } catch { /* Companion inactive. */ }
+  try { perks = game.settings.get("crafting-professions", "perks")?.list; } catch { /* Defaults below. */ }
+  if (flags.masterwork || name.startsWith("Masterwork ")) {
+    name = name.replace(/^Masterwork\s+/, "");
+    multiplier *= Number(rules.masterworkValue) || 2;
+  }
+  if (flags.meal?.exquisite || name.startsWith("Exquisite ")) {
+    name = flags.meal?.dish || name.replace(/^Exquisite\s+/, "");
+    multiplier *= Number(rules.cooking?.exquisiteValue) || 2;
+  }
+  for (const perk of [...(flags.perks ?? [])].reverse()) {
+    const suffix = ` (${perk})`;
+    if (name.endsWith(suffix)) name = name.slice(0, -suffix.length);
+    multiplier *= Number(perks?.find(entry => entry.name === perk)?.effects?.value) || (perk === "Ornate" ? 2 : 1);
+  }
+  return { name, multiplier, quality: multiplier !== 1 || Boolean(flags.masterwork || flags.meal?.exquisite || flags.perks?.length) };
+}
+
 /* ---------------------------------------------------------------------- */
 /* Entry rule: compendium items come in at campaign price                  */
 /* ---------------------------------------------------------------------- */
@@ -127,6 +172,13 @@ const compendiumSource = data => data?._stats?.compendiumSource || data?.flags?.
  */
 export function priceOnCreate(item, data) {
   const price = foundry.utils.getProperty(data, "system.price");
+  const profile = itemPriceProfile(data);
+  // Quality has already been applied to the payload. Do not replace it with
+  // an inherited base approval, or halve it again during inventory transfers.
+  if (profile.quality && data?.flags?.[MODULE_ID]?.[PRICED_FLAG]) {
+    if (oddCoin(price)) item.updateSource({ "system.price": tidyPrice(priceInGp(price)) });
+    return;
+  }
   const own = approvedPrice(data);
   const world = Array.from(game.items ?? []).find(entry => entry.name === data?.name);
   const approved = own ?? approvedPrice(world);
