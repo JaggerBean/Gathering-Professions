@@ -117,7 +117,8 @@ function makeActor(initialXp = 0, profession = "mining", modifier = 0) {
   const xp = { [profession]: initialXp };
   const ranks = {};
   const flags = {};
-  return {
+  const actor = {
+    uuid: `Actor.gatherFixture${++gatheringDocumentId}`,
     name: "Test gatherer", id: "test-actor", type: "character", isOwner: true, selected: profession, inventory, xp, ranks,
     system: { abilities: { str: { mod: modifier }, dex: { mod: modifier }, wis: { mod: modifier } } },
     flags,
@@ -155,6 +156,8 @@ function makeActor(initialXp = 0, profession = "mining", modifier = 0) {
       })));
     }
   };
+  gatheringDocuments.set(actor.uuid, actor);
+  return actor;
 }
 
 await import("../scripts/main.js");
