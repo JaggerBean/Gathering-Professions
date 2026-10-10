@@ -39,6 +39,7 @@ assert.throws(() => pricing.recipeCosts([{ output: "A", quantity: 1, inputs: [["
   { output: "B", quantity: 1, inputs: [["A", 1]] }], new Map([["A", 1], ["B", 1]])), /Recipe cycle/);
 const world = { ...structuredClone(base), id: "dagger", getFlag(m, k) { return get(this.flags[m], k); } };
 world.system.price.value = 2;
+world.flags[GP].campaignPrice.approved = 2;
 game.items = [world];
 const plain = make(structuredClone(base));
 pricing.priceOnCreate(plain, plain.data);
