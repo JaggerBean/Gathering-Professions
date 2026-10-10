@@ -903,7 +903,7 @@ game.modules.get("skill-tree").active = true;
   game.modules.set("kctg-5e", { active: true });
   const all = key => { const preset = presetLib.MATERIAL_PRESETS[key]; return [...Object.values(preset.materials), ...Object.values(preset.rare)].flat().map(entry => Array.isArray(entry) ? entry[0] : entry); };
   // Materials per tier (mining T1 adds Rock Salt; skinning T1/T2 add Beast Flesh/Fat for cooking).
-  const perTier = { herbalism: [5, 5, 5, 5, 5], mining: [6, 5, 5, 5, 5], logging: [4, 4, 4, 4, 4], skinning: [6, 6, 5, 5, 5] };
+  const perTier = { herbalism: [5, 5, 5, 5, 5], mining: [6, 5, 5, 5, 5], logging: [6, 5, 4, 4, 4], skinning: [6, 6, 5, 5, 5] };
   for (const [key, counts] of Object.entries(perTier)) {
     const preset = presetLib.MATERIAL_PRESETS[key];
     assert.deepEqual(Object.values(preset.materials).map(tier => tier.length), counts, `${key}: materials per tier`);
@@ -951,7 +951,7 @@ game.modules.get("skill-tree").active = true;
   assert.deepEqual(materialsLib.materialsModel("mining").gathering.map(group => group.materials.length), [6, 5, 5, 5, 5], "Only the preset's mining materials remain assigned");
   assert.equal((await presetLib.applyMaterialPreset("mining")).imported, 0, "Second run reuses everything");
   // Logging and skinning; skinning imports from Kris's and three Heliana packs.
-  assert.deepEqual([(await presetLib.applyMaterialPreset("logging")).materials, materialsLib.materialsModel("logging").gathering.map(group => group.materials.length)], [20, [4, 4, 4, 4, 4]]);
+  assert.deepEqual([(await presetLib.applyMaterialPreset("logging")).materials, materialsLib.materialsModel("logging").gathering.map(group => group.materials.length)], [23, [6, 5, 4, 4, 4]]);
   const seed = items.find(item => item.name === "Seed of the Old Grove");
   assert.equal(seed.flags["gathering-professions"].customItem, "Seed of the Old Grove", "Forest finds are created by the module");
   assert.equal(seed.img, CUSTOM_ITEMS["Seed of the Old Grove"].img);

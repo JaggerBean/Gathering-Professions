@@ -7,8 +7,8 @@ globalThis.game = { settings: { get() { return undefined; } }, modules: new Map(
 const pricing = await import("../scripts/pricing.js");
 
 // Tidy prices: cp under 1 sp, sp under 1 gp, ½ gp steps under 10 gp, whole gp above.
-assert.deepEqual(pricing.tidyPrice(0.034), { value: 3, denomination: "cp" });
-assert.deepEqual(pricing.tidyPrice(0.004), { value: 1, denomination: "cp" }, "Never rounds a priced item to nothing");
+assert.deepEqual(pricing.tidyPrice(0.034), { value: 1, denomination: "sp" }, "Silver and gold only: at least 1 sp");
+assert.deepEqual(pricing.tidyPrice(0.004), { value: 1, denomination: "sp" }, "Never rounds a priced item to nothing");
 assert.deepEqual(pricing.tidyPrice(0.46), { value: 5, denomination: "sp" });
 assert.deepEqual(pricing.tidyPrice(7.4), { value: 7.5, denomination: "gp" });
 assert.deepEqual(pricing.tidyPrice(87.6), { value: 88, denomination: "gp" });
@@ -18,9 +18,11 @@ assert.equal(pricing.priceInGp({ value: 5, denomination: "sp" }), 0.5);
 assert.deepEqual(pricing.campaignPrice({ value: 15, denomination: "gp" }), { value: 7.5, denomination: "gp" });
 assert.deepEqual(pricing.campaignPrice({ value: 1500, denomination: "gp" }), { value: 750, denomination: "gp" });
 assert.deepEqual(pricing.campaignPrice({ value: 1, denomination: "gp" }), { value: 5, denomination: "sp" });
-assert.deepEqual(pricing.campaignPrice({ value: 1, denomination: "cp" }), { value: 1, denomination: "cp" });
+assert.deepEqual(pricing.campaignPrice({ value: 1, denomination: "cp" }), { value: 1, denomination: "sp" }, "No copper");
+assert.equal(pricing.oddCoin({ value: 3, denomination: "cp" }), true);
+assert.equal(pricing.oddCoin({ value: 3, denomination: "sp" }), false);
 // Bands: approved values (materials T1 5 cp–1.5 sp … T5 7.5–22.5 gp; rare finds T1 1–3 gp … T5 50–100 gp).
-assert.deepEqual(pricing.MATERIAL_BANDS[0], [0.05, 0.15]);
+assert.deepEqual(pricing.MATERIAL_BANDS[0], [0.1, 0.2]);
 assert.deepEqual(pricing.RARE_BANDS[4], [50, 100], "Tier 5 rare finds top out at 100 gp");
 // Spread keeps the old order; equal old prices share a value; a lone item sits mid-band.
 const spread = pricing.spreadInBand([{ key: "a", old: 500 }, { key: "b", old: 0.5 }, { key: "c", old: 30 }, { key: "d", old: 30 }], [1, 3]);
@@ -50,5 +52,12 @@ assert.deepEqual(copy.data.system.price, { value: 7.5, denomination: "gp" }, "Co
 const homebrew = make({ name: "Homebrew", system: { price: { value: 4, denomination: "gp" } } });
 pricing.priceOnCreate(homebrew, homebrew.data);
 assert.equal(homebrew.data.system.price.value, 4, "Items made in the world keep their price");
+// Standard gear by type, even without a compendium source (starting equipment).
+const fiddle = make({ name: "Fiddle", system: { price: { value: 25, denomination: "gp" } } });
+pricing.priceOnCreate(fiddle, fiddle.data);
+assert.deepEqual(fiddle.data.system.price, { value: 12, denomination: "gp" });
+const coppers = make({ name: "Odd Trinket", system: { price: { value: 7, denomination: "cp" } } });
+pricing.priceOnCreate(coppers, coppers.data);
+assert.deepEqual(coppers.data.system.price, { value: 1, denomination: "sp" }, "Copper prices become silver");
 
 console.log("PASS: pricing — tidy prices, half book, bands, spread, refined costs, compendium entry rule.");
