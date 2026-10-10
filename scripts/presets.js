@@ -47,7 +47,8 @@ export const MATERIAL_PRESETS = Object.freeze({
     rareFolder: ["Rare Finds", "Mining"],
     // Ores and stone as gathering materials; gemstones as rare finds.
     materials: Object.freeze({
-      1: list("Stone, Cobblestones, Sandstone, Coal, Copper Ore"),
+      // Rock Salt: a cooking staple (Crafting Professions' Cook).
+      1: list("Stone, Cobblestones, Sandstone, Coal, Copper Ore, Rock Salt"),
       2: list("Granite, Quartzite, Tin, Lead, Iron Ore"),
       3: list("Marble, Alabaster, Silver Ore, Gold Ore, Kyanite"),
       4: list("Platinum Ore, Kornerupine, Harunite, Ravenar, Benitoite"),
@@ -99,8 +100,9 @@ export const MATERIAL_PRESETS = Object.freeze({
     // predators, monsters and giant vermin, dragons. Heliana's type-named parts
     // appear only at the tier of that creature type.
     materials: Object.freeze({
-      1: list("Chicken Bones, Mole Rat Hide, Fox Hide, Crow Feathers, Beast Hair"),
-      2: list("Cowhide, Ram's Horn, Antlers, Beast Pelt, Beast Bone"),
+      // Beast Flesh and Beast Fat: meat for cooking.
+      1: list("Chicken Bones, Mole Rat Hide, Fox Hide, Crow Feathers, Beast Hair, Beast Flesh"),
+      2: list("Cowhide, Ram's Horn, Antlers, Beast Pelt, Beast Bone, Beast Fat"),
       3: list("Bear Hide, Boar Cranium, Shark Teeth, Beast Tusk, Beast Pouch Of Claws"),
       4: list("Tiger Hide, Chitin, Exoskeleton, Monstrosity Pelt, Monstrosity Bone"),
       5: list("Dragonhide, Dragon Bones, Dragon Scales, Dragon Talons, Dragon Horn")

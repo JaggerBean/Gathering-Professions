@@ -890,12 +890,13 @@ game.modules.get("skill-tree").active = true;
   assert.deepEqual(presetLib.availablePresets(), [], "Needs Kris's Trade Goods");
   game.modules.set("kctg-5e", { active: true });
   const all = key => { const preset = presetLib.MATERIAL_PRESETS[key]; return [...Object.values(preset.materials), ...Object.values(preset.rare)].flat().map(entry => Array.isArray(entry) ? entry[0] : entry); };
-  const perTier = { herbalism: 5, mining: 5, logging: 4, skinning: 5 };
-  for (const [key, count] of Object.entries(perTier)) {
+  // Materials per tier (mining T1 adds Rock Salt; skinning T1/T2 add Beast Flesh/Fat for cooking).
+  const perTier = { herbalism: [5, 5, 5, 5, 5], mining: [6, 5, 5, 5, 5], logging: [4, 4, 4, 4, 4], skinning: [6, 6, 5, 5, 5] };
+  for (const [key, counts] of Object.entries(perTier)) {
     const preset = presetLib.MATERIAL_PRESETS[key];
-    assert.ok(Object.values(preset.materials).every(tier => tier.length === count), `${key}: ${count} materials per tier`);
+    assert.deepEqual(Object.values(preset.materials).map(tier => tier.length), counts, `${key}: materials per tier`);
     assert.ok(Object.values(preset.rare).every(tier => tier.length === 3), `${key}: 3 rare finds per tier`);
-    assert.equal(new Set(all(key)).size, count * 5 + 15, `${key}: no item listed twice`);
+    assert.equal(new Set(all(key)).size, counts.reduce((sum, count) => sum + count, 0) + 15, `${key}: no item listed twice`);
   }
   const { CUSTOM_ITEMS } = await import("../scripts/customitems.js");
   const refiningLib = await import("../scripts/refining.js");
@@ -928,10 +929,10 @@ game.modules.get("skill-tree").active = true;
   // Mining: the alias reuses a world "Mithril"; other mining materials are unassigned.
   const [mithril] = await globalThis.Item.implementation.create([{ name: "Mithril", type: "loot", img: "mi.webp", system: {}, flags: {} }]);
   const mining = await presetLib.applyMaterialPreset("mining");
-  assert.deepEqual([mining.materials, mining.rare], [25, 15]);
+  assert.deepEqual([mining.materials, mining.rare], [26, 15]);
   assert.equal(mithril.flags["gathering-professions"].material.tier, 5, "Mithril accepted for Mithral");
   assert.equal(items.filter(item => item.name === "Mithral").length, 0);
-  assert.deepEqual(materialsLib.materialsModel("mining").gathering.map(group => group.materials.length), [5, 5, 5, 5, 5], "Only the preset's mining materials remain assigned");
+  assert.deepEqual(materialsLib.materialsModel("mining").gathering.map(group => group.materials.length), [6, 5, 5, 5, 5], "Only the preset's mining materials remain assigned");
   assert.equal((await presetLib.applyMaterialPreset("mining")).imported, 0, "Second run reuses everything");
   // Logging and skinning; skinning imports from Kris's and three Heliana packs.
   assert.deepEqual([(await presetLib.applyMaterialPreset("logging")).materials, materialsLib.materialsModel("logging").gathering.map(group => group.materials.length)], [20, [4, 4, 4, 4, 4]]);
@@ -940,7 +941,7 @@ game.modules.get("skill-tree").active = true;
   assert.equal(seed.img, CUSTOM_ITEMS["Seed of the Old Grove"].img);
   assert.equal(seed.flags["gathering-professions"].rareFind.tier, 5);
   const skinning = await presetLib.applyMaterialPreset("skinning");
-  assert.deepEqual([skinning.materials, skinning.rare], [25, 15]);
+  assert.deepEqual([skinning.materials, skinning.rare], [27, 15]);
   assert.match(items.find(item => item.name === "Dragon Breath Sac")._stats.compendiumSource, /^Compendium\.helianas-harvest-compendium\.dragon\./, "Found in the later Heliana pack");
   assert.ok(items.some(item => item.name === "Beast Pelt" && item.flags["gathering-professions"].material.tier === 2), "Heliana beast part imported and assigned");
   // Refining: every preset material refines into something.

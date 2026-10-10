@@ -11,7 +11,7 @@ import { rollProfessionCheck } from "./checks.js";
 const KCTG = "kctg-5e.kctg-dnd5e";
 const HELIANA = "helianas-harvest-compendium";
 // Bump when recipes or generated items change: the GM prepares items again.
-export const REFINING_VERSION = 1;
+export const REFINING_VERSION = 2;
 export { REFINE_MINUTES } from "./rules.js";
 
 /** Minutes per unit: the recipe's own time, else the tier default (Rules). */
@@ -42,6 +42,7 @@ export const REFINING = Object.freeze({
       recipe(1, "Glass", 1, [["Sandstone", 2], ["Coal", 1]]),
       recipe(1, "Coke", 1, [["Coal", 3]]),
       recipe(1, "Copper Ingot", 1, [["Copper Ore", 2], ["Coal", 1]]),
+      recipe(1, "Kala Namak", 1, [["Rock Salt", 2], ["Charcoal", 1]]),
       recipe(2, "Stone Brick", 2, [["Granite", 1]]),
       recipe(2, "Glass", 2, [["Quartzite", 1], ["Coal", 1]]),
       recipe(2, "Tin Ingot", 1, [["Tin", 2], ["Coal", 1]]),
@@ -106,11 +107,13 @@ export const REFINING = Object.freeze({
       recipe(1, "Cured Hide", 1, [["Fox Hide", 1]]),
       recipe(1, "Fletching Feathers", 3, [["Crow Feathers", 1]]),
       recipe(1, "Waxed Thread", 2, [["Beast Hair", 1]]),
+      recipe(1, "Dried Meat", 2, [["Beast Flesh", 2], ["Rock Salt", 1]]),
       recipe(2, "Drayweight Leather", 1, [["Cowhide", 1]]),
       recipe(2, "Horn Plate", 2, [["Ram's Horn", 1]]),
       recipe(2, "Horn Plate", 2, [["Antlers", 1]]),
       recipe(2, "Grain Leather", 1, [["Beast Pelt", 1]]),
       recipe(2, "Bone Meal", 2, [["Beast Bone", 1]]),
+      recipe(2, "Lard", 2, [["Beast Fat", 1]]),
       recipe(3, "Tannin Leather", 1, [["Bear Hide", 1]]),
       recipe(3, "Bone Meal", 3, [["Boar Cranium", 1]]),
       recipe(3, "Polished Teeth", 2, [["Shark Teeth", 1]]),
