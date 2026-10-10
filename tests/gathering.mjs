@@ -730,7 +730,7 @@ assert.equal(perkSource.material.enabled, false);
 savedRules.masterfulRareFind = false;
 function nodePage(node) {
   const page = { uuid: `JournalEntry.test.JournalEntryPage.node${++gatheringDocumentId}`,
-    type: "gatherer.gatherer", name: "Test Node", flags: { "gathering-professions": { node }, gatherer: { draws: "0" } },
+    type: "gatherer.gatherer", name: "Test Node", flags: { "gathering-professions": { node }, gatherer: { draws: "5" } },
     getFlag(scope, key) { return foundry.utils.getProperty(this.flags[scope], key); },
     async update(changes) {
       await delay();
@@ -852,6 +852,9 @@ assert.equal(await nodeSheet(undefined)._onGather(true, null, makeActor()), "gat
   otherActor.system.attributes = { exhaustion: 0 };
   const firstPage = nodeSheet(undefined);
   const secondPage = nodeSheet({ profession: "herbalism" });
+  // These tests exhaust actor allowances, not finite node pulls.
+  firstPage.document.flags.gatherer.draws = "0";
+  secondPage.document.flags.gatherer.draws = "0";
   firstPage.table = {};
   secondPage.table = {};
   const blockedPage = nodeSheet({ profession: "mining", minRank: 5 });
