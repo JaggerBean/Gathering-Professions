@@ -1,16 +1,21 @@
-// The universal gathering Skill Tree: 30 skills that serve every profession,
+// The universal gathering Skill Tree: 30 spoke skills (plus 14 extras) that serve every profession,
 // laid out as a hexagon. The six themes are six spokes; the tier 1 skills form
 // the inner ring (the starting choices) and each spoke grows outward to its
 // capstone. Tier 3 skills bridge to the neighbouring spokes, so players can
 // cross themes. Skill points and prior purchases open later nodes.
 // Capstones (tier 5) cost 2 points and lock each other out: one per character.
+// 0.31.0 adds 14 skills off the spokes (EXTRA_SKILLS): an inner ring of
+// "middle pieces" between neighbouring tier 1 skills, an outer ring between
+// neighbouring tier 3 skills, and tier 4 choices that sit beside a spoke skill
+// and lock it out (either one opens the capstone). Two outer pairs are also
+// either/or choices.
 import { MODULE_ID } from "./rules.js";
 import { SKILL_TREE_ID } from "./integrations.js";
 
 export const TREE_NAME = "Gathering Skill Tree";
 export const CAPSTONE_POINTS = 2;
 // Layout version stored on the tree; older trees are moved on load.
-export const LAYOUT_VERSION = 8;
+export const LAYOUT_VERSION = 9;
 // Fixed group id so module.css can restyle this tree only (no group box).
 export const GROUP_ID = "gatheringProfessions";
 export const GRID_SIZE = 25;
@@ -32,7 +37,7 @@ export const THEMES = Object.freeze([
 
 const skill = (key, name, col, row, img, text, perk) => Object.freeze({ key, name, col, row, img: `icons/${img}`, text, perk: Object.freeze(perk) });
 
-export const UNIVERSAL_SKILLS = Object.freeze([
+export const SPOKE_SKILLS = Object.freeze([
   // Bounty: more material per gather.
   skill("steadyHands", "Steady Hands", 0, 0, "containers/bags/sack-leather-brown.webp", "+1 yield on Successful, Excellent, and Masterful extractions.", { yieldBonus: 1 }),
   skill("lightTouch", "Light Touch", 0, 1, "magic/nature/leaf-hand-green.webp", "15% chance a gather does not use a node pull.", { conserveChance: 15 }),
@@ -71,11 +76,60 @@ export const UNIVERSAL_SKILLS = Object.freeze([
   skill("stewardOfTheWilds", "Steward of the Wilds", 5, 4, "magic/nature/leaf-glow-green.webp", "Capstone. +20% chance a gather does not use a node pull.", { conserveChance: 20 })
 ]);
 
-export const TIERS = 5;
-export const isCapstone = entry => entry.row === TIERS - 1;
+const theme = key => THEMES.findIndex(entry => entry.key === key);
+/**
+ * A skill off the spokes, at a fixed grid cell.
+ * kind: "middle" (opens from any skill in `requires`) or "choice" (beside a
+ * spoke skill, locks it out, and also opens the next skill on that spoke).
+ */
+const extra = (key, name, themeKey, cell, img, text, perk, { requires, opens = [], lockout = [], kind = "middle" }) => Object.freeze({
+  key, name, col: theme(themeKey), row: null, cell: Object.freeze(cell), img: `icons/${img}`, text, perk: Object.freeze(perk),
+  requires: Object.freeze(requires), opens: Object.freeze(opens), lockout: Object.freeze(lockout), kind, extra: true
+});
 
-/** Grid cell for a skill: spoke = theme (col), distance from centre = tier (row). */
+export const EXTRA_SKILLS = Object.freeze([
+  // Inner ring: between neighbouring tier 1 skills.
+  extra("luckyStrike", "Lucky Strike", "fortune", [14, 9], "magic/control/buff-luck-fortune-rainbow.webp",
+    "A natural 20 on a gathering check does not use a node pull.", { naturalRefund: true }, { requires: ["steadyHands", "keenEye"] }),
+  extra("momentum", "Momentum", "technique", [15, 12], "skills/movement/arrow-upward-yellow.webp",
+    "After an Excellent or Masterful gather, +1 to your next gathering check within the hour.", { momentumBonus: 1 }, { requires: ["keenEye", "proficientGatherer"] }),
+  extra("toolSteward", "Tool Steward", "craft", [14, 15], "tools/hand/wrench-steel.webp",
+    "The first natural 1 each long rest does not wear your tool.", { toolSteward: 1 }, { requires: ["proficientGatherer", "toolwise"] }),
+  extra("fieldRepair", "Field Repair", "craft", [10, 15], "tools/smithing/tongs-steel-grey.webp",
+    "Once per long rest, restore 1d4 durability to one of your gathering tools (even a broken one) from the gathering window.", { fieldRepairs: 1 }, { requires: ["toolwise", "trailSense"] }),
+  extra("timekeeper", "Timekeeper", "wayfinding", [9, 12], "magic/time/hourglass-yellow-green.webp",
+    "Nodes you exhaust refill 25% sooner.", { refillCut: 25 }, { requires: ["trailSense", "fieldHand"] }),
+  extra("deepReserves", "Deep Reserves", "bounty", [10, 9], "magic/life/heart-cross-strong-flame-green.webp",
+    "+1 free gathering attempt per long rest.", { extraAttempts: 1 }, { requires: ["fieldHand", "steadyHands"], lockout: ["secondWind"] }),
+  // Outer ring: between neighbouring tier 3 skills.
+  extra("secondWind", "Second Wind", "technique", [16, 5], "skills/movement/feet-winged-boots-brown.webp",
+    "Once per long rest, a gather beyond your free attempts adds no exhaustion.", { secondWind: 1 }, { requires: ["bountiful", "treasureHunter"], lockout: ["deepReserves"] }),
+  extra("efficientRefiner", "Efficient Refiner", "craft", [17, 20], "tools/smithing/crucible.webp",
+    "Refining 4 or more units at once: every 4 units use one fewer of the recipe's first ingredient (on a success).", { refineSaver: true }, { requires: ["practicedTechnique", "masterworkHandling"], lockout: ["fieldProcessing"] }),
+  extra("fieldProcessing", "Field Processing", "craft", [7, 20], "environment/wilderness/camp-improvised.webp",
+    "Refining takes 25% less time (when refining takes world time).", { refineTimeCut: 25 }, { requires: ["masterworkHandling", "pathfinder"], lockout: ["efficientRefiner"] }),
+  extra("familiarGround", "Familiar Ground", "wayfinding", [3, 12], "environment/wilderness/terrain-forest-gray.webp",
+    "Choose one biome in the gathering window: gathering DCs there are 2 lower for you. Only the GM can change it afterwards.", { familiarDc: 2 }, { requires: ["pathfinder", "conservationist"] }),
+  extra("sharedHaul", "Shared Haul", "fellowship", [8, 5], "containers/bags/coinpouch-simple-leather-tan.webp",
+    "When an ally you Assist gets an Excellent or Masterful extraction, you also get 1 of that material.", { sharedHaul: 1 }, { requires: ["conservationist", "bountiful"] }),
+  // Tier 4 choices: beside a spoke skill, which they lock out.
+  extra("carefulSelection", "Careful Selection", "bounty", [10, 2], "tools/scribal/magnifying-glass.webp",
+    "Once per long rest, draw two results from the node and choose which one you gather.", { carefulUses: 1 }, { requires: ["bountiful"], opens: ["masterHarvester"], lockout: ["abundance"], kind: "choice" }),
+  extra("appraisersEye", "Appraiser's Eye", "fortune", [23, 9], "commodities/gems/gem-cut-faceted-princess-purple.webp",
+    "Once per long rest, after a rare find, reroll it on the same table and keep whichever result you prefer.", { appraiseUses: 1 }, { requires: ["treasureHunter"], opens: ["fortunesFavour"], lockout: ["richFind"], kind: "choice" }),
+  extra("lastPull", "Last Pull", "wayfinding", [3, 19], "magic/nature/root-vines-grow-brown.webp",
+    "Once per long rest, gather once from an exhausted node.", { lastPulls: 1 }, { requires: ["pathfinder"], opens: ["wayfarer"], lockout: ["deepSense"], kind: "choice" })
+]);
+
+/** Every universal skill: the 30 spoke skills, then the extras. */
+export const UNIVERSAL_SKILLS = Object.freeze([...SPOKE_SKILLS, ...EXTRA_SKILLS]);
+
+export const TIERS = 5;
+export const isCapstone = entry => !entry.extra && entry.row === TIERS - 1;
+
+/** Grid cell for a skill: spoke = theme (col), distance from centre = tier (row); extras have their own cell. */
 export function gridPosition(entry) {
+  if (entry.cell) return { col: entry.cell[0], row: entry.cell[1] };
   const [dx, dy] = SPOKES[entry.col];
   const reach = entry.row + 2;
   return { row: CENTER + dy * reach, col: CENTER + dx * reach };
@@ -92,19 +146,40 @@ export function neighbourSpokes(col) {
  * links between tiers 2 and 3 can be traversed in either direction.
  */
 export function prerequisites(entry, skills = UNIVERSAL_SKILLS) {
-  if (entry.row === 0) return [];
+  if (entry.extra) return skills.filter(other => entry.requires.includes(other.key));
+  // Tier 4 choices also open the next skill on their spoke.
+  const choices = skills.filter(other => other.extra && other.opens.includes(entry.key));
+  if (entry.row === 0) return choices;
   const spokes = entry.row === BRIDGE_ROW ? [entry.col, ...neighbourSpokes(entry.col)] : [entry.col];
-  return skills.filter(other =>
+  return [...skills.filter(other => !other.extra && (
     (other.row === entry.row - 1 && spokes.includes(other.col)) ||
-    (entry.row === BRIDGE_ROW - 1 && other.row === BRIDGE_ROW && neighbourSpokes(entry.col).includes(other.col)));
+    (entry.row === BRIDGE_ROW - 1 && other.row === BRIDGE_ROW && neighbourSpokes(entry.col).includes(other.col)))), ...choices];
 }
+
+/** Skills that taking this one locks out: the other capstones, and either/or partners. */
+export function lockouts(entry, skills = UNIVERSAL_SKILLS) {
+  const capstones = isCapstone(entry) ? skills.filter(other => isCapstone(other) && other !== entry) : [];
+  const partners = skills.filter(other => other !== entry && ((entry.lockout ?? []).includes(other.key) || (other.lockout ?? []).includes(entry.key)));
+  return [...capstones, ...partners];
+}
+
+const nameOf = key => UNIVERSAL_SKILLS.find(other => other.key === key)?.name ?? key;
+const orList = keys => keys.map(nameOf).join(" or ");
 
 function skillText(entry) {
   const theme = THEMES[entry.col];
   const cost = isCapstone(entry) ? `${CAPSTONE_POINTS} points. Only one capstone per character.` : "1 point.";
+  if (entry.extra) {
+    const partners = lockouts(entry).map(other => other.name);
+    const where = entry.kind === "choice" ? ` Opens from ${orList(entry.requires)}, and also opens ${orList(entry.opens)}.` : ` Middle piece: opens from ${orList(entry.requires)}.`;
+    const choice = partners.length ? ` Choose one: taking it locks out ${partners.join(" and ")}.` : "";
+    return `<p>${entry.text}</p><p><em>${theme.label} · ${cost}${where}${choice}</em></p>`;
+  }
   const bridge = entry.row === BRIDGE_ROW || entry.row === BRIDGE_ROW - 1
     ? " Cross-theme links open in either direction." : "";
-  return `<p>${entry.text}</p><p><em>${theme.label} · ${cost}${bridge}</em></p>`;
+  const partners = lockouts(entry).filter(other => other.extra).map(other => other.name);
+  const choice = partners.length ? ` Choose one: taking it locks out ${partners.join(" and ")}.` : "";
+  return `<p>${entry.text}</p><p><em>${theme.label} · ${cost}${bridge}${choice}</em></p>`;
 }
 
 /** Per-skill Skill Tree flags that depend on the layout. */
@@ -128,14 +203,61 @@ function treeFlags() {
 
 /** Set links and capstone lockouts (and any extra page changes) by skill key. */
 async function linkPages(tree, pageByKey, extra = () => ({})) {
-  const capstones = UNIVERSAL_SKILLS.filter(isCapstone);
   const uuids = list => list.filter(other => pageByKey.has(other.key)).map(other => pageByKey.get(other.key).uuid);
   await tree.updateEmbeddedDocuments("JournalEntryPage", UNIVERSAL_SKILLS.filter(entry => pageByKey.has(entry.key)).map(entry => ({
     _id: pageByKey.get(entry.key).id,
     [`flags.${SKILL_TREE_ID}.connectedSkills`]: uuids(prerequisites(entry)),
-    [`flags.${SKILL_TREE_ID}.lockoutSkills`]: isCapstone(entry) ? uuids(capstones.filter(other => other !== entry)) : [],
+    [`flags.${SKILL_TREE_ID}.lockoutSkills`]: uuids(lockouts(entry)),
     ...extra(entry)
   })));
+}
+
+/** Item data for a universal skill's perk Item. */
+function skillItemData(entry, { folder = null, ownership, extraFlags = {} }) {
+  return {
+    name: entry.name, type: "feat", img: entry.img, folder, ownership,
+    system: { description: { value: `<p>${entry.text}</p>` } },
+    flags: foundry.utils.mergeObject({ [MODULE_ID]: { perk: { enabled: true, profession: "any", ...entry.perk }, universalSkill: entry.key } }, extraFlags, { inplace: false })
+  };
+}
+
+/** Journal page data for a universal skill (links are set afterwards). */
+function skillPageData(entry, item, extraFlags = {}) {
+  return {
+    name: entry.name, type: "text", src: entry.img, text: { content: skillText(entry), format: 1 },
+    flags: foundry.utils.mergeObject({
+      [SKILL_TREE_ID]: {
+        linkedSkillRule: 0, mutualExclusion: 0, allowIncompleteProgression: 0, minimumPointsInGroup: 0,
+        itemUuids: [item.uuid], connectedSkills: [], lockoutSkills: [], conditionScript: "",
+        onUnlockScript: "", skillStyle: "default", sound: "", ...skillFlags(entry)
+      },
+      [MODULE_ID]: { universalSkill: entry.key }
+    }, extraFlags, { inplace: false })
+  };
+}
+
+const keyOf = document => document.getFlag?.(MODULE_ID, "universalSkill") ?? document.flags?.[MODULE_ID]?.universalSkill;
+
+/**
+ * Add skills a tree is missing (e.g. the 0.31.0 extras on an older tree): new
+ * perk Items next to the existing ones, and new pages. Existing pages keep
+ * their UUIDs, so unlocked skills stay unlocked.
+ * @returns {Promise<number>} skills added
+ */
+async function addMissingSkills(tree, pageByKey) {
+  const missing = UNIVERSAL_SKILLS.filter(entry => !pageByKey.has(entry.key));
+  if (!missing.length) return 0;
+  const existingItem = Array.from(globalThis.game?.items ?? []).find(item => item.getFlag?.(MODULE_ID, "universalSkill"));
+  const ownership = existingItem?.ownership ? foundry.utils.deepClone(existingItem.ownership) : { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER };
+  const itemByKey = new Map(Array.from(globalThis.game?.items ?? []).filter(item => keyOf(item)).map(item => [keyOf(item), item]));
+  const toCreate = missing.filter(entry => !itemByKey.has(entry.key));
+  if (toCreate.length) {
+    const created = await Item.implementation.create(toCreate.map(entry => skillItemData(entry, { folder: existingItem?.folder?.id ?? null, ownership })));
+    for (const item of created) itemByKey.set(keyOf(item), item);
+  }
+  const pages = await tree.createEmbeddedDocuments("JournalEntryPage", missing.map(entry => skillPageData(entry, itemByKey.get(entry.key))));
+  for (const page of pages) pageByKey.set(keyOf(page), page);
+  return missing.length;
 }
 
 /** True when a universal tree was built with an older layout. */
@@ -155,6 +277,7 @@ export async function relayoutUniversalTree(tree) {
     .map(page => [page.getFlag?.(MODULE_ID, "universalSkill"), page]).filter(([key]) => key));
   if (!pageByKey.size) throw new Error(`${tree.name} is not a universal gathering tree.`);
   await tree.update({ [`flags.${SKILL_TREE_ID}`]: treeFlags(), [`flags.${MODULE_ID}.layoutVersion`]: LAYOUT_VERSION });
+  await addMissingSkills(tree, pageByKey);
   // Re-link each page to the world skill Item with the same key (trees built
   // before 0.15.0 could be linked out of order).
   const itemByKey = new Map(Array.from(globalThis.game?.items ?? [])
@@ -226,29 +349,14 @@ export async function buildUniversalTree({ itemFolder = null, journalFolder = nu
   // Players open the tree and the Skill Tree module copies perk Items onto
   // their actors, so both need at least Observer.
   ownership ??= { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER };
-  const items = await Item.implementation.create(UNIVERSAL_SKILLS.map(entry => ({
-    name: entry.name, type: "feat", img: entry.img, folder: itemFolder, ownership,
-    system: { description: { value: `<p>${entry.text}</p>` } },
-    flags: foundry.utils.mergeObject({ [MODULE_ID]: { perk: { enabled: true, profession: "any", ...entry.perk }, universalSkill: entry.key } }, extraFlags, { inplace: false })
-  })));
+  const items = await Item.implementation.create(UNIVERSAL_SKILLS.map(entry => skillItemData(entry, { folder: itemFolder, ownership, extraFlags })));
   // Match by flag: Foundry may return created documents in a different order.
-  const keyOf = document => document.getFlag?.(MODULE_ID, "universalSkill") ?? document.flags?.[MODULE_ID]?.universalSkill;
   const itemByKey = new Map(items.map(item => [keyOf(item), item]));
   const tree = await JournalEntry.implementation.create({
     name, folder: journalFolder, ownership,
     flags: foundry.utils.mergeObject({ [SKILL_TREE_ID]: treeFlags(), [MODULE_ID]: { layoutVersion: LAYOUT_VERSION } }, extraFlags, { inplace: false })
   });
-  const pages = await tree.createEmbeddedDocuments("JournalEntryPage", UNIVERSAL_SKILLS.map(entry => ({
-    name: entry.name, type: "text", src: entry.img, text: { content: skillText(entry), format: 1 },
-    flags: foundry.utils.mergeObject({
-      [SKILL_TREE_ID]: {
-        linkedSkillRule: 0, mutualExclusion: 0, allowIncompleteProgression: 0, minimumPointsInGroup: 0,
-        itemUuids: [itemByKey.get(entry.key).uuid], connectedSkills: [], lockoutSkills: [], conditionScript: "",
-        onUnlockScript: "", skillStyle: "default", sound: "", ...skillFlags(entry)
-      },
-      [MODULE_ID]: { universalSkill: entry.key }
-    }, extraFlags, { inplace: false })
-  })));
+  const pages = await tree.createEmbeddedDocuments("JournalEntryPage", UNIVERSAL_SKILLS.map(entry => skillPageData(entry, itemByKey.get(entry.key), extraFlags)));
   // Links need the page UUIDs, so they are set after creation.
   await linkPages(tree, new Map(pages.map(page => [keyOf(page), page])));
   return { tree, items };
