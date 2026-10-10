@@ -365,7 +365,11 @@ export async function weightedPick(table, adjusted) {
  */
 const drawQueues = new WeakMap();
 
-export async function withAdjustedDraw(table, adjusted, task) {
+/**
+ * Careful Selection: the first draw picks twice and `choose(first, second)`
+ * returns the pick to keep (either may be a miss or null).
+ */
+export async function withAdjustedDraw(table, adjusted, task, { choose = null } = {}) {
   if (!table) return task();
   const previousTask = drawQueues.get(table) ?? Promise.resolve();
   let release;
@@ -373,12 +377,17 @@ export async function withAdjustedDraw(table, adjusted, task) {
   drawQueues.set(table, currentTask);
   await previousTask;
   try {
-    if (!adjusted?.changed) return await task();
+    if (!adjusted?.changed && !choose) return await task();
     const hadOwn = Object.hasOwn(table, "draw");
     const previous = table.draw;
+    let chosen = false;
     table.draw = async () => {
-      const pick = await weightedPick(table, adjusted);
-      if (pick?.miss) adjusted.missed = true;
+      let pick = await weightedPick(table, adjusted);
+      if (choose && !chosen) {
+        chosen = true;
+        pick = await choose(pick, await weightedPick(table, adjusted));
+      }
+      adjusted.missed = Boolean(pick?.miss);
       return { roll: pick?.roll ?? null, results: pick?.result ? [pick.result] : [] };
     };
     try { return await task(); }

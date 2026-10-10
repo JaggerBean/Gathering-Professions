@@ -3,6 +3,7 @@
 // module data; the Recipes window (recipes-ui.js) shows the ones the party has
 // discovered, and this file runs the craft: check, consume, produce or queue.
 import { MODULE_ID, PROFESSIONS, MAX_REFINE_MINUTES, activeRules, checkFormula, materialRule, professionFlag } from "./rules.js";
+import { actorPerks } from "./perks.js";
 import { getDegreeOfSuccess, naturalMasterful } from "./gathering.js";
 import { MATERIAL_PRESETS, folderPath, worldItem } from "./presets.js";
 import { runActorAction } from "./actions.js";
@@ -602,8 +603,12 @@ async function craftRecipeUnlocked(actor, id, batch = 1, { addXp }) {
   if (natural === 20) degree = naturalMasterful(degree);
   if (natural === 1 && degree.id !== "failed") degree = { ...degree, id: "failed", natural1: true };
   const success = ["successful", "excellent", "masterful"].includes(degree.id);
+  // Efficient Refiner: every 4 units of a successful batch use one fewer of the first ingredient.
+  // Field Processing: timed refining finishes sooner.
+  const perks = actorPerks(actor, entry.profession);
+  const saved = success && perks.refineSaver ? Math.min(Math.floor(count / 4), entry.inputs[0][1] * count - 1) : 0;
   const lost = degree.id === "failed" ? entry.inputs.map(([name, quantity]) => [name, Math.ceil(quantity * count / 2)])
-    : success ? entry.inputs.map(([name, quantity]) => [name, quantity * count]) : [];
+    : success ? entry.inputs.map(([name, quantity], index) => [name, quantity * count - (index === 0 ? saved : 0)]) : [];
   for (const [name, quantity] of lost) await removeFromInventory(actor, name, quantity);
   const bonus = degree.id === "masterful" ? 2 : degree.id === "excellent" ? 1 : 0;
   const made = success ? entry.quantity * count + bonus : 0;
@@ -611,14 +616,16 @@ async function craftRecipeUnlocked(actor, id, batch = 1, { addXp }) {
   if (xp) await addXp(actor, entry.profession, xp);
   let job = null;
   if (made) {
-    const minutes = rules.craftingTimed ? recipeMinutes(entry, rules) * count : 0;
+    const cut = Math.min(90, Math.max(0, Number(perks.refineTimeCut) || 0));
+    const minutes = rules.craftingTimed ? Math.round(recipeMinutes(entry, rules) * count * (1 - cut / 100)) : 0;
     const data = product.toObject();
     if (minutes) job = await queueJob(actor, { name: entry.output, img: product.img, quantity: made, data, ready: (game.time?.worldTime ?? 0) + minutes * 60, recipe: id, minutes });
     else await addToInventory(actor, data, made);
   }
   const verb = REFINING[entry.profession]?.verb ?? "Refining";
   const label = PROFESSIONS[entry.profession]?.label ?? entry.profession;
-  const used = entry.inputs.map(([name, quantity]) => `${quantity * count} ${escape(name)}`).join(", ");
+  const used = (success ? lost : entry.inputs.map(([name, quantity]) => [name, quantity * count])).map(([name, quantity]) => `${quantity} ${escape(name)}`).join(", ")
+    + (saved ? ` (Efficient Refiner saved ${saved} ${escape(entry.inputs[0][0])})` : "");
   const outcome = success ? `${made} ${escape(entry.output)}${bonus ? ` (+${bonus} ${LABELS[degree.id].toLowerCase()})` : ""}${job ? `, ready in ${formatMinutes(job.minutes)}` : ""}.`
     : degree.id === "failed" ? `Ruined: lost ${lost.map(([name, quantity]) => `${quantity} ${escape(name)}`).join(", ")}.` : "Nothing made; materials kept.";
   const flavor = `<div class="gathering-professions-chat"><strong>${verb}: ${escape(entry.output)}${count > 1 ? ` ×${count}` : ""}</strong>
@@ -626,7 +633,7 @@ async function craftRecipeUnlocked(actor, id, batch = 1, { addXp }) {
     <br><strong>${LABELS[degree.id]}</strong>${natural === 20 ? " (natural 20)" : degree.natural1 ? " (natural 1)" : ""}: ${outcome}${xp ? ` +${xp} ${escape(label)} XP.` : ""}</div>`;
   try { await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }), flavor }); }
   catch (error) { console.error(`${MODULE_ID}: could not post the refining roll`, error); }
-  return { degree: degree.id, made, lost, xp, job, total: roll.total, target: check.target };
+  return { degree: degree.id, made, lost, xp, job, saved, total: roll.total, target: check.target };
 }
 
 /* ---------------------------------------------------------------------- */

@@ -322,8 +322,21 @@ export function nodeUsage(page) {
   const gatherer = page?.flags?.gatherer ?? {};
   const draws = parseInt(gatherer.draws) || 0;
   const used = Number(gatherer.data?.drawsUsed) || 0;
-  return { draws, used, remaining: draws ? Math.max(0, draws - used) : null, time: parseFloat(gatherer.time) || 0, firstDrawTime: Number(gatherer.data?.firstDrawTime) || 0 };
+  // Timekeeper: a node emptied by a Timekeeper refills sooner until its next reset.
+  const baseTime = parseFloat(gatherer.time) || 0;
+  const cut = Math.min(75, Math.max(0, Number(page?.flags?.[MODULE_ID]?.refillCut) || 0));
+  const time = cut && used ? Math.round(baseTime * (1 - cut / 100) * 100) / 100 : baseTime;
+  return { draws, used, remaining: draws ? Math.max(0, draws - used) : null, time, baseTime, refillCut: used ? cut : 0, firstDrawTime: Number(gatherer.data?.firstDrawTime) || 0 };
 }
+
+/** Last Pull: the actor holding a node's reserved extra pull, while it lasts. */
+export function lastPullHolder(page) {
+  const hold = page?.flags?.[MODULE_ID]?.lastPull;
+  return hold && Number(hold.expires) > Date.now() ? String(hold.actorUuid ?? "") : "";
+}
+
+/** Changes that refill a node (clears Timekeeper and Last Pull state). */
+const refillChanges = now => ({ "flags.gatherer.data": { drawsUsed: 0, firstDrawTime: now }, [`flags.${MODULE_ID}.-=refillCut`]: null, [`flags.${MODULE_ID}.-=lastPull`]: null });
 
 export function isDepleted(page) {
   const { draws, used } = nodeUsage(page);
@@ -404,7 +417,7 @@ export async function autoResetExpired(pages = allNodePages()) {
   for (const page of pages) {
     const { time, used, firstDrawTime } = nodeUsage(page);
     if (!time || !used || now - firstDrawTime < time * 3600) continue;
-    await page.setFlag("gatherer", "data", { drawsUsed: 0, firstDrawTime: now });
+    await page.update(refillChanges(now));
     reset++;
   }
   return reset;
@@ -412,7 +425,7 @@ export async function autoResetExpired(pages = allNodePages()) {
 
 export async function resetNodes(pages) {
   const now = Number(globalThis.game?.time?.worldTime) || 0;
-  for (const page of pages) await page.setFlag("gatherer", "data", { drawsUsed: 0, firstDrawTime: now });
+  for (const page of pages) await page.update(refillChanges(now));
   return pages.length;
 }
 
