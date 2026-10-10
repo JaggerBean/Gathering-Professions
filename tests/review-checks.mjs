@@ -29,6 +29,44 @@ game.users.activeGM = game.user;
 await actions.handleActionRequest(actor, { id: "handover", operation: "acquire" }, player);
 assert.equal(flags.actionLease.id, "handover", "Replacement active GM can grant expired leases");
 
+// Resolve real node UUIDs and expose both actors to the GM's shared-resource
+// scan. Node leases must not be granted from actor ownership alone.
+await actions.handleActionRequest(actor, { id: "handover", operation: "release" }, player);
+const otherFlags = {};
+const otherActor = { ...actor, uuid: "Actor.otherReview",
+  getFlag: (_scope, key) => key.split(".").reduce((value, part) => value?.[part], otherFlags),
+  async setFlag(_scope, key, value) { await new Promise(resolve => setTimeout(resolve, 2)); otherFlags[key] = structuredClone(value); },
+  async unsetFlag(_scope, key) { delete otherFlags[key]; } };
+const node = { uuid: "JournalEntry.review.JournalEntryPage.node", type: "gatherer.gatherer",
+  testUserPermission: user => user.isGM || [player.id, second.id].includes(user.id) };
+const otherNode = { ...node, uuid: "JournalEntry.review.JournalEntryPage.other" };
+const hiddenNode = { ...node, uuid: "JournalEntry.review.JournalEntryPage.hidden", testUserPermission: user => user.isGM };
+const textPage = { ...node, uuid: "JournalEntry.review.JournalEntryPage.text", type: "text" };
+const documents = new Map([node, otherNode, hiddenNode, textPage].map(page => [page.uuid, page]));
+globalThis.fromUuid = async uuid => documents.get(uuid) ?? null;
+game.actors = [actor, otherActor];
+const nodeResource = `gather-node:${node.uuid}`;
+await Promise.all([
+  actions.handleActionRequest(actor, { id: "nodeFirst", operation: "acquire", resource: nodeResource }, player),
+  actions.handleActionRequest(otherActor, { id: "nodeSecond", operation: "acquire", resource: nodeResource }, second)
+]);
+assert.equal(flags.actionLease.id, "nodeFirst");
+assert.equal(flags.actionLease.resource, nodeResource);
+assert.equal(otherFlags.actionLease, undefined, "Different actors cannot hold the same node concurrently");
+await actions.handleActionRequest(otherActor, { id: "otherNode", operation: "acquire", resource: `gather-node:${otherNode.uuid}` }, second);
+assert.equal(otherFlags.actionLease.id, "otherNode", "Unrelated nodes remain available");
+await actions.handleActionRequest(otherActor, { id: "otherNode", operation: "release", resource: `gather-node:${otherNode.uuid}` }, second);
+for (const pageUuid of [hiddenNode.uuid, textPage.uuid, "JournalEntry.review.JournalEntryPage.missing"]) {
+  await actions.handleActionRequest(otherActor, { id: "invalidNode", operation: "acquire", resource: `gather-node:${pageUuid}` }, second);
+  assert.equal(otherFlags.actionLease, undefined, "Hidden, wrong-type and missing pages cannot grant node leases");
+}
+await actions.handleActionRequest(actor, { id: "nodeFirst", operation: "release", resource: nodeResource }, second);
+assert.equal(flags.actionLease.id, "nodeFirst", "Another owner cannot release a sender-bound node lease");
+await actions.handleActionRequest(actor, { id: "nodeFirst", operation: "release", resource: nodeResource }, player);
+await actions.handleActionRequest(otherActor, { id: "nodeSecond", operation: "acquire", resource: nodeResource }, second);
+assert.equal(otherFlags.actionLease.id, "nodeSecond", "Released node can be acquired by the waiting actor");
+await actions.handleActionRequest(otherActor, { id: "nodeSecond", operation: "release", resource: nodeResource }, second);
+
 const { rollProfessionCheck } = await import("../scripts/checks.js");
 const calls = [];
 const systemRoll = { total: 8, dice: [{ total: 10 }], options: { disadvantage: true } };
@@ -44,4 +82,4 @@ assert.deepEqual(calls.at(-1)[1].rolls[0].parts, ["1d6"], "System supplies skill
 await rollProfessionCheck(roller, { abilityKey: "str", modifier: 5, formula: "1d20 + 5 + 1d4" }, { tool: "smith" });
 assert.equal(calls.at(-1)[0], "tool");
 assert.deepEqual(calls.at(-1)[1].rolls[0].parts, ["1d4"]);
-console.log("PASS: deep-review checks — authenticated cross-client leases, expired-lock handover and native dnd5e roll delegation.");
+console.log("PASS: deep-review checks — authenticated actor/node leases, node visibility and type checks, expired-lock handover and native dnd5e roll delegation.");
