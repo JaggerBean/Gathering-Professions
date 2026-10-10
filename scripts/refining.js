@@ -494,6 +494,10 @@ export async function prepareRefinedItems(professions = refiningProfessions().ma
     report.missing.push(...pending.map(row => row.output));
   }
   report.missing = [...new Set(report.missing)];
+  // Campaign prices for anything just created or imported (pricing.js).
+  if (globalThis.Item?.implementation?.updateDocuments) {
+    try { await (await import("./repricing.js")).repriceWorld(); } catch (error) { console.warn("gathering-professions: repricing after preparing items failed", error); }
+  }
   return report;
 }
 

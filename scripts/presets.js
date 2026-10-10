@@ -220,5 +220,9 @@ export async function applyMaterialPreset(key, { exclusive = true } = {}) {
       report.unassigned++;
     }
   }
+  // Campaign prices for anything just created or imported (pricing.js).
+  if (globalThis.Item?.implementation?.updateDocuments) {
+    try { await (await import("./repricing.js")).repriceWorld(); } catch (error) { console.warn("gathering-professions: repricing after preparing items failed", error); }
+  }
   return report;
 }

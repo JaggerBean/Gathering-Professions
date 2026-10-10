@@ -35,7 +35,7 @@ export async function buildDefaultTools() {
     const entry = DEFAULT_TOOLS[profession.key];
     return {
       name: entry.name, type: "tool", img: entry.img, folder: folder.id, ownership: observer,
-      system: { quantity: 1, proficient: 0, description: { value: `<p>${entry.text}</p><p><em>Basic ${profession.label} tool: required to gather; no bonus. A natural 1 on a gathering check costs 1 durability.</em></p>` } },
+      system: { quantity: 1, proficient: 0, price: { value: 1, denomination: "gp" }, description: { value: `<p>${entry.text}</p><p><em>Basic ${profession.label} tool: required to gather; no bonus. A natural 1 on a gathering check costs 1 durability.</em></p>` } },
       flags: { [MODULE_ID]: { defaultTool: profession.key } }
     };
   }));

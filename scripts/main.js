@@ -27,6 +27,11 @@ import { LEGACY_MODULE_ID, migrateLegacyNamespace } from "./migration.js";
 import { gpDialog } from "./dialogs.js";
 import { runActorAction, registerActionHooks } from "./actions.js";
 import { rollProfessionCheck } from "./checks.js";
+import { registerPricingHooks, MATERIAL_BANDS, RARE_BANDS, PRICE_FACTOR, campaignPrice, tidyPrice, priceInGp } from "./pricing.js";
+import { repriceWorld, registerPriceContributor } from "./repricing.js";
+
+// Bump when campaign pricing changes: the active GM reprices the world once.
+const PRICING_VERSION = 1;
 
 const RESULT = Symbol("gatheringProfessionResult");
 const actorQueues = new WeakMap();
@@ -780,6 +785,7 @@ function integrateGatherer() {
 Hooks.on("gathererGather", gathererCheck);
 
 Hooks.once("init", () => {
+  registerPricingHooks();
   registerSettingsMenu();
   registerSceneControls();
   registerNodeUI();
@@ -821,6 +827,9 @@ Hooks.once("init", () => {
   });
   game.settings.register(MODULE_ID, "customRecipes", {
     name: "GM recipes", scope: "world", config: false, type: Array, default: []
+  });
+  game.settings.register(MODULE_ID, "pricingVersion", {
+    name: "Campaign Pricing Version", scope: "world", config: false, type: Number, default: 0
   });
   game.settings.register(MODULE_ID, "refiningVersion", {
     name: "Refined Items Version", scope: "world", config: false, type: Number, default: 0
@@ -872,6 +881,15 @@ Hooks.once("ready", async () => {
     },
     assist: { power: assistPower, offer: offerAssist, withdraw: withdrawAssist, find: findAssist },
     presets: { list: () => availablePresets(), apply: key => applyMaterialPreset(key) },
+    /** Campaign pricing: book × PRICE_FACTOR; module goods in tier bands. */
+    pricing: {
+      factor: PRICE_FACTOR, materialBands: MATERIAL_BANDS, rareBands: RARE_BANDS,
+      campaignPrice, tidyPrice, priceInGp,
+      /** GM: reprice the world (dryRun: just the plan). */
+      reprice: options => repriceWorld(options),
+      /** Add prices for another module's items: fn(prices, helpers) → Map<name, gp>. */
+      registerContributor: registerPriceContributor
+    },
     /** Refining: smelting, milling, tanning, preparation (Recipes window). */
     refining: {
       definitions: REFINING,
@@ -1114,7 +1132,8 @@ Hooks.once("ready", async () => {
       .catch(logFailure("could not set up gathering content"))
       .then(() => migrateUniversalTree()).catch(logFailure("could not update the universal tree"))
       .finally(() => syncEveryCharacter())
-      .then(() => setUpRefining()).catch(logFailure("could not set up refining")), 0);
+      .then(() => setUpRefining()).catch(logFailure("could not set up refining"))
+      .then(() => migratePricing()).catch(logFailure("could not apply campaign prices")), 0);
   }
   registerDiscoveryHooks(isActiveGM);
   for (const key of Object.keys(REFINING)) registerRecipeProvider(refiningProvider(key, { addXp }));
@@ -1140,6 +1159,14 @@ async function setUpRefining() {
     if (result.missing.length) console.warn(`${MODULE_ID}: refining items not found: ${result.missing.join(", ")}`);
   }
   await deliverAllDueJobs();
+}
+
+/** Active GM: apply campaign prices once per PRICING_VERSION (world items and inventories). */
+async function migratePricing() {
+  if (!isActiveGM() || (Number(game.settings.get(MODULE_ID, "pricingVersion")) || 0) >= PRICING_VERSION) return;
+  const result = await repriceWorld();
+  await game.settings.set(MODULE_ID, "pricingVersion", PRICING_VERSION);
+  if (result.world.length || result.actors.length) ui.notifications.info(`Campaign prices applied: ${result.world.length} items, ${result.actors.length} carried items.`);
 }
 
 function syncEveryCharacter() {
