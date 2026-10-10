@@ -404,7 +404,7 @@ function defineClass() {
       this.refreshTimer = null;
       this.refreshRunning = false;
       this.refreshDirty = false;
-      this.closed = false;
+      this.refreshClosed = false;
     }
 
     get title() { return this.page.name; }
@@ -479,12 +479,12 @@ function defineClass() {
       });
       // Batch hook bursts and never overlap renders or interrupt a gather.
       const rerender = () => {
-        if (this.closed || !this.rendered) return;
+        if (this.refreshClosed || !this.rendered) return;
         this.refreshDirty = true;
         if (this.refreshTimer !== null || this.refreshRunning || this.view.busy) return;
         this.refreshTimer = setTimeout(async () => {
           this.refreshTimer = null;
-          if (this.closed || !this.rendered || this.view.busy) return;
+          if (this.refreshClosed || !this.rendered || this.view.busy) return;
           this.refreshDirty = false;
           this.refreshRunning = true;
           try { await this.render(); }
@@ -546,7 +546,7 @@ function defineClass() {
     }
 
     _onClose(options) {
-      this.closed = true;
+      this.refreshClosed = true;
       clearTimeout(this.refreshTimer);
       this.refreshTimer = null;
       super._onClose?.(options);

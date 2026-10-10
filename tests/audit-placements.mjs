@@ -195,7 +195,9 @@ await ignores("updateWorldTime", 1);
 linked.flags.gatherer.data = { drawsUsed: 1, firstDrawTime: 0 };
 await refreshes("updateWorldTime", 0);
 game.time.worldTime = 1;
-await ignores("updateWorldTime", 1);
+await refreshes("updateWorldTime", 1); // Display crosses from 8h 0m to 7h 59m.
+game.time.worldTime = 2;
+await ignores("updateWorldTime", 2);
 game.time.worldTime = 61;
 await refreshes("updateWorldTime", 61);
 game.time.calendar = { days: { hoursPerDay: 24, minutesPerHour: 60, secondsPerMinute: 60 } };
