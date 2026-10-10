@@ -698,7 +698,7 @@ export async function deliverAllDueJobs(now = game.time?.worldTime ?? 0) {
 export function refiningProvider(profession, { addXp }) {
   const entry = REFINING[profession];
   return {
-    key: profession, order: 10 + Object.keys(REFINING).indexOf(profession),
+    key: profession, order: 10 + Object.keys(REFINING).indexOf(profession), category: "refining",
     get label() { return PROFESSIONS[profession]?.label ?? profession; },
     verb: entry.verb, action: entry.action, icon: entry.icon,
     get rollLabel() { return `Rolls ${PROFESSIONS[profession]?.label ?? profession} at the recipe's tier`; },

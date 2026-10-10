@@ -31,11 +31,16 @@ export function buildRecipesModel(actor, { isGM = false, tab = "", onlyCraftable
   const providers = recipeProviders().filter(entry => entry.visible?.(actor, isGM) ?? true);
   const provider = providers.find(entry => entry.key === tab) ?? providers[0] ?? null;
   const query = search.trim().toLowerCase();
-  const tabs = providers.map(entry => {
+  const allTabs = providers.map(entry => {
     const rows = entry.recipes({});
-    return { key: entry.key, label: entry.label, verb: entry.verb, icon: entry.icon, total: rows.length,
+    return { key: entry.key, label: entry.label, verb: entry.verb, icon: entry.icon, total: rows.length, category: categoryOf(entry),
       known: rows.filter(row => entry.isKnown(row, actor)).length, active: entry === provider };
   });
+  // Two rows: categories (only those with a visible tab), then the active category's tabs.
+  const activeCategory = provider ? categoryOf(provider) : "";
+  const categories = categoryList(allTabs.map(entry => entry.category)).map(category => ({ ...category, active: category.key === activeCategory,
+    first: allTabs.find(entry => entry.category === category.key)?.key ?? "" }));
+  const tabs = allTabs.filter(entry => entry.category === activeCategory);
   const groups = new Map();
   for (const row of provider ? provider.recipes({ includeDisabled: isGM }) : []) {
     const done = Boolean(provider.isDone?.(row, actor));
@@ -73,7 +78,7 @@ export function buildRecipesModel(actor, { isGM = false, tab = "", onlyCraftable
   if (onlyCraftable) products = products.map(group => ({ ...group, recipes: group.recipes.filter(row => row.max > 0 && !row.blocked) })).filter(group => group.recipes.length);
   const jobs = actor ? actorJobs(actor).map(job => ({ ...job, img: job.img || imgFor(job.name), done: job.ready <= now, left: formatDuration(Math.max(0, job.ready - now)) })) : [];
   return {
-    tabs, active: provider?.key ?? "", verb: provider?.verb ?? "", action: provider?.action ?? "Make", rollLabel: provider?.rollLabel ?? "",
+    tabs, categories, activeCategory, active: provider?.key ?? "", verb: provider?.verb ?? "", action: provider?.action ?? "Make", rollLabel: provider?.rollLabel ?? "",
     learnOptions: provider?.learnOptions ?? [], learnHint: provider?.learnHint ?? "", perCharacter: Boolean(provider?.perCharacter),
     hiddenHint: provider?.hiddenHint ?? "Not yet discovered", hiddenWord: provider?.hiddenWord ?? "unknown", emptyText: provider?.emptyText ?? "No recipes known yet.",
     gmHint: provider?.gmHint ?? "", canEdit: Boolean(provider?.gm?.create), canScroll: Boolean(provider?.gm?.scroll),
@@ -169,12 +174,31 @@ export function renderCarried(model) {
     </section>`;
 }
 
+/** Recipes-window groups, in display order; unknown categories follow. */
+export const CATEGORIES = Object.freeze([
+  { key: "refining", label: "Refining", icon: "fa-fire" },
+  { key: "crafting", label: "Crafting", icon: "fa-hammer" },
+  { key: "services", label: "Services", icon: "fa-handshake" }
+]);
+
+const categoryOf = provider => String(provider?.category || "crafting");
+
+function categoryList(keys) {
+  const present = new Set(keys);
+  const known = CATEGORIES.filter(category => present.has(category.key));
+  const extra = [...present].filter(key => !CATEGORIES.some(category => category.key === key)).sort()
+    .map(key => ({ key, label: key.charAt(0).toUpperCase() + key.slice(1), icon: "fa-folder" }));
+  return [...known, ...extra];
+}
+
 export function renderRecipesWindow(model, state = {}) {
   const characters = state.characters ?? [];
   const who = characters.length
     ? `<select data-act-change="actor" aria-label="Character">${model.isGM ? '<option value="">— GM view —</option>' : ""}${characters.map(actor =>
       `<option value="${escape(actor.id)}" ${actor.id === model.actor?.id ? "selected" : ""}>${escape(actor.name)}</option>`).join("")}</select>`
     : '<span class="gp-rw-noactor">No character</span>';
+  const categories = (model.categories ?? []).map(category => `<button type="button" class="gp-rw-cat ${category.active ? "active" : ""}" data-act="category" data-category="${escape(category.key)}" data-first="${escape(category.first)}">
+      <i class="fas ${escape(category.icon)}"></i> ${escape(category.label)}</button>`).join("");
   const tabs = model.tabs.map(tab => `<button type="button" class="gp-rw-tab ${tab.active ? "active" : ""}" data-act="tab" data-tab="${escape(tab.key)}" title="${escape(tab.label)}">
       <i class="fas ${escape(tab.icon)}"></i> ${escape(tab.verb)} <small>${tab.known}/${tab.total}</small></button>`).join("");
   const cards = model.products.map(group => `<section class="gp-rw-card">
@@ -197,6 +221,7 @@ export function renderRecipesWindow(model, state = {}) {
       <label class="gp-rw-filter"><input type="checkbox" data-act-change="craftable" ${state.onlyCraftable ? "checked" : ""}> Can make now</label>
       <input type="search" class="gp-rw-search" data-act-change="search" placeholder="Search" value="${escape(state.search ?? "")}">
     </header>
+    ${categories ? `<nav class="gp-rw-cats">${categories}</nav>` : ""}
     <nav class="gp-rw-tabs">${tabs || '<span class="gp-rw-noactor">No recipes available yet.</span>'}</nav>
     ${jobs}
     ${gmBar}
@@ -438,7 +463,16 @@ function defineClass() {
     async #onAction(button) {
       const act = button.dataset.act;
       const provider = this.provider;
-      if (act === "tab") { this.view.tab = button.dataset.tab; this.view.editing = null; this.view.experiment = freshExperiment(); return this.render(); }
+      if (act === "tab" || act === "category") {
+        const category = button.dataset.category;
+        const remembered = act === "category" ? rememberedTab(category) : "";
+        const usable = remembered && providerFor(remembered) && (providerFor(remembered).visible?.(this.actor, game.user.isGM) ?? true)
+          && categoryOf(providerFor(remembered)) === category;
+        this.view.tab = act === "tab" ? button.dataset.tab : usable ? remembered : button.dataset.first;
+        this.view.editing = null; this.view.experiment = freshExperiment();
+        rememberTab(this.view.tab);
+        return this.render();
+      }
       if (act === "collect") { await deliverDueJobs(this.actor); return this.render(); }
       if (act === "use-carried") { await provider.useCarried(this.actor, button.dataset.item); return this.render(); }
       if (act === "panel") { await provider.onPanel?.(button.dataset.panelAct, button, this.actor); return this.render(); }
@@ -505,12 +539,35 @@ function defineClass() {
   };
 }
 
-/** Open (or focus) the Recipes window. */
+/* The last tab (and the last tab per category) for this user, on this browser. */
+const TAB_KEY = "gathering-professions.recipesTab";
+
+function storedTabs() {
+  try { return JSON.parse(globalThis.localStorage?.getItem(TAB_KEY) ?? "{}") ?? {}; } catch { return {}; }
+}
+
+function rememberedTab(category) {
+  const saved = storedTabs();
+  return category ? saved.byCategory?.[category] ?? "" : saved.tab ?? "";
+}
+
+function rememberTab(key) {
+  const provider = providerFor(key);
+  if (!provider) return;
+  try {
+    const saved = storedTabs();
+    globalThis.localStorage?.setItem(TAB_KEY, JSON.stringify({ tab: key, byCategory: { ...(saved.byCategory ?? {}), [categoryOf(provider)]: key } }));
+  } catch { /* storage unavailable: just don't remember */ }
+}
+
+/** Open (or focus) the Recipes window (on the last-used tab unless one is given). */
 export async function openRecipes({ actor = null, tab = "" } = {}) {
   RecipesClass ??= defineClass();
+  const fresh = !instance;
   instance ??= new RecipesClass();
   if (actor) instance.view.actorId = actor.id;
   if (tab) instance.view.tab = tab;
+  else if (fresh) instance.view.tab = rememberedTab();
   await instance.render({ force: true });
   return instance;
 }

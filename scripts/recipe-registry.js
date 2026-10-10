@@ -4,6 +4,7 @@
 //
 // Provider shape (functions may be omitted where noted):
 //   key, label, verb, action, icon, order
+//   category                       window group: "refining" | "crafting" | "services" (default "crafting")
 //   rollLabel                      "Rolls Mining at the recipe's tier"
 //   learnOptions                   [[value, label], ...] for the GM learn control
 //   learnHint                      tooltip for the GM learn control
@@ -34,6 +35,7 @@ export function registerRecipeProvider(provider) {
   if (!provider?.key || typeof provider.recipes !== "function") throw new Error("A recipe provider needs a key and recipes().");
   // Keep the provider object itself so its getters (e.g. a mode that the GM can switch) stay live.
   provider.order ??= 100;
+  provider.category ??= "crafting";
   provider.learnOptions ??= [["learned", "Learned"], ["unlearned", "Unlearned"]];
   providers.set(provider.key, provider);
   Hooks.callAll("gatheringProfessions.recipeProviders", recipeProviders());

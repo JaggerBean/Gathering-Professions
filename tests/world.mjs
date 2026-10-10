@@ -979,6 +979,12 @@ game.modules.get("skill-tree").active = true;
   await smith.createEmbeddedDocuments("Item", [{ name: "Cobblestones", type: "loot", system: { quantity: 5 } }, { name: "Copper Ore", type: "loot", system: { quantity: 9 } }, { name: "Coal", type: "loot", system: { quantity: 4 } }]);
   assert.deepEqual((await refiningLib.backfillDiscoveries()).sort(), ["Coal", "Cobblestones", "Copper Ore"]);
   let model = recipesUi.buildRecipesModel(smith, { tab: "mining" });
+  // Two rows: categories, then the active category's tabs (refining providers are "refining").
+  assert.equal(model.activeCategory, "refining");
+  assert.ok(model.categories.some(category => category.key === "refining" && category.active));
+  assert.ok(model.tabs.length && model.tabs.every(tab => tab.category === "refining"), "Only the active category's tabs in the second row");
+  assert.match(recipesUi.renderRecipesWindow(model, { characters: [smith] }), /class="gp-rw-cats"[\s\S]*data-category="refining"/);
+  assert.deepEqual(recipesUi.CATEGORIES.map(category => category.label), ["Refining", "Crafting", "Services"]);
   const brickCard = model.products.find(group => group.name === "Stone Brick");
   assert.deepEqual([brickCard.recipes.length, brickCard.hidden], [1, 2], "Stone and Granite recipes stay hidden until found");
   assert.deepEqual(model.products.map(group => group.name), ["Coke", "Copper Ingot", "Stone Brick"]);
