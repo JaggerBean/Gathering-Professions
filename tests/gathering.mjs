@@ -977,7 +977,7 @@ assert.equal(await nodeSheet(undefined)._onGather(true, null, makeActor()), "gat
   assert.match(warnings.pop(), /Nothing can be gathered here right now \(Blizzard, Night\)/);
   assert.equal(gatherCalls.length, before, "No pull is used");
   settingsStore.conditionOverrides = { time: "day" };
-  assert.equal(await nightSheet._onGather(true, null, cold), "gathered", "Daytime: unchanged weights pass through");
+  assert.equal(await nightSheet._onGather(true, null, cold), "gathered", `Daytime: unchanged weights pass through (${errors.join('; ')})`);
   settingsStore.conditionOverrides = {};
   settingsStore.conditionDc = [];
 }
