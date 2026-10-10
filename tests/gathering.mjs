@@ -1330,6 +1330,13 @@ assert.equal(await nodeSheet(undefined)._onGather(true, null, makeActor()), "gat
   hooks.get("updateActor")(refundActor, { flags: { "gathering-professions": { refundRequest: request } } }, {}, "gm");
   await delay(); await delay();
   assert.equal(refundPage.flags.gatherer.data.drawsUsed, 2, "Replaying a claimed ticket cannot refund again");
+  // Lucky Strike: a natural 20 refunds the pull without the no-pull chance roll.
+  refundActor.inventory.push(new Item("Lucky Strike", { enabled: true, profession: "any", naturalRefund: true }, null));
+  refundActor.inventory.splice(refundActor.inventory.findIndex(entry => entry.name === "Conservationist"), 1);
+  await refundActor.setFlag("gathering-professions", "gatherTickets.luckyRefund", { pageUuid: refundPage.uuid, expires: Date.now() + 120000 });
+  hooks.get("updateActor")(refundActor, { flags: { "gathering-professions": { refundRequest: { ...request, ticket: "luckyRefund", before: 1, lucky: true } } } }, {}, "gm");
+  for (let wait = 0; wait < 100 && refundPage.flags.gatherer.data.drawsUsed !== 1; wait++) await delay();
+  assert.equal(refundPage.flags.gatherer.data.drawsUsed, 1, "Lucky Strike keeps the pull with no roll");
   globalThis.fromUuid = previousResolver; game.user = previousUser; game.users = previousUsers;
 }
 
@@ -1448,7 +1455,7 @@ assert.equal(await nodeSheet(undefined)._onGather(true, null, makeActor()), "gat
 
   // Shared Haul: the GM gives the helper the material when the gatherer cannot.
   const helper = makeActor();
-  helper.uuid = "Actor.helper"; helper.id = "helper"; helper.isOwner = false;
+  helper.uuid = "Actor.helper"; helper.id = "helper"; helper.isOwner = false; helper.documentName = "Actor";
   helper.inventory.push(perkItem("Shared Haul", { enabled: true, profession: "any", sharedHaul: 1 }));
   globalThis.fromUuid = async uuid => uuid === helper.uuid ? helper : uuid === plainStone.uuid ? plainStone : uuid === node.uuid ? node : uuid === "RollTable.skillNode" ? { results: [{ documentUuid: plainStone.uuid }] } : previousResolver(uuid);
   plainStone.uuid ??= "Item.plainStone";
