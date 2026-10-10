@@ -401,6 +401,10 @@ function defineClass() {
       this.page = page;
       this.view = { busy: false, resultHtml: "", animate: false, actorId: defaultActor()?.id ?? null };
       this.hookIds = [];
+      this.refreshTimer = null;
+      this.refreshRunning = false;
+      this.refreshDirty = false;
+      this.closed = false;
     }
 
     get title() { return this.page.name; }
@@ -413,6 +417,7 @@ function defineClass() {
     async _prepareContext() { return {}; }
 
     async _renderHTML() {
+      this.refreshDirty = false;
       const model = buildGatherModel(this.page, this.actor, { isGM: game.user.isGM });
       const html = renderGatherWindow(model, { ...this.view, characters: ownedCharacters() });
       this.view.animate = false;
@@ -472,24 +477,78 @@ function defineClass() {
           void this.render();
         }
       });
-      const rerender = () => { if (this.rendered && !this.view.busy) void this.render(); };
-      this.hookIds.push(["updateJournalEntryPage", Hooks.on("updateJournalEntryPage", page => { if (page.id === this.page.id) rerender(); })]);
+      // Batch hook bursts and never overlap renders or interrupt a gather.
+      const rerender = () => {
+        if (this.closed || !this.rendered) return;
+        this.refreshDirty = true;
+        if (this.refreshTimer !== null || this.refreshRunning || this.view.busy) return;
+        this.refreshTimer = setTimeout(async () => {
+          this.refreshTimer = null;
+          if (this.closed || !this.rendered || this.view.busy) return;
+          this.refreshDirty = false;
+          this.refreshRunning = true;
+          try { await this.render(); }
+          catch (error) { report(error); }
+          finally {
+            this.refreshRunning = false;
+            if (this.refreshDirty) rerender();
+          }
+        }, 50);
+      };
+      const listen = (hook, callback) => this.hookIds.push([hook, Hooks.on(hook, callback)]);
+      const tableUuids = () => [this.page.flags?.gatherer?.table, readNode(this.page)?.rareTable].filter(Boolean);
+      const relevantItem = item => {
+        if (item.parent) return item.parent.id === this.view.actorId;
+        if (tableUuids().some(uuid => Array.from(globalThis.fromUuidSync?.(uuid)?.results ?? []).some(result => result.documentUuid === item.uuid))) return true;
+        const node = readNode(this.page);
+        const professions = pageProfessions(this.page, node);
+        return (professions.length ? professions : [null]).some(key => requiredTools(node, key)
+          .some(tool => tool.uuid === item.uuid || tool.name?.toLowerCase() === item.name?.toLowerCase()));
+      };
+      listen("updateJournalEntryPage", page => { if (page.uuid === this.page.uuid) rerender(); });
       // Re-render for the chosen actor, and when anyone offers or withdraws an Assist.
       this.hookIds.push(["updateActor", Hooks.on("updateActor", (actor, changes) => {
         const flags = changes?.flags?.[MODULE_ID] ?? {};
         if (actor.id === this.view.actorId || "assist" in flags || "-=assist" in flags) rerender();
       })]);
-      this.hookIds.push(["createItem", Hooks.on("createItem", item => { if (item.parent?.id === this.view.actorId) rerender(); })]);
-      this.hookIds.push(["deleteItem", Hooks.on("deleteItem", item => { if (item.parent?.id === this.view.actorId) rerender(); })]);
+      for (const hook of ["createItem", "updateItem", "deleteItem"]) listen(hook, item => { if (relevantItem(item)) rerender(); });
+      for (const hook of ["updateRollTable", "deleteRollTable"]) listen(hook, table => { if (tableUuids().includes(table.uuid)) rerender(); });
+      for (const hook of ["createTableResult", "updateTableResult", "deleteTableResult"]) listen(hook, result => {
+        if (tableUuids().includes(result.parent?.uuid)) rerender();
+      });
+      const settings = new Set(["rules", "professions", "biomes", "conditionOverrides", "conditionDc", "skillTree"].map(key => `${MODULE_ID}.${key}`));
+      settings.add("simple-timekeeping.configuration");
+      listen("updateSetting", setting => { if (settings.has(setting?.key)) rerender(); });
+      listen("updateScene", (scene, changes) => {
+        if (scene.id !== nodeScene(this.page, pinsFor)?.id) return;
+        const flags = changes?.flags?.[MODULE_ID];
+        if ((flags && ("biome" in flags || "-=biome" in flags))
+          || Object.hasOwn(changes ?? {}, `flags.${MODULE_ID}.biome`)
+          || Object.hasOwn(changes ?? {}, `flags.${MODULE_ID}.-=biome`)) rerender();
+      });
+      const timeState = () => JSON.stringify([
+        currentConditions({ node: readNode(this.page), scene: nodeScene(this.page, pinsFor) }),
+        refillText(this.page, nodeUsage(this.page))
+      ]);
+      let previousTimeState = timeState();
+      listen("updateWorldTime", () => {
+        const state = timeState();
+        if (state === previousTimeState) return;
+        previousTimeState = state;
+        rerender();
+      });
       this.hookIds.push(["controlToken", Hooks.on("controlToken", (token, controlled) => {
         if (!controlled || this.view.busy || !token.actor || !ownedCharacters().includes(token.actor)) return;
         this.view.actorId = token.actor.id;
         rerender();
       })]);
-      this.hookIds.push(["deleteJournalEntryPage", Hooks.on("deleteJournalEntryPage", page => { if (page.id === this.page.id) void this.close(); })]);
+      listen("deleteJournalEntryPage", page => { if (page.uuid === this.page.uuid) void this.close(); });
     }
 
     _onClose(options) {
+      this.closed = true;
+      clearTimeout(this.refreshTimer);
+      this.refreshTimer = null;
       super._onClose?.(options);
       for (const [hook, id] of this.hookIds) Hooks.off(hook, id);
       windows.delete(this.page.uuid);
