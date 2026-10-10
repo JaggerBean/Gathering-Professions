@@ -37,6 +37,14 @@ for (const kind of ["masterwork", "ornate", "both"]) {
 }
 assert.throws(() => pricing.recipeCosts([{ output: "A", quantity: 1, inputs: [["B", 1]] },
   { output: "B", quantity: 1, inputs: [["A", 1]] }], new Map([["A", 1], ["B", 1]])), /Recipe cycle/);
+const registry = await import("../scripts/recipe-registry.js");
+registry.registerRecipeProvider({ key: "cycle-test", label: "Cycle test", recipes: () => [
+  { id: "cycle-test:a", output: "A", inputs: [["B", 1]], disabled: true },
+  { id: "cycle-test:b", output: "B", inputs: [["A", 1]] }
+] });
+assert.doesNotThrow(() => registry.assertRecipeSnapshot([]));
+assert.throws(() => registry.assertRecipeSnapshot([{ id: "cycle-test:a", output: "A", inputs: [["B", 1]] }]), /Recipe cycle/, "Re-enabling a registered recipe cannot create a cross-provider cycle");
+registry.unregisterRecipeProvider("cycle-test");
 const world = { ...structuredClone(base), id: "dagger", getFlag(m, k) { return get(this.flags[m], k); } };
 world.system.price.value = 2;
 world.flags[GP].campaignPrice.approved = 2;
