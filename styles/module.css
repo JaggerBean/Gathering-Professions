@@ -307,7 +307,7 @@
    fits the screen; the size does not depend on the window, so link lines stay
    aligned when toggling fullscreen (ui.js re-renders on browser resize). */
 :is(.skill-tree-actor, .skill-tree-application) .skill-groups .skill-group[data-group-id="gatheringProfessions"] {
-  --gp-tree-cell: clamp(12px, calc(min(76vw, 100vh - 12rem) / 26), 44px);
+  --gp-tree-cell: clamp(12px, calc(min(76vw, 95vh - 17rem) / 26.5), 44px);
   border-color: transparent;
   box-shadow: none;
   background: none;
