@@ -66,7 +66,7 @@ export function gatheringPrices(items = Array.from(game.items ?? [])) {
   // Refined goods: every enabled recipe must cover ingredients + margin.
   for (const [name, gp] of recipeCosts(rows, prices)) prices.set(name, gp);
   // Basic gathering tools.
-  for (const item of items) if (item.getFlag?.(MODULE_ID, "defaultTool")) prices.set(item.name, TOOL_PRICE);
+  for (const item of items) if (item.getFlag?.(MODULE_ID, "defaultTool")) prices.set(item.name, Math.max(TOOL_PRICE, prices.get(item.name) ?? 0, priceInGp(item.system?.price)));
   return prices;
 }
 
