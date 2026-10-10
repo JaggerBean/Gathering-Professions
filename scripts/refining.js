@@ -9,6 +9,7 @@ import { MATERIAL_PRESETS, folderPath, worldItem } from "./presets.js";
 import { ITEM_FOLDERS, professionFolder } from "./folders.js";
 import { runActorAction } from "./actions.js";
 import { rollProfessionCheck } from "./checks.js";
+import { assertAcyclicRecipes } from "./pricing.js";
 
 const KCTG = "kctg-5e.kctg-dnd5e";
 const HELIANA = "helianas-harvest-compendium";
@@ -308,6 +309,7 @@ export async function createRecipe(fields) {
   requireGM();
   const data = normalizeRecipeFields(fields);
   const row = { id: `${data.profession}:custom-${foundry.utils.randomID()}`, ...data };
+  assertAcyclicRecipes([...allRecipes({ includeDisabled: true }), row]);
   await game.settings.set(MODULE_ID, "customRecipes", [...customRecipes(), row]);
   await shareProduct(data.output);
   return row;
@@ -319,6 +321,7 @@ export async function updateRecipe(id, fields) {
   const current = findRecipe(id, { includeDisabled: true });
   if (!current) throw new Error("That recipe no longer exists.");
   const data = normalizeRecipeFields({ ...fields, profession: current.profession });
+  assertAcyclicRecipes(allRecipes({ includeDisabled: true }).map(row => row.id === id ? { ...row, ...data } : row));
   if (current.custom) {
     await game.settings.set(MODULE_ID, "customRecipes", customRecipes().map(row => (row.id === id ? { ...row, ...data } : row)));
   } else {
