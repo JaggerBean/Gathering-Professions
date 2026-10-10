@@ -53,13 +53,14 @@ export function gatheringPrices(items = Array.from(game.items ?? [])) {
   // are floors, not fixed caps, so later ingredient increases remain safe.
   const rows = allRecipes();
   const outputs = new Set(rows.map(row => row.output));
+  const inputs = new Set(rows.flatMap(row => row.inputs.map(([name]) => name)));
   for (const item of items) {
     if (item.getFlag?.(MODULE_ID, "universalSkill")) continue;
     const approved = approvedPrice(item);
     const current = priceInGp(item.system?.price);
     if (approved !== null) prices.set(item.name, approved);
     else if (prices.has(item.name) && item.getFlag?.(MODULE_ID, PRICED_FLAG)) prices.set(item.name, current);
-    else if (outputs.has(item.name) && current) prices.set(item.name, current);
+    else if ((outputs.has(item.name) || inputs.has(item.name)) && current) prices.set(item.name, current);
   }
   for (const [name, gp] of prices) prices.set(name, priceInGp(tidyPrice(gp)));
   // Refined goods: every enabled recipe must cover ingredients + margin.
