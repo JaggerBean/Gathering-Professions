@@ -10,18 +10,29 @@
 //   Timekeeper         markRefillCut      (GM shortens an exhausted node's timer)
 // Requests that change documents a player may not own go through the active GM
 // as an authenticated actor update (flag gmRequest), like the other requests.
-import { MODULE_ID, selectedProfession } from "./rules.js";
+import { MODULE_ID, selectedProfession, materialRule } from "./rules.js";
 import { actorPerks, restUsesLeft, spendRestUse, restUseChanges, familiarBiome } from "./perks.js";
 import { toolDurability } from "./durability.js";
 import { getBiomes } from "./conditions.js";
 import { isGathererPage, isDepleted, lastPullHolder, nodeUsage, readNode } from "./nodes.js";
 import { drawRareFind } from "./integrations.js";
 import { gpDialog } from "./dialogs.js";
+import { runActorAction } from "./actions.js";
+import { findAssist } from "./assist.js";
 
 const escape = value => String(value ?? "").replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const isActiveGM = () => game.user.isGM && (!game.users?.activeGM || game.users.activeGM.id === game.user.id);
 const LAST_PULL_MS = 120000;
+const receiptQueues = new Map();
+
+function receiptAction(uuid, task) {
+  const completion = (receiptQueues.get(uuid) ?? Promise.resolve()).catch(() => {}).then(task);
+  receiptQueues.set(uuid, completion);
+  const clear = () => { if (receiptQueues.get(uuid) === completion) receiptQueues.delete(uuid); };
+  completion.then(clear, clear);
+  return completion;
+}
 
 let award = null;
 /** main.js supplies its item award (stacking by name, Gatherer's quantity path). */
@@ -123,8 +134,13 @@ export async function offerAppraisal(actor, { tableUuid, items }) {
 
 /** Field Repair: restore 1d4 durability to one of the actor's tools. */
 export async function fieldRepair(actor, item) {
+  return runActorAction(actor, () => fieldRepairUnlocked(actor, item));
+}
+
+async function fieldRepairUnlocked(actor, item) {
   if (!actor?.isOwner) throw new Error("Choose a character you own.");
   if (!item || item.parent !== actor) throw new Error("Choose one of this character's tools.");
+  if (item.type !== "tool" && item.getFlag?.(MODULE_ID, "durability") === undefined) throw new Error("Choose a gathering tool.");
   const state = toolDurability(item);
   if (state.unbreakable || state.value >= state.max) throw new Error(`${item.name} needs no repair.`);
   const perks = perksFor(actor);
@@ -181,12 +197,13 @@ export async function requestGm(actor, type, data, { wait = false } = {}) {
   throw new Error("The GM did not answer in time.");
 }
 
-const HANDLERS = { lastPull: handleLastPull, sharedHaul: handleSharedHaul, refillCut: handleRefillCut };
+const HANDLERS = { lastPull: handleLastPull, sharedHaul: handleSharedHaul, refillCut: handleRefillCut,
+  gatherStart: handleGatherStart, gatherPull: handleGatherPull, gatherResult: handleGatherResult };
 
 /** Active GM: run an authenticated request from an actor update. */
 export async function handleGmRequest(actor, request, user) {
   const handler = HANDLERS[request?.type];
-  if (!handler || !user || !(user.isGM || actor.testUserPermission?.(user, "OWNER"))) return null;
+  if (!isActiveGM() || !handler || !user || !(user.isGM || actor.testUserPermission?.(user, "OWNER"))) return null;
   let response;
   try { response = { result: await handler(actor, request.data ?? {}, user) ?? null }; }
   catch (error) { response = { error: error.message || "Request failed." }; }
@@ -223,26 +240,102 @@ async function handleLastPull(actor, data, user) {
 
 /* Shared Haul: the assisting helper also gets some of the material. */
 export async function shareHaul(helper, item, page, gatherer, profession) {
-  const amount = Number(perksFor(helper, profession).sharedHaul) || 0;
-  if (!amount || !item) return 0;
-  if (helper.isOwner) {
-    await award({ item, quantity: amount }, helper);
-    return amount;
-  }
-  await requestGm(gatherer, "sharedHaul", { helperUuid: helper.uuid, itemUuid: item.uuid, pageUuid: page?.uuid ?? "", profession });
-  return amount;
+  const receiptId = arguments[5];
+  if (!receiptId || !helper || !item) return 0;
+  const result = await requestGm(gatherer, "sharedHaul", { receiptId, helperUuid: helper.uuid,
+    itemUuid: item.uuid, pageUuid: page?.uuid ?? "" }, { wait: true });
+  return result?.amount ?? 0;
 }
 
 async function handleSharedHaul(gatherer, data, user) {
-  const helper = typeof data.helperUuid === "string" ? await fromUuid(data.helperUuid) : null;
-  const item = typeof data.itemUuid === "string" ? await fromUuid(data.itemUuid) : null;
-  if (!helper || helper.documentName !== "Actor" || helper.id === gatherer.id || !item) throw new Error("Shared Haul: unknown helper or material.");
-  const page = await gathererPage(data.pageUuid, user);
-  const table = await fromUuid(page.flags?.gatherer?.table ?? "");
-  if (!Array.from(table?.results ?? []).some(result => result.documentUuid === item.uuid)) throw new Error("Shared Haul: that material is not gathered here.");
-  const amount = Number(perksFor(helper, data.profession).sharedHaul) || 0;
-  if (amount) await award({ item, quantity: amount }, helper);
-  return { amount };
+  const claim = await receiptAction(data.pageUuid, async () => {
+    const page = await gathererPage(data.pageUuid, user);
+    const receipt = readGatherReceipt(page, gatherer, data, user);
+    const result = receipt.results?.[data.itemUuid];
+    if (!receipt.pulled || !result || !["excellent", "masterful"].includes(result.degree)
+      || result.quantity <= 0 || receipt.assist?.helperUuid !== data.helperUuid) throw new Error("Shared Haul requires a completed great gather with this Assist.");
+    if (result.shared) return null;
+    const helper = await fromUuid(receipt.assist.helperUuid);
+    const item = await fromUuid(data.itemUuid);
+    if (!helper || helper.documentName !== "Actor" || helper.uuid === gatherer.uuid || !item) throw new Error("Shared Haul: unknown helper or material.");
+    const amount = Number(perksFor(helper, result.profession).sharedHaul) || 0;
+    // Claim before any reward write. Failed awards remain marked for GM review;
+    // replaying a request must never award a second copy.
+    await page.setFlag(MODULE_ID, `gatherReceipts.${data.receiptId}.results.${data.itemUuid}.shared`, true);
+    return { helper, item, amount };
+  });
+  if (!claim) return { amount: 0 };
+  if (claim.amount) await runActorAction(claim.helper, () => award({ item: claim.item, quantity: claim.amount }, claim.helper));
+  return { amount: claim.amount };
+}
+
+function readGatherReceipt(page, actor, data, user) {
+  if (!/^[A-Za-z0-9]{1,64}$/.test(data.receiptId ?? "")) throw new Error("Invalid gathering receipt.");
+  const receipt = page.getFlag(MODULE_ID, `gatherReceipts.${data.receiptId}`);
+  if (!receipt || receipt.actorUuid !== actor.uuid || receipt.user !== user.id || receipt.expires <= Date.now()) throw new Error("This gathering receipt is missing or expired.");
+  return receipt;
+}
+
+function requireGatherLease(actor, page, id, user) {
+  if (!game.users?.activeGM && user.isGM) return;
+  const lease = actor.getFlag(MODULE_ID, "actionLease");
+  if (lease?.id !== id || lease.user !== user.id || lease.expires <= Date.now()
+    || lease.resource !== `gather-node:${page.uuid}`) throw new Error("The gathering actor and node lease is no longer held.");
+}
+
+async function handleGatherStart(actor, data, user) {
+  return receiptAction(data.pageUuid, async () => {
+    const page = await gathererPage(data.pageUuid, user);
+    requireGatherLease(actor, page, data.receiptId, user);
+    if (!/^[A-Za-z0-9]{1,64}$/.test(data.receiptId ?? "")) throw new Error("Invalid gathering receipt.");
+    if (page.getFlag(MODULE_ID, `gatherReceipts.${data.receiptId}`)) throw new Error("This gathering action has already started.");
+    const assist = data.assist === false ? null : findAssist(actor, page);
+    const savedAssist = assist ? { helperUuid: assist.helper.uuid, bonus: assist.bonus, die: assist.die, untrainedRelief: assist.untrainedRelief } : null;
+    if (assist) await assist.helper.unsetFlag(MODULE_ID, "assist");
+    const receipt = { actorUuid: actor.uuid, user: user.id, expires: Date.now() + 900000,
+      before: nodeUsage(page).used, assist: savedAssist, pulled: false, results: {} };
+    const changes = { [`flags.${MODULE_ID}.gatherReceipts.${data.receiptId}`]: receipt };
+    for (const [id, old] of Object.entries(page.getFlag(MODULE_ID, "gatherReceipts") ?? {})) {
+      if (old.expires <= Date.now()) changes[`flags.${MODULE_ID}.gatherReceipts.-=${id}`] = null;
+    }
+    await page.update(changes);
+    return receipt;
+  });
+}
+
+async function handleGatherPull(actor, data, user) {
+  return receiptAction(data.pageUuid, async () => {
+    const page = await gathererPage(data.pageUuid, user);
+    requireGatherLease(actor, page, data.receiptId, user);
+    const receipt = readGatherReceipt(page, actor, data, user);
+    if (receipt.pulled) return { ok: true };
+    const usage = nodeUsage(page);
+    if (usage.used !== receipt.before || (usage.draws && usage.used >= usage.draws)) throw new Error("This node changed during gathering. No reward was granted.");
+    const changes = { [`flags.${MODULE_ID}.gatherReceipts.${data.receiptId}.pulled`]: true };
+    if (data.consume !== false) changes["flags.gatherer.data"] = { ...(page.getFlag("gatherer", "data") ?? {}),
+      drawsUsed: usage.draws ? usage.used + 1 : 0,
+      firstDrawTime: usage.time ? (usage.used ? usage.firstDrawTime : Number(game.time?.worldTime) || 0) : 0 };
+    await page.update(changes);
+    return { ok: true };
+  });
+}
+
+async function handleGatherResult(actor, data, user) {
+  return receiptAction(data.pageUuid, async () => {
+    const page = await gathererPage(data.pageUuid, user);
+    requireGatherLease(actor, page, data.receiptId, user);
+    const receipt = readGatherReceipt(page, actor, data, user);
+    const item = typeof data.itemUuid === "string" ? await fromUuid(data.itemUuid) : null;
+    const table = await fromUuid(page.flags?.gatherer?.table ?? "");
+    const rule = item && materialRule(item);
+    if (!receipt.pulled || !rule || !Array.from(table?.results ?? []).some(result => result.documentUuid === item.uuid)
+      || !["failed", "partial", "successful", "excellent", "masterful"].includes(data.degree)
+      || !Number.isInteger(data.quantity) || data.quantity < 0) throw new Error("Invalid completed gathering result.");
+    if (receipt.results?.[item.uuid]) return { ok: true };
+    await page.setFlag(MODULE_ID, `gatherReceipts.${data.receiptId}.results`, { ...receipt.results,
+      [item.uuid]: { profession: rule.profession, degree: data.degree, quantity: data.quantity, shared: false } });
+    return { ok: true };
+  });
 }
 
 /* Timekeeper: once the node is exhausted, its timer runs shorter. */
