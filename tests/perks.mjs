@@ -106,8 +106,11 @@ assert.equal(successChance(0, 0, 25, [4]), 0, "d20 + d4 never reaches 25");
 assert.equal(successChance(0, 0, 24, [4]), 1 / 80);
 
 // --- tree layout ---------------------------------------------------------------
-assert.equal(tree.UNIVERSAL_SKILLS.length, tree.THEMES.length * tree.TIERS);
-assert.equal(new Set(tree.UNIVERSAL_SKILLS.map(skill => skill.name)).size, 30, "Unique names");
+assert.equal(tree.SPOKE_SKILLS.length, tree.THEMES.length * tree.TIERS);
+assert.equal(tree.EXTRA_SKILLS.length, 14);
+assert.equal(tree.UNIVERSAL_SKILLS.length, 44);
+assert.equal(new Set(tree.UNIVERSAL_SKILLS.map(skill => skill.name)).size, 44, "Unique names");
+assert.equal(new Set(tree.UNIVERSAL_SKILLS.map(skill => skill.key)).size, 44, "Unique keys");
 const named = key => tree.UNIVERSAL_SKILLS.find(skill => skill.key === key);
 assert.deepEqual(tree.prerequisites(named("keenEye")), []);
 assert.deepEqual(tree.prerequisites(named("reliablePartner")).map(skill => skill.key).sort(), ["bountiful", "fieldHand", "pathfinder"]);
@@ -120,9 +123,42 @@ for (const bridge of tree.UNIVERSAL_SKILLS.filter(skill => skill.row === tree.BR
   }
 }
 assert.deepEqual(tree.neighbourSpokes(0), [5, 1]);
+// 0.31.0 extras: middle pieces open from either neighbour; tier 4 choices lock out and open the capstone.
+assert.deepEqual(tree.prerequisites(named("luckyStrike")).map(skill => skill.key).sort(), ["keenEye", "steadyHands"]);
+assert.deepEqual(tree.prerequisites(named("efficientRefiner")).map(skill => skill.key).sort(), ["masterworkHandling", "practicedTechnique"]);
+assert.deepEqual(tree.prerequisites(named("masterHarvester")).map(skill => skill.key).sort(), ["abundance", "carefulSelection"], "Either choice opens the capstone");
+assert.deepEqual(tree.prerequisites(named("fortunesFavour")).map(skill => skill.key).sort(), ["appraisersEye", "richFind"]);
+assert.deepEqual(tree.prerequisites(named("wayfarer")).map(skill => skill.key).sort(), ["deepSense", "lastPull"]);
+assert.deepEqual(tree.prerequisites(named("abundance")).map(skill => skill.key), ["bountiful"], "Middle pieces open nothing on the spokes");
+const lockedBy = key => tree.lockouts(named(key)).map(skill => skill.key).sort();
+assert.deepEqual(lockedBy("carefulSelection"), ["abundance"]);
+assert.deepEqual(lockedBy("abundance"), ["carefulSelection"], "Lockouts go both ways");
+assert.deepEqual(lockedBy("deepReserves"), ["secondWind"]);
+assert.deepEqual(lockedBy("fieldProcessing"), ["efficientRefiner"]);
+assert.deepEqual(lockedBy("richFind"), ["appraisersEye"]);
+assert.deepEqual(lockedBy("luckyStrike"), []);
+assert.equal(lockedBy("masterHarvester").length, 5, "Capstones still lock each other out");
+for (const skill of tree.EXTRA_SKILLS) {
+  assert.ok(skill.requires.length && skill.requires.every(key => named(key)), `${skill.name} opens from real skills`);
+  assert.ok(!tree.isCapstone(skill));
+}
+// Layout: skills at least 2 cells apart; no link passes through another skill.
+{
+  const at = skill => { const cell = tree.gridPosition(skill); return [cell.col, cell.row]; };
+  const links = tree.UNIVERSAL_SKILLS.flatMap(skill => tree.prerequisites(skill).map(other => [skill, other]));
+  const segment = (p, a, b) => {
+    const [dx, dy] = [b[0] - a[0], b[1] - a[1]]; const length = dx * dx + dy * dy;
+    const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / length));
+    return Math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy));
+  };
+  for (const [index, skill] of tree.UNIVERSAL_SKILLS.entries()) {
+    for (const other of tree.UNIVERSAL_SKILLS.slice(index + 1)) assert.ok(Math.hypot(at(skill)[0] - at(other)[0], at(skill)[1] - at(other)[1]) >= 2, `${skill.name} and ${other.name} do not overlap`);
+    for (const [a, b] of links) if (skill !== a && skill !== b) assert.ok(segment(at(skill), at(a), at(b)) >= 0.95, `${a.name}–${b.name} link clears ${skill.name}`);
+  }
+}
 // Radial grid: unique cells, inner ring around the centre, capstones at the tips.
 const cells = tree.UNIVERSAL_SKILLS.map(skill => tree.gridPosition(skill));
-assert.equal(new Set(cells.map(cell => `${cell.row},${cell.col}`)).size, 30);
+assert.equal(new Set(cells.map(cell => `${cell.row},${cell.col}`)).size, 44);
 assert.ok(cells.every(cell => cell.row >= 0 && cell.col >= 0 && cell.row < tree.GRID_SIZE && cell.col < tree.GRID_SIZE));
 const centre = (tree.GRID_SIZE - 1) / 2;
 const reach = cell => Math.hypot(cell.row - centre, cell.col - centre);

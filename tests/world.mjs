@@ -166,10 +166,11 @@ await assert.rejects(fixture.createSampleWorld(), /already exists/);
 
 assert.equal(folders.length, 4);
 const { UNIVERSAL_SKILLS } = await import("../scripts/skilltree.js");
-assert.equal(UNIVERSAL_SKILLS.length, 30);
+assert.equal(UNIVERSAL_SKILLS.length, 44);
 assert.deepEqual(items.map(item => item.name).sort(), ["Test Copper Ore", "Test Glowcap Truffle", "Test Miner's Pick", "Test Moonpetal", "Test Silver Ore", "Test Star Sapphire",
   ...UNIVERSAL_SKILLS.map(skill => skill.name)].sort());
-assert.equal(new Set(UNIVERSAL_SKILLS.map(skill => `${skill.col},${skill.row}`)).size, 30, "Every grid cell is used once");
+const { gridPosition, EXTRA_SKILLS } = await import("../scripts/skilltree.js");
+assert.equal(new Set(UNIVERSAL_SKILLS.map(skill => { const cell = gridPosition(skill); return `${cell.col},${cell.row}`; })).size, 44, "Every grid cell is used once");
 const copper = items.find(item => item.name === "Test Copper Ore");
 assert.deepEqual(api.getProfessions().mining.rareTable, result.rareOre);
 const rules = await import("../scripts/rules.js");
@@ -192,8 +193,8 @@ assert.equal(tree.flags["skill-tree"].groups[0].id, "gatheringProfessions", "Fix
 assert.equal(tree.flags["skill-tree"].groups[0].name, "", "No yellow group title");
 assert.equal(tree.name, "Gathering Skill Tree", "No test suffix in the tree title");
 assert.equal(tree.flags["skill-tree"].independentSkillPoints, true, "Own point pool");
-assert.equal(tree.flags["gathering-professions"].layoutVersion, 8);
-assert.equal(tree.pages.length, 30);
+assert.equal(tree.flags["gathering-professions"].layoutVersion, 9);
+assert.equal(tree.pages.length, 44);
 const skillPage = name => tree.pages.find(page => page.name === name);
 const st = name => skillPage(name).flags["skill-tree"];
 // Radial: spokes outward from the inner ring; tier 3 also opens from neighbouring spokes.
@@ -218,7 +219,14 @@ for (const name of capstones) {
   assert.deepEqual(st(name).requirements, []);
   assert.deepEqual(st(name).lockoutSkills.sort(), capstones.filter(other => other !== name).map(other => skillPage(other).uuid).sort());
 }
-assert.deepEqual(st("Abundance").lockoutSkills, []);
+assert.deepEqual(st("Abundance").lockoutSkills, [skillPage("Careful Selection").uuid], "Tier 4 choice locks out its spoke partner");
+assert.deepEqual(st("Careful Selection").lockoutSkills, [skillPage("Abundance").uuid]);
+assert.deepEqual([st("Lucky Strike").col, st("Lucky Strike").row], [14, 9], "Extras sit at their own cells");
+assert.deepEqual(st("Lucky Strike").connectedSkills.sort(), [skillPage("Steady Hands").uuid, skillPage("Keen Eye").uuid].sort());
+assert.deepEqual(st("Master Harvester").connectedSkills.sort(), [skillPage("Abundance").uuid, skillPage("Careful Selection").uuid].sort());
+assert.equal(st("Lucky Strike").color, "#9b6bd6", "Theme colour");
+assert.match(skillPage("Deep Reserves").text.content, /locks out Second Wind/);
+assert.equal(items.find(item => item.name === "Shared Haul").flags["gathering-professions"].perk.sharedHaul, 1);
 assert.equal(items.find(item => item.name === "Light Touch").flags["gathering-professions"].perk.conserveChance, 15);
 assert.equal(items.find(item => item.name === "Light Touch").flags["gathering-professions"].universalSkill, "lightTouch");
 assert.equal(api.skillTreeConfig().uuid, tree.uuid);

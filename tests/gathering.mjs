@@ -1206,7 +1206,8 @@ assert.equal(await nodeSheet(undefined)._onGather(true, null, makeActor()), "gat
   game.user = { id: "player1", isGM: false };
   rolls.push({ formula: "1d20", total: 4 });
   const remoteResult = await api.rareFinds.climb(lucky, "remote");
-  assert.deepEqual(remoteResult, { tier: 2, pending: false }, "Owner request resolves through the active GM");
+  assert.deepEqual({ tier: remoteResult.tier, pending: remoteResult.pending }, { tier: 2, pending: false }, "Owner request resolves through the active GM");
+  assert.ok("tableUuid" in remoteResult && Array.isArray(remoteResult.itemUuids), "The answer carries the find for Appraiser's Eye");
   assert.equal(lucky.getFlag("gathering-professions", "rareClimbs.remote"), undefined);
   lucky.setFlag = savedSetFlag;
   game.user = savedUser;
