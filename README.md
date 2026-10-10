@@ -140,6 +140,12 @@ When a GM views a character's linked Gathering Skill Tree, **Reset Skills** appe
 - **Sense** bonuses add to the profession rank when checking a hidden node's sense rank. Wayfarer senses every node with a sense rank above 0. Nodes with sense rank 0 stay GM-only.
 - **Assist**: open a node's gathering window with a character who has Field Hand, Reliable Partner, or Mentor, then click **Assist others here**. The next gather at that node by another character, within one in-game hour, gets the bonus. Then the offer is used up. The strongest offer applies, and offers do not stack.
 
+### Locked-out skills, Recipes categories, Items layout (0.31.1)
+
+- **Locked-out skills** show a red X. Clicking one makes the skill that locks it out pulse red, draws a red dashed line between them for about 3 seconds, and shows a notification (works for either/or pairs and capstones).
+- **Recipes window**: two rows of tabs. Top: **Refining · Crafting · Services**; below: that category's tabs (e.g. Smelting · Milling · Tanning · Preparation). Players only see categories and tabs their character can use; the GM sees all. The window reopens on the last tab used (per browser). Recipe providers from other modules set `category`.
+- **Items layout**: new items go to **Gathering / <Profession> / Wild|Ores|Logs|Materials** (materials), **… / Prepared|Refined|Timber** (refined goods), **… / Rare Finds**, plus **Gathering / Tools** and **Gathering / Skill Tree**. Crafting Professions uses **Crafting / <Profession>**.
+
 ### Skill tree expansion (0.31.0)
 
 14 skills sit off the spokes (the tree now has 44). Existing trees get them automatically on the GM's next load: new skill Items in the same folder and new pages; existing pages keep their UUIDs, so learned skills stay. All cost 1 point.
