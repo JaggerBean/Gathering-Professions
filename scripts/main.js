@@ -9,10 +9,11 @@ import { refiningProvider, inventoryCount, maxBatch, removeFromInventory, addToI
 import { successChance } from "./gather-ui.js";
 import { DEFAULT_TOOLS, buildDefaultTools } from "./gatheringtools.js";
 import { DEFAULT_SKILL_TREE, skillTreeConfig, normalizeSkillTreeConfig, syncProfessionState, resetUniversalTreeSkills, drawRareFind, availableSkillTrees, configuredSkillTree } from "./integrations.js";
-import { PERK_EFFECTS, actorPerks, normalizePerk, readPerk, rareChanceTotal, applyPerksToCheck, rerollsLeft, spendReroll, resetRestUses, masterfulLeft, spendMasterful } from "./perks.js";
+import { PERK_EFFECTS, actorPerks, normalizePerk, readPerk, rareChanceTotal, applyPerksToCheck, rerollsLeft, spendReroll, resetRestUses, masterfulLeft, spendMasterful, restUsesLeft, spendRestUse, withMomentum, familiarReduction } from "./perks.js";
+import { configureSkillEffects, chooseDraw, offerAppraisal, fieldRepair, repairableTools, setFamiliarBiome, requestLastPull, shareHaul, markRefillCut, handleGmRequest } from "./skill-effects.js";
 import { UNIVERSAL_SKILLS, buildUniversalTree, relayoutUniversalTree, needsRelayout } from "./skilltree.js";
 import { assistPower, assistLabel, offerAssist, withdrawAssist, findAssist, consumeAssist, handleClearAssist } from "./assist.js";
-import { pinsFor, pageProfessions, requiredTools, nodeUsage, getToolLibrary, addToolToLibrary, removeToolFromLibrary, createRareTable, readNode, nodeGate, applyNodeCheck, isGathererPage, refreshNodeVisibility, refreshPinTint, autoResetExpired, allNodePages, buildNode, updateNode, duplicateNode, deleteNode, resetNodes, setNodeHidden, placePin, placeLinkedNode, normalizeNode } from "./nodes.js";
+import { pinsFor, pageProfessions, requiredTools, nodeUsage, lastPullHolder, getToolLibrary, addToolToLibrary, removeToolFromLibrary, createRareTable, readNode, nodeGate, applyNodeCheck, isGathererPage, refreshNodeVisibility, refreshPinTint, autoResetExpired, allNodePages, buildNode, updateNode, duplicateNode, deleteNode, resetNodes, setNodeHidden, placePin, placeLinkedNode, normalizeNode } from "./nodes.js";
 import { openNodeManager, openNodeBuilder, startPinPlacement, registerNodeUI } from "./node-ui.js";
 import { openGatheringWindow, xpProgress } from "./gather-ui.js";
 import { DEFAULT_BIOMES, currentConditions, nodeScene, adjustedResults, withAdjustedDraw, weightedPick, conditionDcModifier, getBiomes, normalizeBiomes, normalizeConditionDc, normalizeRules, getOverrides } from "./conditions.js";
@@ -79,7 +80,19 @@ async function rollRareFind(actor, rule, degree, perks, node = null, { natural20
 const CLIMB_FLAG = "rareClimbs";
 const climbLocks = new Set();
 
+/** Roll a pending climb; once the find settles, offer Appraiser's Eye on this client. */
 async function requestPendingClimb(actor, id) {
+  const result = await requestPendingClimbRoll(actor, id);
+  if (result && !result.pending) {
+    try {
+      const items = result.items ?? (await Promise.all((result.itemUuids ?? []).map(uuid => fromUuid(uuid)))).filter(Boolean);
+      await offerAppraisal(actor, { tableUuid: result.tableUuid ?? result.table?.uuid, items });
+    } catch (error) { logFailure("Appraiser's Eye failed")(error); }
+  }
+  return result;
+}
+
+async function requestPendingClimbRoll(actor, id) {
   if (!actor || !(game.user.isGM || actor.isOwner)) throw new Error("Only the character's owner can roll this.");
   if (isActiveGM()) return rollPendingClimb(actor, id);
   if (!game.users?.activeGM) throw new Error("An active GM is needed to roll the Fortune die.");
@@ -112,7 +125,8 @@ async function handleClimbRequest(actor, data, user) {
       throw new Error("Only the character's owner can roll this.");
     }
     const result = await rollPendingClimb(actor, data.id);
-    response = { result: result ? { tier: result.tier, pending: result.pending } : null };
+    response = { result: result ? { tier: result.tier, pending: result.pending, tableUuid: result.table?.uuid ?? null,
+      itemUuids: (result.items ?? []).map(item => item.uuid) } : null };
   } catch (error) {
     response = { error: error.message || "Fortune die failed." };
   }
@@ -145,6 +159,7 @@ async function handleActorRequests(actor, changes, userId) {
   if (request("assistClearRequest")) await handleClearAssist(request("assistClearRequest"), user, actor);
   if (request("discoveryRequest")) await handleDiscoveryRequest(actor, request("discoveryRequest"), user);
   if (request("refundRequest")?.actorUuid === actor.uuid) await handleRefundPull(request("refundRequest"), user);
+  if (request("gmRequest")) await handleGmRequest(actor, request("gmRequest"), user).catch(logFailure("skill request failed"));
 }
 
 async function storePendingClimb(actor, rare, context) {
@@ -283,6 +298,12 @@ function perkFlavor(check, perks) {
   if (check.assist) lines.push(`Assisted by ${escapeHtml(check.assist.name)}: ${escapeHtml(check.assist.label)}`);
   if (check.reroll) lines.push(`Rerolled a failed ${check.reroll.first} (${escapeHtml(check.reroll.label)})`);
   if (check.upgraded) lines.push(`Partial counted as Successful (${sources("partialAsFull")})`);
+  if (check.momentum) lines.push(`Momentum: +${check.momentum} (${sources("momentumBonus")})`);
+  if (check.familiar) lines.push(`Familiar ground: DC −${check.familiar} (${sources("familiarDc")})`);
+  if (check.stewarded) lines.push(`Natural 1 did not wear the tool (${sources("toolSteward")})`);
+  if (check.lucky) lines.push(`Natural 20: this gather keeps its node pull (${sources("naturalRefund")})`);
+  if (check.shared) lines.push(`${escapeHtml(check.shared.name)} also gets ${check.shared.amount} (${escapeHtml("Shared Haul")})`);
+  if (check.appraised) lines.push(`Appraiser's Eye: traded for ${escapeHtml(check.appraised)}`);
   for (const extra of check.extras ?? []) lines.push(`Extra draw: ${escapeHtml(extra.item.name)} ×${extra.quantity} (${sources("extraDraws")})`);
   return lines.length ? `<div class="gp-check-section gp-perks"><strong>Skills</strong><br>${lines.join("<br>")}</div>` : "";
 }
@@ -363,6 +384,8 @@ async function awardItem(thing, actor) {
   }
 }
 
+configureSkillEffects({ awardItem: (...args) => awardItem(...args) });
+
 async function awardGatheringResult(actor, item, quantity, xp, profession) {
   if (quantity > 0) await awardItem({ item, quantity }, actor);
   if (xp > 0) await addXp(actor, profession, xp);
@@ -394,6 +417,13 @@ async function drawExtras(sheet, actor, node, conditions, perks, degree) {
  * the same client: { masterful: true } = use Grandmaster's Touch. */
 const gatherIntents = new Map();
 
+function peekIntent(actor) {
+  return gatherIntents.get(actor?.id) ?? {};
+}
+
+// Lucky Strike: gathers whose natural 20 should refund the pull, by actor id → page uuid.
+const luckyStrikes = new Map();
+
 function takeIntent(actor) {
   const intent = gatherIntents.get(actor?.id) ?? {};
   gatherIntents.delete(actor?.id);
@@ -424,13 +454,23 @@ async function resolveCheck({ thing, rule }, actor, sheet, originalToChat) {
   base.conditionDc = conditionDc.total;
   base.conditionParts = conditionDc.parts;
   base.target += conditionDc.total;
+  // Familiar Ground: lower DCs in the chosen biome.
+  const familiar = familiarReduction(actor, perks, conditions);
+  base.target -= familiar;
   // Grandmaster's Touch: chosen before gathering, spends a use, and skips the check.
   const intent = takeIntent(actor);
   const auto = Boolean(intent.masterful) && masterfulLeft(actor, perks) > 0;
   if (auto) await spendMasterful(actor);
   // An automatic Masterful has no roll, so an ally's Assist is kept for a later gather.
   const assist = page && !auto ? findAssist(actor, page) : null;
-  const check = applyPerksToCheck(base, perks, assist);
+  // Momentum from an earlier great gather is spent on this check.
+  const checkPerks = auto ? perks : withMomentum(actor, perks);
+  const check = applyPerksToCheck(base, checkPerks, assist);
+  if (familiar) check.familiar = familiar;
+  if (checkPerks.momentumApplied) {
+    check.momentum = checkPerks.momentumApplied;
+    await actor.unsetFlag(MODULE_ID, "momentum");
+  }
   if (auto) check.auto = { label: perks.effectSources.masterfulUses.join(", ") || "Grandmaster's Touch" };
   if (assist) {
     check.assist = { name: assist.helper.name, label: assistLabel(assist) };
@@ -450,6 +490,13 @@ async function resolveCheck({ thing, rule }, actor, sheet, originalToChat) {
     degree = getDegreeOfSuccess(roll.total, check.target);
     if (roll.dice?.[0]?.total === 1) naturalOnes++;
   }
+  // Tool Steward: the first natural 1s each long rest do not wear the tool.
+  const steward = naturalOnes && check.toolItem ? Math.min(naturalOnes, restUsesLeft(actor, perks, "toolSteward")) : 0;
+  if (steward) {
+    await spendRestUse(actor, "toolSteward", steward);
+    naturalOnes -= steward;
+    check.stewarded = steward;
+  }
   if (naturalOnes && check.toolItem) {
     try {
       const wear = await wearTool(check.toolItem, naturalOnes);
@@ -465,9 +512,23 @@ async function resolveCheck({ thing, rule }, actor, sheet, originalToChat) {
   }
   const extraction = await calculateGatheringYield(rule, degree);
   applyPerkYield(extraction, degree, perks, node);
+  const great = GREAT_DEGREES.has(degree.id);
+  // Momentum carries into the next gather within the hour.
+  if (great && perks.momentumBonus) await actor.setFlag(MODULE_ID, "momentum", { at: Number(game.time?.worldTime) || 0, bonus: perks.momentumBonus });
+  if (natural20 && perks.naturalRefund && page) {
+    luckyStrikes.set(actor.id, page.uuid);
+    check.lucky = true;
+  }
   const xp = gatheringXp(rule, degree);
   thing.quantity = extraction.quantity;
   await awardGatheringResult(actor, thing.item, extraction.quantity, xp, rule.profession);
+  // Shared Haul: the assisting helper gets some of a great gather too.
+  if (assist && great && extraction.quantity > 0) {
+    try {
+      const amount = await shareHaul(assist.helper, thing.item, page, actor, rule.profession);
+      if (amount) check.shared = { name: assist.helper.name, amount };
+    } catch (error) { logFailure("Shared Haul failed")(error); }
+  }
   check.extras = [];
   try { check.extras = await drawExtras(sheet, actor, node, conditions, perks, degree); }
   catch (error) {
@@ -481,6 +542,13 @@ async function resolveCheck({ thing, rule }, actor, sheet, originalToChat) {
     if (rare?.pending) {
       rare.actorUuid = actor.uuid;
       rare.climbId = await storePendingClimb(actor, rare, { itemName: thing.item.name, pageUuid: page?.uuid ?? "", pageName: page?.name ?? "" });
+    } else if (rare?.trigger && rare.items?.length) {
+      // Appraiser's Eye: reroll the find and keep either result.
+      const kept = await offerAppraisal(actor, { tableUuid: rare.table?.uuid, items: rare.items });
+      if (kept) {
+        check.appraised = kept.map(item => item.name).join(", ");
+        rare.items = kept;
+      }
     }
   }
   catch (error) {
@@ -511,6 +579,12 @@ async function resolveCheck({ thing, rule }, actor, sheet, originalToChat) {
   if (natural20) notes.push("Natural 20: Masterful extraction");
   if (auto) notes.push(`${check.auto.label}: automatic Masterful extraction`);
   if (check.wear) notes.push(check.wear.broke ? `Natural 1: ${check.wear.name} broke!` : `Natural 1: ${check.wear.name} ${check.wear.after}/${check.wear.max}`);
+  if (check.stewarded) notes.push("Tool Steward: the natural 1 did not wear your tool");
+  if (check.momentum) notes.push(`Momentum +${check.momentum}`);
+  if (check.familiar) notes.push(`Familiar ground: DC −${check.familiar}`);
+  if (check.lucky) notes.push("Lucky Strike: the pull is kept");
+  if (check.shared) notes.push(`Shared Haul: ${check.shared.name} gets ${check.shared.amount}`);
+  if (check.appraised) notes.push(`Appraiser's Eye: kept ${check.appraised}`);
   const main = {
     type: "profession", item: brief(thing.item), quantity: extraction.quantity,
     profession: rule.profession, professionLabel: PROFESSIONS[rule.profession]?.label ?? rule.profession,
@@ -538,8 +612,8 @@ const plainResults = things => things.filter(thing => thing?.item)
 
 /* Pull refunds: Gatherer does not await its pull update. The owner requests a
  * refund through an authenticated actor update; the GM waits for the pull. */
-async function requestPullRefund(page, before, actor, ticket) {
-  const data = { type: "refundPull", pageUuid: page.uuid, before, actorUuid: actor.uuid, ticket };
+async function requestPullRefund(page, before, actor, ticket, { lucky = false } = {}) {
+  const data = { type: "refundPull", pageUuid: page.uuid, before, actorUuid: actor.uuid, ticket, lucky };
   if (isActiveGM()) return handleRefundPull(data, game.user);
   await actor.setFlag(MODULE_ID, "refundRequest", { ...data, requestId: foundry.utils.randomID() });
 }
@@ -554,9 +628,12 @@ async function handleRefundPull(data, user) {
     if (!record || record.pageUuid !== page.uuid || record.expires < Date.now()) return;
     const perks = actorPerks(actor, readNode(page)?.profession || selectedProfession(actor));
     await actor.unsetFlag(MODULE_ID, `gatherTickets.${data.ticket}`);
-    if (!(perks.conserveChance > 0)) return;
-    const roll = await new Roll("1d100").evaluate({ allowInteractive: false });
-    if (roll.total > perks.conserveChance) return;
+    const lucky = data.lucky === true && perks.naturalRefund;
+    if (!lucky) {
+      if (!(perks.conserveChance > 0)) return;
+      const roll = await new Roll("1d100").evaluate({ allowInteractive: false });
+      if (roll.total > perks.conserveChance) return;
+    }
     const before = Number(data.before);
     if (!Number.isInteger(before) || before < 0) return;
     for (let attempt = 0; attempt < 25; attempt++) {
@@ -564,7 +641,7 @@ async function handleRefundPull(data, user) {
       if (used > before) {
         // Refund this action's one pull, never restore the caller's old snapshot.
         await page.update({ "flags.gatherer.data.drawsUsed": Math.max(0, used - 1) });
-        ui.notifications.info(`${actor.name} gathered with care: one pull refunded.`);
+        ui.notifications.info(lucky ? `Lucky Strike: ${actor.name} keeps the pull.` : `${actor.name} gathered with care: one pull refunded.`);
         return;
       }
       await new Promise(resolve => setTimeout(resolve, 200));
@@ -611,6 +688,12 @@ function integrateGatherer() {
           return;
         }
       }
+      // Last Pull: an exhausted node's reopened pull belongs to the actor who asked for it.
+      const holder = lastPullHolder(this.document);
+      if (holder && actor && holder !== actor.uuid) {
+        ui.notifications.warn(`Someone is taking the last pull at ${this.document?.name ?? "this node"}.`);
+        return;
+      }
       // Season, weather, time, and biome reweight the node's table for this draw.
       const table = this.table;
       let started = false;
@@ -639,17 +722,27 @@ function integrateGatherer() {
       const pullsBefore = Number(this.document?.getFlag?.("gatherer", "data")?.drawsUsed) || 0;
       let gathered = false;
       const watch = Hooks.on("gathererGather", data => { if (data?.actor === actor) gathered = true; });
+      // Careful Selection: draw two results and let the player keep one.
+      const careful = Boolean(peekIntent(actor).careful) && actor && restUsesLeft(actor, perks, "carefulUses") > 0;
+      const choose = careful ? (first, second) => chooseDraw(actor, first, second) : null;
       let outcome;
-      try { outcome = await withAdjustedDraw(table, adjusted, runGather); }
+      try { outcome = await withAdjustedDraw(table, adjusted, runGather, { choose }); }
       finally { Hooks.off("gathererGather", watch); }
       if (!started) return;
       if (adjusted.missed) {
         const now = [conditions.season, conditions.weather, conditions.time].filter(Boolean).map(entry => entry.label).join(", ");
         ui.notifications.info(`${actor?.name ?? "You"} searched ${this.document?.name ?? "the node"} but found nothing${now ? ` (${now})` : ""}.`);
       }
-      // Light Touch / Conservationist / Steward: chance the pull is refunded.
-      if (perks?.conserveChance > 0 && actor && gathered && nodeUsage(this.document).draws > 0) {
-        void requestPullRefund(this.document, pullsBefore, actor, refundTicket).catch(logFailure("pull refund failed"));
+      // Lucky Strike: a natural 20 keeps the pull. Otherwise Light Touch /
+      // Conservationist / Steward: chance the pull is refunded.
+      const lucky = actor && luckyStrikes.get(actor.id) === this.document?.uuid;
+      if (actor) luckyStrikes.delete(actor.id);
+      if (actor && gathered && nodeUsage(this.document).draws > 0 && (lucky || perks?.conserveChance > 0)) {
+        void requestPullRefund(this.document, pullsBefore, actor, refundTicket, { lucky }).catch(logFailure("pull refund failed"));
+      }
+      // Timekeeper: if this gather exhausted the node, it refills sooner.
+      if (actor && gathered && !lucky && perks?.refillCut > 0 && nodeUsage(this.document).draws > 0) {
+        void markRefillCut(actor, this.document).catch(logFailure("Timekeeper failed"));
       }
       return outcome;
     };
@@ -844,7 +937,16 @@ Hooks.once("ready", async () => {
       clearIntent(actor) { gatherIntents.delete(actor?.id); },
       /** Grandmaster's Touch uses left this long rest. */
       masterfulLeft: actor => masterfulLeft(actor, actorPerks(actor, selectedProfession(actor))),
-      rerollsLeft: actor => rerollsLeft(actor, actorPerks(actor, selectedProfession(actor)))
+      rerollsLeft: actor => rerollsLeft(actor, actorPerks(actor, selectedProfession(actor))),
+      /** Other once-per-long-rest skills: toolSteward, fieldRepairs, secondWind, carefulUses, appraiseUses, lastPulls. */
+      usesLeft: (actor, key) => restUsesLeft(actor, actorPerks(actor, selectedProfession(actor)), key),
+      /** Last Pull: ask the GM to reopen one pull on an exhausted node for this actor. */
+      lastPull: (actor, page) => requestLastPull(actor, page),
+      /** Field Repair: 1d4 durability back on one of the actor's tools. */
+      fieldRepair: (actor, item) => fieldRepair(actor, item),
+      repairableTools,
+      /** Familiar Ground: choose the actor's biome (GM may change it later). */
+      setFamiliarBiome: (actor, key) => setFamiliarBiome(actor, key)
     },
     tools: {
       catalogue: DEFAULT_TOOLS,
