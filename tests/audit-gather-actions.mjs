@@ -30,7 +30,7 @@ function apply(object, path, value) {
 }
 const delay = () => new Promise(resolve => setTimeout(resolve, 3));
 function addRecord(uuid, data) {
-  const record = { uuid, id: uuid.split(".").at(-1), flags: {}, system: {}, ...data };
+  const record = { id: uuid.split(".").at(-1), flags: {}, system: {}, ...data, uuid };
   records.set(uuid, record);
   return record;
 }
@@ -185,7 +185,9 @@ const quantity = record => record.itemUuids.map(uuid => records.get(uuid)).find(
 // Independent client modules compete for the final pull. Both actor and node
 // leases remain held until the actual native Gatherer/toChat flow settles.
 const last = node("last", 1);
+const watchdog = setTimeout(() => { console.error("Gather timeout", first.flags, second.flags, last.flags, authority.errors, playerClient.errors); process.exit(1); }, 15000);
 await Promise.all([authority.gather(last.uuid, first.uuid), playerClient.gather(last.uuid, second.uuid)]);
+clearTimeout(watchdog);
 assert.equal(last.flags.gatherer.data.drawsUsed, 1);
 assert.equal(quantity(first) + quantity(second), 2);
 assert.equal(socketWrites, 0, "Gatherer's unawaited socket writes are suppressed");

@@ -60,6 +60,24 @@ await scholar.setFlag(CP, "professions.blacksmith", { rank: 2, xp: 100, talents:
 const talents = CRAFTING_PROFESSIONS.blacksmith.talents.slice(0, 2).map(row => row.id);
 await Promise.all(talents.map(id => state.chooseTalent(scholar, "blacksmith", id)));
 assert.deepEqual(state.talentsOf(scholar, "blacksmith"), talents);
+const beginner = new Actor("beginner");
+const setFlag = beginner.setFlag.bind(beginner);
+beginner.unsetFlag = async (m, k) => { const keys = k.split("."), last = keys.pop(); delete keys.reduce((v, key) => v?.[key], beginner.flags[m])[last]; };
+beginner.setFlag = async (m, k, value) => {
+  if (m === GP && k === "actionRequest") {
+    if (value.operation === "release") delete beginner.flags[GP].actionLease;
+    else set(beginner.flags, `${GP}.actionLease`, { id: value.id, user: "player", expires: Date.now() + 120000 });
+    return beginner;
+  }
+  return setFlag(m, k, value);
+};
+game.users.activeGM = { id: "gm", isGM: true };
+game.user = { id: "player", isGM: false };
+const selections = await Promise.allSettled([state.chooseProfession(beginner, "blacksmith"), state.chooseProfession(beginner, "cook")]);
+assert.equal(selections.filter(row => row.status === "fulfilled").length, 1, "Concurrent player selection grants only one profession");
+assert.equal(Object.keys(state.actorProfessions(beginner)).length, 1);
+delete game.users.activeGM;
+game.user = { id: "gm", isGM: true };
 
 // Cached dependency models must be rebuilt inside the action before spending.
 const tree = { id: "tree", uuid: "JournalEntry.tree", pages: [], getFlag(m, k) { return k === "independentSkillPoints"; } };
@@ -97,5 +115,7 @@ try { Date.now = () => realNow() + 6000;
   assert.equal(limits.gatheringAllowance(gatherer).exhaustion, 0, "Pending exhaustion expires");
 } finally { Date.now = realNow; }
 gatherer.system.attributes.exhaustion = 6;
+gatherer.items = [{ flags: { [GP]: { perk: { enabled: true, profession: "any", secondWind: 1 } } }, getFlag(m, k) { return get(this.flags[m], k); } }];
+assert.ok(limits.gatheringAllowance(gatherer).secondWind > 0);
 assert.equal(await limits.reserveGatherAttempt(gatherer), false, "Maximum exhaustion blocks gathering");
 console.log("PASS: audit core — quality premiums, repricing recovery, recipe cycles, state concurrency, stale tree purchases and exhaustion expiry.");
