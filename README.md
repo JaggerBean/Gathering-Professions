@@ -2,6 +2,10 @@
 
 Foundry 14 + dnd5e + Gatherer 5.0.3. Enable this module alongside Gatherer. After updating module files while Foundry is running, restart the Foundry server and reopen the world so the new manifest, script, and stylesheet load.
 
+## Node pin size (0.33.2)
+
+Node pins default to 96 px (previously a fixed 48). Change the default with the **Node pin size** slider in **Game Settings → Configure Settings → Module Settings → Gathering Professions** (24–192). Override one node under **Node → Visibility → Pin size**: untick **Use global size** and drag the slider (24–192 px); tick it again to follow the global setting. Changing either resizes that node's existing pins on every scene. Macro: `game.modules.get("gathering-professions").api.nodes.resizeAllPins()`.
+
 ## Reliability update (0.33.0)
 
 Update together with Crafting Professions 0.8.0. Gathering holds both a character lease and a node lease until the GM confirms the pull and rewards. Assist rewards require an authenticated, single-use gathering receipt. Field Repair and linked-tree purchases also recheck current state inside the character lease.

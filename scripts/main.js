@@ -13,7 +13,7 @@ import { PERK_EFFECTS, actorPerks, normalizePerk, readPerk, rareChanceTotal, app
 import { configureSkillEffects, chooseDraw, offerAppraisal, fieldRepair, repairableTools, setFamiliarBiome, requestLastPull, shareHaul, markRefillCut, handleGmRequest, requestGm } from "./skill-effects.js";
 import { UNIVERSAL_SKILLS, buildUniversalTree, relayoutUniversalTree, needsRelayout } from "./skilltree.js";
 import { assistPower, assistLabel, offerAssist, withdrawAssist, findAssist, consumeAssist, handleClearAssist } from "./assist.js";
-import { pinsFor, pageProfessions, requiredTools, nodeUsage, lastPullHolder, getToolLibrary, addToolToLibrary, removeToolFromLibrary, createRareTable, readNode, nodeGate, applyNodeCheck, isGathererPage, refreshNodeVisibility, refreshPinTint, autoResetExpired, allNodePages, buildNode, updateNode, duplicateNode, deleteNode, resetNodes, setNodeHidden, placePin, placeLinkedNode, normalizeNode } from "./nodes.js";
+import { pinsFor, pageProfessions, requiredTools, nodeUsage, lastPullHolder, getToolLibrary, addToolToLibrary, removeToolFromLibrary, createRareTable, readNode, nodeGate, applyNodeCheck, isGathererPage, refreshNodeVisibility, refreshPinTint, autoResetExpired, allNodePages, buildNode, updateNode, duplicateNode, deleteNode, resetNodes, setNodeHidden, placePin, placeLinkedNode, normalizeNode, resizeAllPins, DEFAULT_PIN_SIZE } from "./nodes.js";
 import { openNodeManager, openNodeBuilder, startPinPlacement, registerNodeUI } from "./node-ui.js";
 import { openGatheringWindow, xpProgress } from "./gather-ui.js";
 import { DEFAULT_BIOMES, currentConditions, nodeScene, adjustedResults, withAdjustedDraw, weightedPick, conditionDcModifier, getBiomes, normalizeBiomes, normalizeConditionDc, normalizeRules, getOverrides } from "./conditions.js";
@@ -910,6 +910,16 @@ Hooks.once("init", () => {
   game.settings.register(MODULE_ID, "biomes", {
     name: "Biomes", scope: "world", config: false, type: Array, default: DEFAULT_BIOMES.map(biome => ({ ...biome }))
   });
+  game.settings.register(MODULE_ID, "pinSize", {
+    name: "Node pin size",
+    hint: "Default size (pixels) of gathering node pins on the map. Nodes can override this under Node → Visibility → Pin size. Changing it resizes existing pins.",
+    scope: "world", config: true, type: Number,
+    range: { min: 24, max: 192, step: 8 }, default: DEFAULT_PIN_SIZE,
+    onChange: () => {
+      if (!game.users?.activeGM?.isSelf) return;
+      resizeAllPins().catch(err => console.error("gathering-professions: pin resize failed", err));
+    }
+  });
   game.settings.register(MODULE_ID, "conditionOverrides", {
     name: "Condition Overrides", scope: "world", config: false, type: Object, default: { season: "", weather: "", time: "" }
   });
@@ -1117,7 +1127,8 @@ Hooks.once("ready", async () => {
       read: readNode, normalize: normalizeNode, all: allNodePages, gate: nodeGate,
       build: buildNode, update: updateNode, duplicate: duplicateNode, delete: deleteNode,
       reset: resetNodes, setHidden: setNodeHidden, placePin, placeLinked: placeLinkedNode, refreshVisibility: refreshNodeVisibility,
-      openManager: openNodeManager, openBuilder: openNodeBuilder, startPlacement: startPinPlacement
+      openManager: openNodeManager, openBuilder: openNodeBuilder, startPlacement: startPinPlacement,
+      resizeAllPins
     },
     async setProfessions(list) {
       if (!game.user.isGM) throw new Error("Only the GM may edit professions.");

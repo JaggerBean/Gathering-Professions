@@ -710,3 +710,10 @@
   stroke: #e0302f; stroke-width: 3; stroke-dasharray: 8 6; stroke-linecap: round;
 }
 @keyframes gp-lockout-fade { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
+
+/* Per-node pin size slider (0.33.2) */
+.gp-pin-size { display: flex; flex-direction: column; gap: .3rem; }
+.gp-pin-slider { display: flex; align-items: center; gap: .6rem; }
+.gp-pin-slider input[type="range"] { flex: 1 1 auto; min-width: 0; }
+.gp-pin-slider input[type="range"]:disabled { opacity: .45; }
+.gp-pin-slider output { flex: 0 0 4.5em; text-align: right; font-variant-numeric: tabular-nums; }

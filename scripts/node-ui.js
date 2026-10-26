@@ -5,6 +5,7 @@ import {
   NODE_DEFAULTS, readNode, linkGroupFor, allNodePages, isGathererPage, skillChoices, skillLabel, nodeUsage, isDepleted,
   pinsFor, tableMaterials, buildNode, updateNode, duplicateNode, deleteNode, resetNodes, setNodeHidden, placePin, placeLinkedNode,
   nodeTools, toolNames, getToolLibrary, addToolToLibrary, removeToolFromLibrary, createRareTable
+, pinSizeFor
 } from "./nodes.js";
 import { getBiomes } from "./conditions.js";
 import { rulesEditorHtml, bindRulesEditors, parseRules, rulesSummary, openConditionsWindow } from "./conditions-ui.js";
@@ -16,7 +17,18 @@ export const escape = value => String(value ?? "").replace(/[&<>"']/g, character
 })[character]);
 const option = (value, label, selected) => `<option value="${escape(value)}" ${String(value) === String(selected) ? "selected" : ""}>${escape(label)}</option>`;
 const num = (name, value, min, max, step = 1) => `<input name="${name}" type="number" step="${step}" min="${min}" max="${max}" value="${escape(value)}">`;
-const TABS = [["basics", "Basics", "fa-circle-info"], ["materials", "Materials", "fa-gem"], ["rules", "Check & Rules", "fa-dice-d20"], ["visibility", "Visibility", "fa-eye"]];
+
+/** Per-node pin size: "use global" checkbox + 24–192 px slider with a live read-out. */
+function pinSizeControl(node) {
+  const globalSize = pinSizeFor({});
+  const own = Number(node?.pinSize ?? 0);
+  const value = own || globalSize;
+  return `<div class="gp-pin-size">
+    <label class="gp-check"><input type="checkbox" name="pinSizeGlobal" data-pin-global data-global-size="${globalSize}" ${own ? "" : "checked"}> Use global size (${globalSize} px)</label>
+    <div class="gp-pin-slider"><input type="range" name="pinSizeValue" data-pin-range min="24" max="192" step="8" value="${value}" ${own ? "" : "disabled"}>
+    <output data-pin-out>${value} px</output></div>
+  </div>`;
+}const TABS = [["basics", "Basics", "fa-circle-info"], ["materials", "Materials", "fa-gem"], ["rules", "Check & Rules", "fa-dice-d20"], ["visibility", "Visibility", "fa-eye"]];
 const FALLBACK_ICON = "icons/svg/book.svg";
 
 function report(error) {
@@ -413,6 +425,7 @@ export function renderDetail(page, state) {
   const visibility = `
     ${field("Players", `<label class="gp-check"><input type="checkbox" name="hidden" ${node.hidden ? "checked" : ""}> Hidden until revealed</label>`, "Hidden nodes and their pins are invisible to players.")}
     ${field("Profession sense", rankSelect("senseRank", node.senseRank, "Off"), "While hidden, characters with the node's profession at this rank or higher still see it.")}
+    ${field("Pin size", pinSizeControl(node), "Drag to resize this node's map pins. Tick \"Use global size\" to follow the Node pin size module setting.")}
     ${isNew ? "" : `<h3>Placements</h3><p class="gp-hint">Another pin shares this node's pulls. A linked placement uses the same loot table but has its own pulls and reset timer. Material edits to the table affect every linked placement.</p>${pinsList(page)}<button type="button" data-act="place"><i class="fas fa-map-pin"></i> Add shared-pool pin</button> <button type="button" data-act="place-linked"><i class="fas fa-link"></i> Add linked placement</button>`}`;
 
   const panels = { basics, materials: materialsTab(page, node, isNew), rules, visibility };
@@ -456,6 +469,7 @@ function collectData(values, page, isNew) {
     checkType, checkKey, dcModifier: Number(values.dcModifier ?? 0), yieldModifier: Number(values.yieldModifier ?? 0),
     minRank: Number(values.minRank ?? 0), toolName: "", tools: values.tools ?? "[]", rareChance: Number(values.rareChance ?? 0),
     rareTable: values.rareTable ?? "", hidden: values.hidden === true, senseRank: Number(values.senseRank ?? 0),
+    pinSize: values.pinSizeGlobal === true ? 0 : Number(values.pinSizeValue ?? 0),
     biome: values.biome ?? "",
     materialRules: Object.fromEntries(Object.entries(values).filter(([key]) => key.startsWith("mru_"))
       .map(([key, uuid]) => [uuid, key.slice(4)])
@@ -729,6 +743,10 @@ function defineClass() {
         return;
       }
       if (target.matches("[data-mat-search]")) return this.#filterMaterials();
+      if (target.matches("[data-pin-range]")) {
+        const out = target.closest(".gp-pin-size")?.querySelector("[data-pin-out]");
+        if (out) out.textContent = `${target.value} px`;
+      }
       if (target.closest(".gp-node-form")) {
         this.#markDirty();
         if (target.name?.startsWith("w_")) this.#updateShares();
@@ -737,6 +755,18 @@ function defineClass() {
 
     #onChange(event) {
       const target = event.target;
+      if (target.matches("[data-pin-global]")) {
+        const box = target.closest(".gp-pin-size");
+        const range = box?.querySelector("[data-pin-range]");
+        const out = box?.querySelector("[data-pin-out]");
+        if (range) {
+          range.disabled = target.checked;
+          if (target.checked) range.value = target.dataset.globalSize;
+        }
+        if (out && range) out.textContent = `${range.value} px`;
+        this.#markDirty();
+        return;
+      }
       if (target.matches("[data-filter='scene']")) { this.view.scene = target.value; return void this.render({ parts: ["list"] }); }
       if (target.matches("[data-filter='profession']")) { this.view.profession = target.value; return void this.render({ parts: ["list"] }); }
       if (target.matches("[data-check]")) {

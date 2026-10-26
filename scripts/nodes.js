@@ -14,13 +14,31 @@ export const NODE_DEFAULTS = Object.freeze({
   profession: "", tier: 1, checkType: "default", checkKey: "",
   dcModifier: 0, yieldModifier: 0, minRank: 0, toolName: "", tools: [],
   rareChance: 0, rareTable: "", hidden: true, senseRank: 0, icon: "", flavor: "", biome: "", materialRules: {},
-  built: false, tableUuid: "", linkGroup: ""
+  pinSize: 0, built: false, tableUuid: "", linkGroup: ""
 });
+
+export const DEFAULT_PIN_SIZE = 96;
+
+/** Pin size for a node: its own override, else the world "Node pin size" setting. */
+export function pinSizeFor(node) {
+  const own = Number(node?.pinSize ?? 0);
+  if (own) return own;
+  let global = 0;
+  try { global = Number(game.settings.get(MODULE_ID, "pinSize")); } catch { global = 0; }
+  return global || DEFAULT_PIN_SIZE;
+}
 
 const int = (value, fallback = 0) => {
   const number = Number(value);
   return Number.isFinite(number) ? Math.trunc(number) : fallback;
 };
+
+/** 0 = use the global setting; otherwise a whole number from 24 to 192. */
+function pinSizeInput(value) {
+  const size = inRange("Pin size", value, 0, 192);
+  if (size && size < 24) throw new Error("Pin size must be 0 (use the global setting) or from 24 to 192.");
+  return size;
+}
 
 function inRange(name, value, min, max) {
   const number = Number(value ?? 0);
@@ -65,6 +83,7 @@ export function normalizeNode(input = {}) {
     rareTable: String(input.rareTable ?? "").trim(),
     hidden: input.hidden === true || input.hidden === "true",
     senseRank: inRange("Profession sense rank", input.senseRank, 0, 5),
+    pinSize: pinSizeInput(input.pinSize),
     icon: String(input.icon ?? "").trim(),
     flavor: String(input.flavor ?? "").trim().slice(0, 2000),
     biome: String(input.biome ?? "").trim(),
@@ -351,6 +370,26 @@ export function pinsFor(page) {
 }
 
 /** Grey pins on depleted nodes, white otherwise. GM only. */
+/** GM: bring every node pin to its node's size (override or global setting). */
+export async function resizeAllPins(pages = allNodePages()) {
+  if (!game.user.isGM) return 0;
+  const byScene = new Map();
+  for (const page of pages) {
+    const size = pinSizeFor(readNode(page));
+    for (const { scene, note } of pinsFor(page)) {
+      if (Number(note.iconSize) === size) continue;
+      if (!byScene.has(scene)) byScene.set(scene, []);
+      byScene.get(scene).push({ _id: note.id, iconSize: size });
+    }
+  }
+  let count = 0;
+  for (const [scene, updates] of byScene) {
+    await scene.updateEmbeddedDocuments("Note", updates);
+    count += updates.length;
+  }
+  return count;
+}
+
 export async function refreshPinTint(page) {
   const tint = isDepleted(page) ? DEPLETED_TINT : ACTIVE_TINT;
   const byScene = new Map();
@@ -552,7 +591,7 @@ export async function updateNode(page, data) {
     [`flags.${MODULE_ID}.node`]: node
   });
   for (const { scene, note } of pinsFor(page)) {
-    await scene.updateEmbeddedDocuments("Note", [{ _id: note.id, text: name, "texture.src": node.icon || note.texture?.src }]);
+    await scene.updateEmbeddedDocuments("Note", [{ _id: note.id, text: name, "texture.src": node.icon || note.texture?.src, iconSize: pinSizeFor(node) }]);
   }
   await refreshNodeVisibility([page]);
   return page;
@@ -637,7 +676,7 @@ export async function placePin(page, scene, x, y) {
   const [note] = await scene.createEmbeddedDocuments("Note", [{
     entryId: page.parent.id, pageId: page.id, x: Math.round(x), y: Math.round(y),
     texture: { src: node.icon || "icons/svg/book.svg", tint: isDepleted(page) ? DEPLETED_TINT : ACTIVE_TINT },
-    iconSize: 48, text: page.name, global: true,
+    iconSize: pinSizeFor(node), text: page.name, global: true,
     flags: { [MODULE_ID]: { nodePin: true } }
   }]);
   return note;
