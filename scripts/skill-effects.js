@@ -195,7 +195,7 @@ export async function requestGm(actor, type, data, { wait = false } = {}) {
     if (response.error) throw new Error(response.error);
     return response.result;
   }
-  throw new Error("The GM did not answer in time.");
+  throw new Error(`The GM did not answer in time (${type}).`);
 }
 
 const HANDLERS = { lastPull: handleLastPull, sharedHaul: handleSharedHaul, refillCut: handleRefillCut,
