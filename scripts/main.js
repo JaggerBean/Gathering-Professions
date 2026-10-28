@@ -167,7 +167,13 @@ async function handleActorRequests(actor, changes, userId) {
   if (request("assistClearRequest")) await handleClearAssist(request("assistClearRequest"), user, actor);
   if (request("discoveryRequest")) await handleDiscoveryRequest(actor, request("discoveryRequest"), user);
   if (request("refundRequest")?.actorUuid === actor.uuid) await handleRefundPull(request("refundRequest"), user);
-  if (request("gmRequest")) await handleGmRequest(actor, request("gmRequest"), user).catch(logFailure("skill request failed"));
+  // `changes` holds only the changed keys, and consecutive gather requests share
+  // pageUuid/receiptId, so read the whole request from the actor (as actions.js does).
+  if (request("gmRequest")) {
+    const saved = actor.getFlag?.(MODULE_ID, "gmRequest");
+    const full = saved && typeof saved === "object" ? foundry.utils.deepClone(saved) : request("gmRequest");
+    await handleGmRequest(actor, full, user).catch(logFailure("skill request failed"));
+  }
 }
 
 async function storePendingClimb(actor, rare, context) {
