@@ -162,18 +162,20 @@ async function handleDiscoveryRequest(actor, data, user) {
 async function handleActorRequests(actor, changes, userId) {
   const user = userId ? game.users?.get?.(userId) ?? Array.from(game.users ?? []).find(entry => entry.id === userId) : null;
   if (!user) return;
-  const request = key => changes.flags?.[MODULE_ID]?.[key] ?? changes[`flags.${MODULE_ID}.${key}`];
+  // `changes` holds only the changed keys. Consecutive requests repeat pageUuid,
+  // receiptId and actorUuid, which would arrive missing, so read each whole
+  // request from the updated actor (as actions.js does for leases).
+  const request = key => {
+    const changed = changes.flags?.[MODULE_ID]?.[key] ?? changes[`flags.${MODULE_ID}.${key}`];
+    if (!changed) return changed;
+    const saved = actor.getFlag?.(MODULE_ID, key);
+    return saved && typeof saved === "object" ? foundry.utils.deepClone(saved) : changed;
+  };
   if (request("climbRequest")) await handleClimbRequest(actor, request("climbRequest"), user);
   if (request("assistClearRequest")) await handleClearAssist(request("assistClearRequest"), user, actor);
   if (request("discoveryRequest")) await handleDiscoveryRequest(actor, request("discoveryRequest"), user);
   if (request("refundRequest")?.actorUuid === actor.uuid) await handleRefundPull(request("refundRequest"), user);
-  // `changes` holds only the changed keys, and consecutive gather requests share
-  // pageUuid/receiptId, so read the whole request from the actor (as actions.js does).
-  if (request("gmRequest")) {
-    const saved = actor.getFlag?.(MODULE_ID, "gmRequest");
-    const full = saved && typeof saved === "object" ? foundry.utils.deepClone(saved) : request("gmRequest");
-    await handleGmRequest(actor, full, user).catch(logFailure("skill request failed"));
-  }
+  if (request("gmRequest")) await handleGmRequest(actor, request("gmRequest"), user).catch(logFailure("skill request failed"));
 }
 
 async function storePendingClimb(actor, rare, context) {
