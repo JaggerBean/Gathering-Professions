@@ -813,6 +813,12 @@ function integrateGatherer() {
     Sheet.prototype._onGather = async function (...args) {
       const actor = args[2] ?? globalThis.canvas?.tokens?.controlled?.[0]?.actor ?? game.user.character;
       if (!actor) return originalGather.apply(this, args);
+      // A deleted node is dropped silently by the GM's lease handler; fail fast instead of timing out.
+      if (isGathererPage(this.document) && !(await fromUuid(this.document.uuid))) {
+        ui.notifications.error("This gathering node no longer exists.");
+        this.close?.();
+        return;
+      }
       const context = { shared: [] };
       context.rewardsReady = new Promise(resolve => { context.releaseRewards = resolve; });
       let outcome;
