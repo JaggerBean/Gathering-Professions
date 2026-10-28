@@ -57,7 +57,13 @@ export function registerActionHooks() {
   if (registered) return;
   registered = true;
   Hooks.on("updateActor", (actor, changes, _options, userId) => {
-    const request = changes.flags?.[MODULE_ID]?.actionRequest ?? changes[`flags.${MODULE_ID}.actionRequest`];
+    const changed = changes.flags?.[MODULE_ID]?.actionRequest ?? changes[`flags.${MODULE_ID}.actionRequest`];
+    if (!changed) return;
+    // `changes` holds only the changed keys. Release, renew and retried acquires
+    // keep the same id, so read the whole request from the updated actor before
+    // any await; otherwise those requests arrive without an id and are dropped.
+    const saved = actor.getFlag?.(MODULE_ID, "actionRequest");
+    const request = saved && typeof saved === "object" ? foundry.utils.deepClone(saved) : changed;
     if (request) void handleActionRequest(actor, request, game.users?.get?.(userId) ?? Array.from(game.users ?? []).find(user => user.id === userId))
       .catch(error => console.error(`${MODULE_ID}: action lock failed`, error));
   });
