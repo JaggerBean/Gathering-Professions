@@ -1,0 +1,47 @@
+# Publish a release: set "version" in module.json, commit, then push a matching tag:
+#   git tag v1.2.0 && git push origin v1.2.0
+# This zips the module and creates the GitHub release that OneStop installs from. The release's module.json has
+# Foundry's manifest/download links filled in, so "Install Module" with
+#   https://github.com/<this repo>/releases/latest/download/module.json
+# works in Foundry itself too. Release notes: the tag's message (git tag -a), else the commits since the last tag.
+name: Release
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Package
+        run: |
+          set -e
+          id=$(jq -r .id module.json); v=$(jq -r .version module.json)
+          [ "v$v" = "$GITHUB_REF_NAME" ] || { echo "::error::module.json says $v but the tag is $GITHUB_REF_NAME"; exit 1; }
+          mkdir -p stage dist
+          rsync -a --exclude '.git' --exclude '.github' --exclude 'tests' --exclude 'docs' --exclude '.*' \
+            --exclude '*.md' --exclude 'stage' --exclude 'dist' ./ stage/
+          [ -f README.md ] && cp README.md stage/
+          jq --arg m "https://github.com/$GITHUB_REPOSITORY/releases/latest/download/module.json" \
+             --arg d "https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/$id-$v.zip" \
+             '.manifest = $m | .download = $d' module.json > stage/module.json
+          cp stage/module.json dist/module.json
+          (cd stage && zip -qr "../dist/$id-$v.zip" .)
+          cp .github/onestop/launcher.json dist/launcher.json
+          prev=$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || true)
+          notes=$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME")
+          [ -n "$notes" ] || notes=$(git log --pretty='- %s' ${prev:+$prev..}"$GITHUB_REF_NAME")
+          printf '%s\n' "$notes" > dist/notes.md
+          echo "title=$(jq -r .title module.json) $v" >> "$GITHUB_OUTPUT"
+        id: pkg
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/*.zip dist/module.json dist/launcher.json \
+            --title "${{ steps.pkg.outputs.title }}" --notes-file dist/notes.md

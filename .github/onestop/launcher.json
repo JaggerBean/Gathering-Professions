@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "id": "gathering-professions",
+  "name": "Gathering Professions",
+  "type": "foundry-module",
+  "author": "Jagger",
+  "description": "Profession progression, material checks, Skill Tree perks, rare finds and a gathering node builder for Foundry VTT (D&D 5e). Requires the Gatherer module.",
+  "tags": [
+    "Foundry VTT",
+    "D&D 5e"
+  ]
+}
